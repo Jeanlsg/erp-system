@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend, Pie, PieChart, Cell } from "recharts";
-import { Store, TrendingUp, Receipt, PackageX, AlertTriangle } from "lucide-react";
+import { Store, TrendingUp, Receipt, PackageX, AlertTriangle, Loader2 } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,9 +9,9 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useLojas, useVendas, isSupabaseConfigured } from "@/lib/supabase-queries";
+import { useLojas, useVendas, useProdutosComEstoque, isSupabaseConfigured } from "@/lib/supabase-queries";
 import { useLojaAtualStore } from "@/lib/store/loja-atual";
-import { useProdutosComEstoque } from "@/lib/supabase-queries";
+import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { brl, num, pct } from "@/lib/format";
 
 const CORES = ["hsl(var(--primary))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))", "hsl(var(--muted-foreground))"];
@@ -144,19 +144,6 @@ export function VisaoGeralPage() {
   };
 
   const vazio = vendasFiltradas.length === 0;
-
-  if (!isSupabaseConfigured()) {
-    return (
-      <div className="space-y-6">
-        <PageHeader title="Visão Geral" description="Consolidado multi-loja" />
-        <Card>
-          <CardContent className="p-12 text-center text-muted-foreground">
-            Configure as variáveis do Supabase no arquivo <code>.env</code>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">

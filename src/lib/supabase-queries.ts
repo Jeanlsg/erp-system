@@ -20,11 +20,11 @@ export { isSupabaseConfigured };
 // ========================================
 export function useLojas() {
   return useQuery<Loja[]>({
-    queryKey: ["lojas"],
+    queryKey: ["erp_lojas"],
     queryFn: async () => {
       if (!isSupabaseConfigured()) return [];
       const { data, error } = await supabase
-        .from("lojas")
+        .from("erp_lojas")
         .select("*")
         .eq("ativo", true)
         .order("matriz", { ascending: false })
@@ -32,7 +32,7 @@ export function useLojas() {
       if (error) throw error;
       return data ?? [];
     },
-    staleTime: 1000 * 60 * 30, // 30 minutos (lojas mudam pouco)
+    staleTime: 1000 * 60 * 30,
   });
 }
 
@@ -41,11 +41,11 @@ export function useLojas() {
 // ========================================
 export function useCategorias() {
   return useQuery<Categoria[]>({
-    queryKey: ["categorias"],
+    queryKey: ["erp_categorias"],
     queryFn: async () => {
       if (!isSupabaseConfigured()) return [];
       const { data, error } = await supabase
-        .from("categorias")
+        .from("erp_categorias")
         .select("*")
         .eq("ativo", true)
         .order("nome");
@@ -61,11 +61,11 @@ export function useCategorias() {
 // ========================================
 export function useProdutos(filters?: { lojaId?: string; search?: string }) {
   return useQuery<Produto[]>({
-    queryKey: ["produtos", filters],
+    queryKey: ["erp_produtos", filters],
     queryFn: async () => {
       if (!isSupabaseConfigured()) return [];
       let query = supabase
-        .from("produtos")
+        .from("erp_produtos")
         .select("*")
         .eq("ativo", true)
         .order("nome");
@@ -83,14 +83,14 @@ export function useProdutos(filters?: { lojaId?: string; search?: string }) {
 
 export function useProdutosComEstoque(lojaId?: string) {
   return useQuery<ProdutoComEstoque[]>({
-    queryKey: ["produtos-com-estoque", lojaId],
+    queryKey: ["erp_produtos-com-estoque", lojaId],
     queryFn: async () => {
       if (!isSupabaseConfigured()) return [];
       const [produtosRes, estoqueRes] = await Promise.all([
-        supabase.from("produtos").select("*, categoria:categorias(*)").eq("ativo", true).order("nome"),
+        supabase.from("erp_produtos").select("*, categoria:erp_categorias(*)").eq("ativo", true).order("nome"),
         lojaId
-          ? supabase.from("estoque").select("*").eq("loja_id", lojaId)
-          : supabase.from("estoque").select("*"),
+          ? supabase.from("erp_estoque").select("*").eq("loja_id", lojaId)
+          : supabase.from("erp_estoque").select("*"),
       ]);
 
       if (produtosRes.error) throw produtosRes.error;
@@ -114,11 +114,11 @@ export function useProdutosComEstoque(lojaId?: string) {
 
 export function useEstoqueLoja(lojaId: string | undefined) {
   return useQuery<Estoque[]>({
-    queryKey: ["estoque", lojaId],
+    queryKey: ["erp_estoque", lojaId],
     queryFn: async () => {
       if (!isSupabaseConfigured() || !lojaId) return [];
       const { data, error } = await supabase
-        .from("estoque")
+        .from("erp_estoque")
         .select("*")
         .eq("loja_id", lojaId);
       if (error) throw error;
@@ -133,17 +133,17 @@ export function useEstoqueLoja(lojaId: string | undefined) {
 // ========================================
 export function useVendas(filters?: { lojaId?: string; status?: string; dataInicio?: string; dataFim?: string }) {
   return useQuery<VendaCompleta[]>({
-    queryKey: ["vendas", filters],
+    queryKey: ["erp_vendas", filters],
     queryFn: async () => {
       if (!isSupabaseConfigured()) return [];
       let query = supabase
-        .from("vendas")
+        .from("erp_vendas")
         .select(`
           *,
-          itens:venda_itens(*),
-          cliente:pessoas(*),
-          loja:lojas(*),
-          usuario:usuarios(*)
+          itens:erp_venda_itens(*),
+          cliente:erp_pessoas(*),
+          loja:erp_lojas(*),
+          usuario:erp_usuarios(*)
         `)
         .order("data_venda", { ascending: false })
         .limit(200);
@@ -162,7 +162,7 @@ export function useVendas(filters?: { lojaId?: string; status?: string; dataInic
 
 export function useVendasPorDia(lojaId: string, dias: number = 7) {
   return useQuery<{ dia: string; total: number; tickets: number }[]>({
-    queryKey: ["vendas-por-dia", lojaId, dias],
+    queryKey: ["erp_vendas-por-dia", lojaId, dias],
     queryFn: async () => {
       if (!isSupabaseConfigured() || !lojaId) return [];
 
@@ -170,7 +170,7 @@ export function useVendasPorDia(lojaId: string, dias: number = 7) {
       desde.setDate(desde.getDate() - dias);
 
       const { data, error } = await supabase
-        .from("vendas")
+        .from("erp_vendas")
         .select("data_venda, total, status")
         .eq("loja_id", lojaId)
         .eq("status", "finalizada")
@@ -178,7 +178,6 @@ export function useVendasPorDia(lojaId: string, dias: number = 7) {
 
       if (error) throw error;
 
-      // Agrupa por dia
       const mapa: Record<string, { total: number; tickets: number }> = {};
       for (const v of data ?? []) {
         const dia = v.data_venda.slice(0, 10);
@@ -199,7 +198,7 @@ export function useVendasPorDia(lojaId: string, dias: number = 7) {
 
 export function useVendasHoje(lojaId: string | undefined) {
   return useQuery({
-    queryKey: ["vendas-hoje", lojaId],
+    queryKey: ["erp_vendas-hoje", lojaId],
     queryFn: async () => {
       if (!isSupabaseConfigured() || !lojaId) {
         return { total: 0, tickets: 0, ticketMedio: 0 };
@@ -208,7 +207,7 @@ export function useVendasHoje(lojaId: string | undefined) {
       hoje.setHours(0, 0, 0, 0);
 
       const { data, error } = await supabase
-        .from("vendas")
+        .from("erp_vendas")
         .select("total")
         .eq("loja_id", lojaId)
         .eq("status", "finalizada")
@@ -225,19 +224,19 @@ export function useVendasHoje(lojaId: string | undefined) {
 
 export function useTopProdutos(lojaId: string, limite: number = 5, dias: number = 7) {
   return useQuery({
-    queryKey: ["top-produtos", lojaId, limite, dias],
+    queryKey: ["erp_top-produtos", lojaId, limite, dias],
     queryFn: async () => {
       if (!isSupabaseConfigured() || !lojaId) return [];
       const desde = new Date();
       desde.setDate(desde.getDate() - dias);
 
       const { data, error } = await supabase
-        .from("venda_itens")
+        .from("erp_venda_itens")
         .select(`
           nome,
           quantidade,
           subtotal,
-          venda:vendas!inner(loja_id, status, data_venda)
+          venda:erp_vendas!inner(loja_id, status, data_venda)
         `)
         .eq("venda.loja_id", lojaId)
         .eq("venda.status", "finalizada")
@@ -246,7 +245,6 @@ export function useTopProdutos(lojaId: string, limite: number = 5, dias: number 
 
       if (error) throw error;
 
-      // Agrupa
       const mapa: Record<string, { nome: string; quantidade: number; total: number }> = {};
       for (const item of data ?? []) {
         if (!mapa[item.nome]) mapa[item.nome] = { nome: item.nome, quantidade: 0, total: 0 };
@@ -263,15 +261,15 @@ export function useTopProdutos(lojaId: string, limite: number = 5, dias: number 
 }
 
 // ========================================
-// PESSOAS (clientes/fornecedores/funcion√°rios)
+// PESSOAS
 // ========================================
 export function useClientes() {
   return useQuery<Pessoa[]>({
-    queryKey: ["clientes"],
+    queryKey: ["erp_clientes"],
     queryFn: async () => {
       if (!isSupabaseConfigured()) return [];
       const { data, error } = await supabase
-        .from("pessoas")
+        .from("erp_pessoas")
         .select("*")
         .eq("ativo", true)
         .order("nome_razao");
@@ -282,16 +280,16 @@ export function useClientes() {
 }
 
 // ========================================
-// CONTAS A PAGAR/RECEBER
+// CONTAS
 // ========================================
 export function useContas(filters?: { tipo?: "pagar" | "receber"; status?: string; lojaId?: string }) {
   return useQuery<Conta[]>({
-    queryKey: ["contas", filters],
+    queryKey: ["erp_contas", filters],
     queryFn: async () => {
       if (!isSupabaseConfigured()) return [];
       let query = supabase
-        .from("contas")
-        select("*")
+        .from("erp_contas")
+        .select("*")
         .order("data_vencimento", { ascending: true })
         .limit(500);
 
@@ -308,12 +306,12 @@ export function useContas(filters?: { tipo?: "pagar" | "receber"; status?: strin
 
 export function useContasVencidas(lojaId?: string) {
   return useQuery({
-    queryKey: ["contas-vencidas", lojaId],
+    queryKey: ["erp_contas-vencidas", lojaId],
     queryFn: async () => {
       if (!isSupabaseConfigured()) return [];
       const hoje = new Date().toISOString().slice(0, 10);
       let query = supabase
-        .from("contas")
+        .from("erp_contas")
         .select("*")
         .lt("data_vencimento", hoje)
         .neq("status", "pago")
@@ -333,7 +331,7 @@ export function useContasVencidas(lojaId?: string) {
 // ========================================
 export function useDashboardStats(lojaId: string | undefined) {
   return useQuery({
-    queryKey: ["dashboard-stats", lojaId],
+    queryKey: ["erp_dashboard-stats", lojaId],
     queryFn: async () => {
       if (!isSupabaseConfigured() || !lojaId) {
         return {
@@ -350,9 +348,8 @@ export function useDashboardStats(lojaId: string | undefined) {
       hoje.setHours(0, 0, 0, 0);
       const hojeStr = hoje.toISOString().slice(0, 10);
 
-      // Vendas de hoje
       const { data: vendasHoje } = await supabase
-        .from("vendas")
+        .from("erp_vendas")
         .select("total")
         .eq("loja_id", lojaId)
         .eq("status", "finalizada")
@@ -361,13 +358,12 @@ export function useDashboardStats(lojaId: string | undefined) {
       const totalVendas = (vendasHoje ?? []).reduce((s, v) => s + Number(v.total), 0);
       const tickets = vendasHoje?.length ?? 0;
 
-      // Produtos com estoque baixo
       const { data: produtos } = await supabase
-        .from("produtos")
+        .from("erp_produtos")
         .select("id, estoque_minimo");
 
       const { data: estoque } = await supabase
-        .from("estoque")
+        .from("erp_estoque")
         .select("produto_id, quantidade")
         .eq("loja_id", lojaId);
 
@@ -381,9 +377,8 @@ export function useDashboardStats(lojaId: string | undefined) {
         return q <= p.estoque_minimo;
       }).length;
 
-      // Contas vencidas
       const { data: contasVenc } = await supabase
-        .from("contas")
+        .from("erp_contas")
         .select("valor")
         .eq("loja_id", lojaId)
         .neq("status", "pago")
@@ -406,7 +401,7 @@ export function useDashboardStats(lojaId: string | undefined) {
 }
 
 // ========================================
-// MUTATIONS (criar/atualizar/excluir)
+// MUTATIONS
 // ========================================
 export function useCreateVenda() {
   const qc = useQueryClient();
@@ -414,7 +409,7 @@ export function useCreateVenda() {
     mutationFn: async (venda: Partial<Venda> & { itens: any[] }) => {
       const { itens, ...vendaData } = venda;
       const { data: vendaCriada, error } = await supabase
-        .from("vendas")
+        .from("erp_vendas")
         .insert(vendaData)
         .select()
         .single();
@@ -422,7 +417,7 @@ export function useCreateVenda() {
 
       if (itens && itens.length > 0) {
         const { error: errItens } = await supabase
-          .from("venda_itens")
+          .from("erp_venda_itens")
           .insert(itens.map((i) => ({ ...i, venda_id: vendaCriada.id })));
         if (errItens) throw errItens;
       }
@@ -430,11 +425,11 @@ export function useCreateVenda() {
       return vendaCriada;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["vendas"] });
-      qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
-      qc.invalidateQueries({ queryKey: ["vendas-por-dia"] });
-      qc.invalidateQueries({ queryKey: ["vendas-hoje"] });
-      qc.invalidateQueries({ queryKey: ["top-produtos"] });
+      qc.invalidateQueries({ queryKey: ["erp_vendas"] });
+      qc.invalidateQueries({ queryKey: ["erp_dashboard-stats"] });
+      qc.invalidateQueries({ queryKey: ["erp_vendas-por-dia"] });
+      qc.invalidateQueries({ queryKey: ["erp_vendas-hoje"] });
+      qc.invalidateQueries({ queryKey: ["erp_top-produtos"] });
     },
   });
 }
@@ -443,11 +438,11 @@ export function useCreateProduto() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (produto: Partial<Produto>) => {
-      const { data, error } = await supabase.from("produtos").insert(produto).select().single();
+      const { data, error } = await supabase.from("erp_produtos").insert(produto).select().single();
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["produtos"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["erp_produtos"] }),
   });
 }
 
@@ -456,7 +451,7 @@ export function useUpdateEstoque() {
   return useMutation({
     mutationFn: async ({ produtoId, lojaId, quantidade }: { produtoId: string; lojaId: string; quantidade: number }) => {
       const { data, error } = await supabase
-        .from("estoque")
+        .from("erp_estoque")
         .upsert({ produto_id: produtoId, loja_id: lojaId, quantidade, updated_at: new Date().toISOString() })
         .select()
         .single();
@@ -464,9 +459,493 @@ export function useUpdateEstoque() {
       return data;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["estoque"] });
-      qc.invalidateQueries({ queryKey: ["produtos-com-estoque"] });
-      qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
+      qc.invalidateQueries({ queryKey: ["erp_estoque"] });
+      qc.invalidateQueries({ queryKey: ["erp_produtos-com-estoque"] });
+      qc.invalidateQueries({ queryKey: ["erp_dashboard-stats"] });
+    },
+  });
+}
+
+// ========================================
+// FORNECEDORES
+// ========================================
+export function useFornecedores() {
+  return useQuery<Pessoa[]>({
+    queryKey: ['erp_fornecedores'],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      const { data, error } = await supabase
+        .from('erp_pessoas')
+        .select('*')
+        .eq('ativo', true)
+        .order('nome_razao');
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+// ========================================
+// CONTAS (MUTATIONS)
+// ========================================
+export function useCreateConta() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (conta: Partial<Conta>) => {
+      const { data, error } = await supabase
+        .from('erp_contas')
+        .insert(conta)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_contas'] });
+      qc.invalidateQueries({ queryKey: ['erp_contas-vencidas'] });
+      qc.invalidateQueries({ queryKey: ['erp_dashboard-stats'] });
+    },
+  });
+}
+
+export function useUpdateConta() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: Partial<Conta> & { id: string }) => {
+      const { data, error } = await supabase
+        .from('erp_contas')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_contas'] });
+      qc.invalidateQueries({ queryKey: ['erp_contas-vencidas'] });
+    },
+  });
+}
+
+export function useDeleteConta() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('erp_contas').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_contas'] });
+      qc.invalidateQueries({ queryKey: ['erp_contas-vencidas'] });
+    },
+  });
+}
+
+// ========================================
+// AGENDA COMPROMISSOS
+// ========================================
+export function useAgendaCompromissos(usuarioId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_agenda', usuarioId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured() || !usuarioId) return [];
+      const { data, error } = await supabase
+        .from('erp_agenda_compromissos')
+        .select('*')
+        .eq('usuario_id', usuarioId)
+        .order('data_inicio', { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!usuarioId,
+  });
+}
+
+export function useCreateAgendaItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (item: any) => {
+      const { data, error } = await supabase
+        .from('erp_agenda_compromissos')
+        .insert(item)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_agenda'] }),
+  });
+}
+
+export function useToggleAgendaItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      const { data, error } = await supabase
+        .from('erp_agenda_compromissos')
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_agenda'] }),
+  });
+}
+
+export function useDeleteAgendaItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('erp_agenda_compromissos').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_agenda'] }),
+  });
+}
+
+// ========================================
+// LOTES
+// ========================================
+export function useLotes(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_lotes', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase
+        .from('erp_lotes')
+        .select('*, produto:erp_produtos(id, nome, sku)')
+        .order('data_validade', { ascending: true });
+      if (lojaId) query = query.eq('loja_id', lojaId);
+      const { data, error } = await query;
+      if (error) throw error;
+      // Mapear para o formato esperado
+      return (data ?? []).map((l: any) => ({
+        ...l,
+        produto_nome: l.produto?.nome,
+      }));
+    },
+  });
+}
+
+export function useCreateLote() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (lote: any) => {
+      const { data, error } = await supabase.from('erp_lotes').insert(lote).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_lotes'] });
+      qc.invalidateQueries({ queryKey: ['erp_lotes-vencendo'] });
+    },
+  });
+}
+
+// ========================================
+// NOTIFICA«’ES
+// ========================================
+export function useNotificacoes(usuarioId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_notificacoes', usuarioId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured() || !usuarioId) return [];
+      const { data, error } = await supabase
+        .from('erp_notificacoes')
+        .select('*')
+        .eq('usuario_id', usuarioId)
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!usuarioId,
+  });
+}
+
+export function useCreateNotificacao() {
+  return useMutation({
+    mutationFn: async (notif: any) => {
+      const { data, error } = await supabase.from('erp_notificacoes').insert(notif).select().single();
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useMarcarNotificacaoLida() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('erp_notificacoes')
+        .update({ lida: true, data_leitura: new Date().toISOString() })
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_notificacoes'] }),
+  });
+}
+
+// ========================================
+// VIEWS
+// ========================================
+export function useEstoqueBaixo(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_estoque-baixo', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      const { data, error } = await supabase
+        .from('v_erp_estoque_baixo')
+        .select('*')
+        .order('deficit', { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useLotesVencendo(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_lotes-vencendo', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      const { data, error } = await supabase
+        .from('v_erp_lotes_vencendo')
+        .select('*')
+        .order('dias_para_vencer', { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useAniversariantes() {
+  return useQuery<any[]>({
+    queryKey: ['erp_aniversariantes'],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      const { data, error } = await supabase
+        .from('v_erp_aniversariantes_mes')
+        .select('*')
+        .order('dia');
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useFluxoCaixa(lojaId?: string, dataInicio?: string, dataFim?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_fluxo-caixa', lojaId, dataInicio, dataFim],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase
+        .from('v_erp_fluxo_caixa')
+        .select('*')
+        .order('data', { ascending: false });
+      if (lojaId) query = query.eq('loja_id', lojaId);
+      if (dataInicio) query = query.gte('data', dataInicio);
+      if (dataFim) query = query.lte('data', dataFim);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useTopProdutosView(lojaId?: string, limite: number = 10) {
+  return useQuery<any[]>({
+    queryKey: ['erp_top-produtos-view', lojaId, limite],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase
+        .from('v_erp_top_produtos')
+        .select('*')
+        .order('receita_total', { ascending: false })
+        .limit(limite);
+      if (lojaId) query = query.eq('loja_id', lojaId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+// ========================================
+// BOLETOS / CHEQUES / PROMISS”RIAS
+// ========================================
+export function useBoletos(filters?: { lojaId?: string; status?: string }) {
+  return useQuery<any[]>({
+    queryKey: ['erp_boletos', filters],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase
+        .from('erp_boletos')
+        .select('*')
+        .order('data_vencimento', { ascending: true });
+      if (filters?.lojaId) query = query.eq('loja_id', filters.lojaId);
+      if (filters?.status) query = query.eq('status', filters.status);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useCheques(filters?: { lojaId?: string; status?: string }) {
+  return useQuery<any[]>({
+    queryKey: ['erp_cheques', filters],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase
+        .from('erp_cheques')
+        .select('*')
+        .order('data_vencimento', { ascending: true });
+      if (filters?.lojaId) query = query.eq('loja_id', filters.lojaId);
+      if (filters?.status) query = query.eq('status', filters.status);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function usePromissorias(filters?: { lojaId?: string; status?: string }) {
+  return useQuery<any[]>({
+    queryKey: ['erp_promissorias', filters],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase
+        .from('erp_promissorias')
+        .select('*')
+        .order('data_vencimento', { ascending: true });
+      if (filters?.lojaId) query = query.eq('loja_id', filters.lojaId);
+      if (filters?.status) query = query.eq('status', filters.status);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+// ========================================
+// SANGRIAS / ENTRADAS EXTRAS
+// ========================================
+export function useSangrias(caixaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_sangrias', caixaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase
+        .from('erp_sangrias')
+        .select('*')
+        .order('data_hora', { ascending: false });
+      if (caixaId) query = query.eq('caixa_id', caixaId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useCreateSangria() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (sangria: any) => {
+      const { data, error } = await supabase.from('erp_sangrias').insert(sangria).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_sangrias'] }),
+  });
+}
+
+export function useEntradasExtras(caixaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_entradas-extras', caixaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase
+        .from('erp_entradas_extras')
+        .select('*')
+        .order('data_hora', { ascending: false });
+      if (caixaId) query = query.eq('caixa_id', caixaId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useCreateEntradaExtra() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (entrada: any) => {
+      const { data, error } = await supabase.from('erp_entradas_extras').insert(entrada).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_entradas-extras'] }),
+  });
+}
+
+// ========================================
+// CHAVES PIX / CONTAS BANC¡RIAS
+// ========================================
+export function useChavesPix(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_chaves-pix', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase
+        .from('erp_chaves_pix')
+        .select('*')
+        .eq('ativo', true);
+      if (lojaId) query = query.eq('loja_id', lojaId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useContasBancarias(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_contas-bancarias', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase
+        .from('erp_contas_bancarias')
+        .select('*')
+        .eq('ativo', true);
+      if (lojaId) query = query.eq('loja_id', lojaId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useVendasPorDiaView(lojaId?: string, dias: number = 7) {
+  return useQuery<any[]>({
+    queryKey: ['erp_vendas-por-dia-view', lojaId, dias],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      const desde = new Date();
+      desde.setDate(desde.getDate() - dias);
+      let query = supabase
+        .from('v_erp_vendas_por_dia')
+        .select('*')
+        .gte('dia', desde.toISOString().slice(0, 10))
+        .order('dia', { ascending: true });
+      if (lojaId) query = query.eq('loja_id', lojaId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
     },
   });
 }

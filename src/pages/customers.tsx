@@ -1,28 +1,18 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Users, Plus, Search } from "lucide-react";
-import { useState } from "react";
+import { Users, Plus, Search, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useClientes, isSupabaseConfigured } from "@/lib/supabase-queries";
+import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 
 export function CustomersPage() {
   const { data: clientes = [], isLoading } = useClientes();
   const [search, setSearch] = useState("");
 
   if (!isSupabaseConfigured()) {
-    return (
-      <div className="space-y-6">
-        <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
-          <Users className="h-6 w-6" /> Clientes
-        </h1>
-        <Card>
-          <CardContent className="p-12 text-center text-muted-foreground">
-            Configure as variáveis do Supabase no arquivo <code>.env</code>
-          </CardContent>
-        </Card>
-      </div>
-    );
+    return <SupabaseNotConfigured title="Clientes" />;
   }
 
   const filtrados = clientes.filter((c) => {
@@ -64,7 +54,10 @@ export function CustomersPage() {
       <Card>
         <CardContent className="p-0">
           {isLoading ? (
-            <div className="p-8 text-center text-muted-foreground">Carregando...</div>
+            <div className="p-8 text-center text-muted-foreground">
+              <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
+              Carregando clientes...
+            </div>
           ) : (
             <Table>
               <TableHeader>

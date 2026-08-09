@@ -1,6 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { TrendingUp, Receipt, AlertTriangle, PackageX, ScanBarcode, Package, ArrowUpRight, Calendar } from "lucide-react";
+import { TrendingUp, Receipt, AlertTriangle, PackageX, ScanBarcode, Package, ArrowUpRight, Calendar, Loader2 } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { brl, num } from "@/lib/format";
 import { useLojaAtualStore } from "@/lib/store/loja-atual";
-import { useDashboardStats, useVendasPorDia, useTopProdutos } from "@/lib/supabase-queries";
+import { useLojas, useDashboardStats, useVendasPorDia, useTopProdutos, isSupabaseConfigured } from "@/lib/supabase-queries";
 
 const DIA_LABEL: Record<number, string> = { 0: "Dom", 1: "Seg", 2: "Ter", 3: "Qua", 4: "Qui", 5: "Sex", 6: "Sáb" };
 
@@ -33,8 +33,20 @@ function KpiCard({ label, value, delta, icon: Icon, tone = "default" }: any) {
 }
 
 export function DashboardPage() {
-  const lojaId = useLojaAtualStore((s) => s.currentLojaId);
-  const { data: stats } = useDashboardStats(lojaId ?? undefined);
+  const { data: lojas = [], isLoading: lojasLoading } = useLojas();
+  const currentLojaId = useLojaAtualStore((s) => s.currentLojaId);
+  const setCurrentLojaId = useLojaAtualStore((s) => s.setCurrentLojaId);
+
+  // Auto-selecionar a primeira loja matriz automaticamente
+  useEffect(() => {
+    if (lojas.length > 0 && !currentLojaId) {
+      const matriz = lojas.find((l) => l.matriz) ?? lojas[0];
+      setCurrentLojaId(matriz.id);
+    }
+  }, [lojas, currentLojaId, setCurrentLojaId]);
+
+  const lojaId = currentLojaId;
+  const { data: stats, isLoading: statsLoading } = useDashboardStats(lojaId ?? undefined);
   const { data: vendasPorDia = [] } = useVendasPorDia(lojaId ?? "", 7);
   const { data: topProdutos = [] } = useTopProdutos(lojaId ?? "", 5, 7);
 
@@ -50,6 +62,77 @@ export function DashboardPage() {
     return arr;
   }, [vendasPorDia]);
 
+  // Se Supabase não está configurado
+  if (!isSupabaseConfigured()) {
+    return (
+      <div className="space-y-6">
+        <header>
+          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+          <p className="text-sm text-muted-foreground">
+            Visão geral da operação
+          </p>
+        </header>
+        <Card>
+          <CardContent className="p-12 text-center">
+            <p className="text-muted-foreground">
+              Configure as variáveis do Supabase no arquivo <code className="text-xs">.env</code>
+            </p>
+            <code className="mt-2 inline-block text-xs">VITE_SUPABASE_URL</code> e <code className="text-xs">VITE_SUPABASE_ANON_KEY</code>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Carregando lojas
+  if (lojasLoading) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <Loader2 className="h-8 w-8 animate-spin" />
+          <p className="text-sm">Carregando lojas...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Sem lojas cadastradas
+  if (lojas.length === 0) {
+    return (
+      <div className="space-y-6">
+        <header>
+          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+          <p className="text-sm text-muted-foreground">
+            Visão geral da operação · hoje, {new Date().toLocaleDateString("pt-BR")}
+          </p>
+        </header>
+        <Card>
+          <CardContent className="p-12 text-center">
+            <p className="text-muted-foreground mb-2">
+              Nenhuma loja cadastrada no Supabase.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Cadastre pelo menos uma loja na tabela <code>lojas</code> para começar.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Aguardando loja ser selecionada (será automático)
+  if (!lojaId) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <Loader2 className="h-8 w-8 animate-spin" />
+          <p className="text-sm">Selecionando loja...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Dashboard normal
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
@@ -69,12 +152,10 @@ export function DashboardPage() {
         </div>
       </header>
 
-      {!lojaId ? (
-        <Card>
-          <CardContent className="p-12 text-center text-muted-foreground">
-            Configure as variáveis do Supabase no <code>.env</code> e selecione uma loja no header.
-          </CardContent>
-        </Card>
+      {statsLoading ? (
+        <div className="flex h-32 items-center justify-center text-muted-foreground">
+          <Loader2 className="h-6 w-6 animate-spin mr-2" /> Carregando indicadores...
+        </div>
       ) : (
         <>
           <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

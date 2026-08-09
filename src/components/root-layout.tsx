@@ -1,4 +1,4 @@
-import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
+import { Outlet, Link, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { LogOut, Store, User as UserIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -25,7 +25,6 @@ import { useLojaAtualStore } from "@/lib/store/loja-atual";
 import { useLojas, isSupabaseConfigured } from "@/lib/supabase-queries";
 
 export function RootLayout() {
-  const location = useLocation();
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
   const { data: lojas = [] } = useLojas();
@@ -34,6 +33,7 @@ export function RootLayout() {
 
   const [hydrated, setHydrated] = useState(false);
 
+  // ===== TODOS OS HOOKS ANTES DE QUALQUER EARLY RETURN =====
   useEffect(() => {
     setHydrated(true);
   }, []);
@@ -43,17 +43,6 @@ export function RootLayout() {
       navigate("/login", { replace: true });
     }
   }, [hydrated, isAuthenticated, navigate]);
-
-  if (!hydrated || !isAuthenticated) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-3 text-muted-foreground">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          <p className="text-sm">Carregando…</p>
-        </div>
-      </div>
-    );
-  }
 
   // Auto-selecionar primeira loja ao carregar
   useEffect(() => {
@@ -67,6 +56,18 @@ export function RootLayout() {
     logout();
     toast.success("Logout realizado!");
     navigate("/login", { replace: true });
+  }
+
+  // ===== EARLY RETURN (após todos os hooks) =====
+  if (!hydrated || !isAuthenticated) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          <p className="text-sm">Carregando…</p>
+        </div>
+      </div>
+    );
   }
 
   const lojaAtual = lojas.find((l) => l.id === currentLojaId);

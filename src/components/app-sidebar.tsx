@@ -26,6 +26,7 @@ import {
   HelpCircle,
   ChevronDown,
   Mail,
+  Car,
 } from "lucide-react";
 
 import { useAuth, type Permission } from "@/lib/store/auth-store";
@@ -73,7 +74,6 @@ const groups: NavGroup[] = [
       { title: "Pedidos Delivery", url: "/pedidos-delivery", icon: Bike, perm: "venda.criar" },
       { title: "Pedidos iFood", url: "/ifood", icon: ShoppingCart, perm: "venda.criar" },
       { title: "ExApp Pedidos", url: "/exapp-pedidos", icon: MessageSquare, perm: "venda.criar" },
-      { title: "Comanda/Mesa", url: "/comanda-mesa", icon: Coffee, perm: "venda.criar" },
       { title: "Gerador de Boletos", url: "/gerador-boletos", icon: Barcode, perm: "financeiro.ver", badge: "novo" },
       {
         title: "Venda Mais",
