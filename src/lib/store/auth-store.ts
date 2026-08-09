@@ -123,28 +123,61 @@ export const useAuthStore = create<AuthState>()(
   )
 );
 
-// Função de login (mock para demo)
+// Função de login (Supabase Auth + fallback demo)
 export async function login(
   email: string,
   password: string
 ): Promise<{ ok: true; user: User } | { ok: false; error: string }> {
-  // Demo users
+  // Tenta login via Supabase Auth primeiro
+  try {
+    const { supabase } = await import("@/lib/supabase");
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+
+    if (!error && data.user) {
+      // Busca perfil do usuário
+      const { data: perfil } = await supabase
+        .from("usuarios")
+        .select("id, email, nome, role, ativo")
+        .eq("id", data.user.id)
+        .single();
+
+      if (perfil) {
+        const user: User = {
+          id: perfil.id,
+          email: perfil.email,
+          nome: perfil.nome,
+          role: perfil.role,
+          ativo: perfil.ativo,
+        };
+        useAuthStore.getState().setUser(user);
+        return { ok: true, user };
+      }
+    }
+  } catch (err) {
+    // Cai no fallback abaixo se Supabase não estiver configurado
+    console.warn("Login Supabase falhou, usando demo:", err);
+  }
+
+  // Fallback demo (caso Supabase não esteja configurado)
   const demoUsers: Record<string, { user: User; password: string }> = {
-    "admin@powererp.com": {
-      password: "admin123",
-      user: { id: "u1", email: "admin@powererp.com", nome: "Administrador", role: "admin", ativo: true },
+    "admin@lojaxlife.com.br": {
+      password: "Admin@2026",
+      user: { id: "u1", email: "admin@lojaxlife.com.br", nome: "Administrador", role: "admin", ativo: true },
     },
-    "gerente@powererp.com": {
-      password: "gerente123",
-      user: { id: "u2", email: "gerente@powererp.com", nome: "Gerente", role: "gerente", ativo: true },
+    "gerente@lojaxlife.com.br": {
+      password: "Ger@2026",
+      user: { id: "u2", email: "gerente@lojaxlife.com.br", nome: "Gerente", role: "gerente", ativo: true },
     },
-    "caixa@powererp.com": {
-      password: "caixa123",
-      user: { id: "u3", email: "caixa@powererp.com", nome: "Caixa", role: "caixa", ativo: true },
+    "caixa@lojaxlife.com.br": {
+      password: "Caixa@2026",
+      user: { id: "u3", email: "caixa@lojaxlife.com.br", nome: "Caixa", role: "caixa", ativo: true },
     },
-    "estoque@powererp.com": {
-      password: "estoque123",
-      user: { id: "u4", email: "estoque@powererp.com", nome: "Estoquista", role: "estoquista", ativo: true },
+    "estoque@lojaxlife.com.br": {
+      password: "Estoque@2026",
+      user: { id: "u4", email: "estoque@lojaxlife.com.br", nome: "Estoquista", role: "estoquista", ativo: true },
     },
   };
 

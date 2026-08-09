@@ -10,10 +10,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { login, useAuth } from "@/lib/store/auth-store";
 
 const demoUsers = [
-  { label: "Admin", email: "admin@powererp.com", senha: "admin123" },
-  { label: "Gerente", email: "gerente@powererp.com", senha: "gerente123" },
-  { label: "Caixa", email: "caixa@powererp.com", senha: "caixa123" },
-  { label: "Estoquista", email: "estoque@powererp.com", senha: "estoque123" },
+  { label: "Admin", email: "admin@lojaxlife.com.br", senha: "Admin@2026" },
+  { label: "Gerente", email: "gerente@lojaxlife.com.br", senha: "Ger@2026" },
+  { label: "Caixa", email: "caixa@lojaxlife.com.br", senha: "Caixa@2026" },
+  { label: "Estoquista", email: "estoque@lojaxlife.com.br", senha: "Estoque@2026" },
 ];
 
 export function LoginPage() {
