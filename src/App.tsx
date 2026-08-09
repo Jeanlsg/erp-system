@@ -11,7 +11,7 @@ import { CustomersPage } from "@/pages/customers";
 import { VisaoGeralPage } from "@/pages/visao-geral";
 
 // Helper para gerar Placeholder com ícone padrão
-import { Calculator, FileText, Bike, MessageSquare, Coffee, Barcode, DollarSign, CreditCard, Mail, Wrench, ShoppingCart, Briefcase, Users, Building2, Package, Calendar, Send, LineChart, BarChart3, CheckCircle, Search, Truck, Key, Cog, Settings, HelpCircle, Store } from "lucide-react";
+import { Calculator, FileText, Bike, MessageSquare, Coffee, Barcode, DollarSign, CreditCard, Mail, Wrench, ShoppingCart, Briefcase, Users, Building2, Package, Calendar, Send, LineChart, BarChart3, Truck, Key, Cog, Settings, HelpCircle, Store, Receipt } from "lucide-react";
 
 const P = (title: string, description?: string, icon?: any) => (
   <PlaceholderPage title={title} description={description} icon={icon} />
