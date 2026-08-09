@@ -21,15 +21,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAuth, roleLabels, logout } from "@/lib/store/auth-store";
-import { useLojas, useStoresStore } from "@/lib/store/stores-store";
+import { useLojaAtualStore } from "@/lib/store/loja-atual";
+import { useLojas, isSupabaseConfigured } from "@/lib/supabase-queries";
 
 export function RootLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
-  const lojas = useLojas();
-  const currentLojaId = useStoresStore((s) => s.currentLojaId);
-  const setCurrentLojaId = useStoresStore((s) => s.setCurrentLojaId);
+  const { data: lojas = [] } = useLojas();
+  const currentLojaId = useLojaAtualStore((s) => s.currentLojaId);
+  const setCurrentLojaId = useLojaAtualStore((s) => s.setCurrentLojaId);
 
   const [hydrated, setHydrated] = useState(false);
 
@@ -54,11 +55,21 @@ export function RootLayout() {
     );
   }
 
+  // Auto-selecionar primeira loja ao carregar
+  useEffect(() => {
+    if (lojas.length > 0 && !currentLojaId) {
+      const matriz = lojas.find((l) => l.matriz) ?? lojas[0];
+      setCurrentLojaId(matriz.id);
+    }
+  }, [lojas, currentLojaId, setCurrentLojaId]);
+
   function handleLogout() {
     logout();
     toast.success("Logout realizado!");
     navigate("/login", { replace: true });
   }
+
+  const lojaAtual = lojas.find((l) => l.id === currentLojaId);
 
   return (
     <div className="flex min-h-screen w-full bg-background">
@@ -67,19 +78,26 @@ export function RootLayout() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-10 flex h-14 items-center justify-between gap-3 border-b bg-background/95 px-4 backdrop-blur">
           <div className="flex items-center gap-3">
-            <Select value={currentLojaId} onValueChange={setCurrentLojaId}>
-              <SelectTrigger className="w-48">
-                <Store className="mr-2 h-4 w-4" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {lojas.map((l) => (
-                  <SelectItem key={l.id} value={l.id}>
-                    {l.apelido} {l.matriz && "★"}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {isSupabaseConfigured() && lojas.length > 0 ? (
+              <Select value={currentLojaId ?? ""} onValueChange={setCurrentLojaId}>
+                <SelectTrigger className="w-48">
+                  <Store className="mr-2 h-4 w-4" />
+                  <SelectValue placeholder="Selecione loja" />
+                </SelectTrigger>
+                <SelectContent>
+                  {lojas.map((l) => (
+                    <SelectItem key={l.id} value={l.id}>
+                      {l.apelido} {l.matriz && "★"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Store className="h-4 w-4" />
+                {lojaAtual?.apelido ?? "Sistema"}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-3">
@@ -103,7 +121,7 @@ export function RootLayout() {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
-                  <Link to="/configuracoes">
+                  <Link to="/config/sistema">
                     <UserIcon className="mr-2 h-4 w-4" /> Perfil
                   </Link>
                 </DropdownMenuItem>

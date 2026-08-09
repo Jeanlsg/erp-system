@@ -9,13 +9,6 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { login, useAuth } from "@/lib/store/auth-store";
 
-const demoUsers = [
-  { label: "Admin", email: "admin@lojaxlife.com.br", senha: "Admin@2026" },
-  { label: "Gerente", email: "gerente@lojaxlife.com.br", senha: "Ger@2026" },
-  { label: "Caixa", email: "caixa@lojaxlife.com.br", senha: "Caixa@2026" },
-  { label: "Estoquista", email: "estoque@lojaxlife.com.br", senha: "Estoque@2026" },
-];
-
 export function LoginPage() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
@@ -40,11 +33,6 @@ export function LoginPage() {
     navigate("/", { replace: true });
   };
 
-  const usarDemo = (u: { email: string; senha: string }) => {
-    setEmail(u.email);
-    setSenha(u.senha);
-  };
-
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
       <div className="grid w-full max-w-4xl gap-6 md:grid-cols-2">
@@ -59,7 +47,7 @@ export function LoginPage() {
             </p>
           </div>
           <div className="rounded-md border border-sidebar-border bg-sidebar-accent/40 p-3 text-xs text-sidebar-foreground/70">
-            Versão de demonstração. Use os atalhos ao lado para entrar com perfis pré-configurados.
+            Use seu e-mail corporativo e senha para acessar.
           </div>
         </div>
 
@@ -76,6 +64,7 @@ export function LoginPage() {
                   id="email"
                   type="email"
                   autoComplete="username"
+                  placeholder="seu@email.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -96,17 +85,6 @@ export function LoginPage() {
                 <LogIn className="mr-2 h-4 w-4" /> {loading ? "Entrando..." : "Entrar"}
               </Button>
             </form>
-
-            <div className="mt-6 space-y-2">
-              <p className="text-xs font-medium text-muted-foreground">Acesso rápido (demo)</p>
-              <div className="grid grid-cols-2 gap-2">
-                {demoUsers.map((u) => (
-                  <Button key={u.email} type="button" variant="outline" size="sm" onClick={() => usarDemo(u)}>
-                    {u.label}
-                  </Button>
-                ))}
-              </div>
-            </div>
           </CardContent>
         </Card>
       </div>

@@ -9,9 +9,9 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useVendas } from "@/lib/store/sales-store";
-import { useLojas } from "@/lib/store/stores-store";
-import { useProdutos, getEstoqueLoja } from "@/lib/store/products-store";
+import { useLojas, useVendas, isSupabaseConfigured } from "@/lib/supabase-queries";
+import { useLojaAtualStore } from "@/lib/store/loja-atual";
+import { useProdutosComEstoque } from "@/lib/supabase-queries";
 import { brl, num, pct } from "@/lib/format";
 
 const CORES = ["hsl(var(--primary))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))", "hsl(var(--muted-foreground))"];
@@ -40,12 +40,13 @@ function Kpi({ label, value, hint, icon: Icon, tone = "default" }: any) {
 }
 
 export function VisaoGeralPage() {
-  const lojas = useLojas();
-  const vendas = useVendas();
-  const produtos = useProdutos();
+  const { data: lojas = [] } = useLojas();
+  const { data: vendas = [] } = useVendas();
+  const { data: produtos = [] } = useProdutosComEstoque();
   const [periodo, setPeriodo] = useState<Periodo>("30");
-  const [selecionadas, setSelecionadas] = useState<string[]>(() => lojas.map((l) => l.id));
+  const [selecionadas, setSelecionadas] = useState<string[]>([]);
 
+  // Auto-selecionar todas as lojas na primeira carga
   const lojasAtivas = selecionadas.length === 0 ? lojas.map((l) => l.id) : selecionadas;
 
   const desde = useMemo(() => {
@@ -55,11 +56,13 @@ export function VisaoGeralPage() {
     return d.getTime();
   }, [periodo]);
 
-  const vendasFiltradas = vendas.filter((v) => lojasAtivas.includes(v.lojaId) && new Date(v.data).getTime() >= desde);
+  const vendasFiltradas = useMemo(() => {
+    return vendas.filter((v) => lojasAtivas.includes(v.loja_id) && new Date(v.data_venda).getTime() >= desde);
+  }, [vendas, lojasAtivas, desde]);
 
   const kpis = useMemo(() => {
-    const total = vendasFiltradas.reduce((s, v) => s + v.total, 0);
-    const custo = vendasFiltradas.reduce((s, v) => s + v.itens.reduce((a, i) => a + i.precoCusto * i.quantidade, 0), 0);
+    const total = vendasFiltradas.reduce((s, v) => s + Number(v.total), 0);
+    const custo = vendasFiltradas.reduce((s, v) => s + Number(v.custo_total), 0);
     const lucro = total - custo;
     const margem = total > 0 ? lucro / total : 0;
     const ticket = vendasFiltradas.length ? total / vendasFiltradas.length : 0;
@@ -69,21 +72,29 @@ export function VisaoGeralPage() {
   const porLoja = useMemo(() => {
     return lojasAtivas.map((lojaId) => {
       const loja = lojas.find((l) => l.id === lojaId);
-      const vs = vendasFiltradas.filter((v) => v.lojaId === lojaId);
-      const receita = vs.reduce((s, v) => s + v.total, 0);
-      const custo = vs.reduce((s, v) => s + v.itens.reduce((a, i) => a + i.precoCusto * i.quantidade, 0), 0);
+      const vs = vendasFiltradas.filter((v) => v.loja_id === lojaId);
+      const receita = vs.reduce((s, v) => s + Number(v.total), 0);
+      const custo = vs.reduce((s, v) => s + Number(v.custo_total), 0);
       const lucro = receita - custo;
       const margem = receita > 0 ? lucro / receita : 0;
-      return { id: lojaId, nome: loja?.apelido ?? lojaId, vendas: vs.length, receita, lucro, margem, ticket: vs.length ? receita / vs.length : 0 };
+      return {
+        id: lojaId,
+        nome: loja?.apelido ?? lojaId,
+        vendas: vs.length,
+        receita,
+        lucro,
+        margem,
+        ticket: vs.length ? receita / vs.length : 0,
+      };
     }).sort((a, b) => b.receita - a.receita);
   }, [vendasFiltradas, lojasAtivas, lojas]);
 
   const porDia = useMemo(() => {
     const map = new Map<string, Record<string, number>>();
     for (const v of vendasFiltradas) {
-      const key = new Date(v.data).toLocaleDateString("pt-BR");
+      const key = new Date(v.data_venda).toLocaleDateString("pt-BR");
       const row = map.get(key) ?? {};
-      row[v.lojaId] = (row[v.lojaId] ?? 0) + v.total;
+      row[v.loja_id] = (row[v.loja_id] ?? 0) + Number(v.total);
       map.set(key, row);
     }
     return [...map.entries()].map(([dia, valores]) => ({ dia, ...valores })).slice(-30);
@@ -91,19 +102,19 @@ export function VisaoGeralPage() {
 
   const porPagamento = useMemo(() => {
     const map = new Map<string, number>();
-    for (const v of vendasFiltradas) map.set(v.formaPagamento, (map.get(v.formaPagamento) ?? 0) + v.total);
+    for (const v of vendasFiltradas) map.set(v.forma_pagamento, (map.get(v.forma_pagamento) ?? 0) + Number(v.total));
     return [...map.entries()].map(([nome, total]) => ({ nome, total }));
   }, [vendasFiltradas]);
 
   const topProdutos = useMemo(() => {
     const map = new Map<string, { nome: string; qtd: number; total: number; custo: number }>();
     for (const v of vendasFiltradas) {
-      for (const i of v.itens) {
-        const cur = map.get(i.produtoId) ?? { nome: i.nome, qtd: 0, total: 0, custo: 0 };
-        cur.qtd += i.quantidade;
-        cur.total += i.precoUnit * i.quantidade;
-        cur.custo += i.precoCusto * i.quantidade;
-        map.set(i.produtoId, cur);
+      for (const i of v.itens ?? []) {
+        const cur = map.get(i.nome) ?? { nome: i.nome, qtd: 0, total: 0, custo: 0 };
+        cur.qtd += Number(i.quantidade);
+        cur.total += Number(i.subtotal);
+        cur.custo += Number(i.preco_custo) * Number(i.quantidade);
+        map.set(i.nome, cur);
       }
     }
     return [...map.values()].sort((a, b) => b.total - a.total).slice(0, 10);
@@ -114,11 +125,11 @@ export function VisaoGeralPage() {
       const loja = lojas.find((l) => l.id === lojaId);
       let unidades = 0, baixo = 0, esgotado = 0, valor = 0;
       for (const p of produtos) {
-        const q = getEstoqueLoja(p.id, lojaId);
+        const q = p.estoque_por_loja[lojaId] ?? 0;
         unidades += q;
-        valor += q * p.precoCusto;
+        valor += q * Number(p.preco_custo);
         if (q === 0) esgotado++;
-        else if (q <= p.estoqueMinimo) baixo++;
+        else if (q <= p.estoque_minimo) baixo++;
       }
       return { id: lojaId, nome: loja?.apelido ?? lojaId, unidades, baixo, esgotado, valor };
     });
@@ -133,6 +144,19 @@ export function VisaoGeralPage() {
   };
 
   const vazio = vendasFiltradas.length === 0;
+
+  if (!isSupabaseConfigured()) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Visão Geral" description="Consolidado multi-loja" />
+        <Card>
+          <CardContent className="p-12 text-center text-muted-foreground">
+            Configure as variáveis do Supabase no arquivo <code>.env</code>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -159,7 +183,7 @@ export function VisaoGeralPage() {
             <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Lojas</span>
             <div className="flex flex-wrap gap-2">
               {lojas.map((l) => {
-                const on = selecionadas.includes(l.id);
+                const on = lojasAtivas.includes(l.id);
                 return (
                   <label key={l.id} className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition ${on ? "border-primary bg-primary/10" : "border-border bg-card text-muted-foreground"}`}>
                     <Checkbox checked={on} onCheckedChange={() => toggleLoja(l.id)} />
@@ -215,7 +239,7 @@ export function VisaoGeralPage() {
                       {porPagamento.map((_, i) => <Cell key={i} fill={CORES[i % CORES.length]} />)}
                     </Pie>
                     <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} formatter={(v: number) => brl(v)} />
-                    <Legend wrapperStyle={{ fontSize: 12, textTransform: "capitalize" }} />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
                   </PieChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -252,38 +276,6 @@ export function VisaoGeralPage() {
                         <TableCell className="text-right tabular-nums">{brl(l.lucro)}</TableCell>
                         <TableCell className="text-right tabular-nums">{pct(l.margem)}</TableCell>
                         <TableCell className="text-right tabular-nums">{pct(share)}</TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle className="text-base">Top produtos · consolidado</CardTitle></CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Produto</TableHead>
-                    <TableHead className="text-right">Qtd</TableHead>
-                    <TableHead className="text-right">Receita</TableHead>
-                    <TableHead className="text-right">Lucro</TableHead>
-                    <TableHead className="text-right">Margem</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {topProdutos.map((p) => {
-                    const lucro = p.total - p.custo;
-                    const margem = p.total > 0 ? lucro / p.total : 0;
-                    return (
-                      <TableRow key={p.nome}>
-                        <TableCell className="font-medium">{p.nome}</TableCell>
-                        <TableCell className="text-right tabular-nums">{num(p.qtd)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{brl(p.total)}</TableCell>
-                        <TableCell className="text-right tabular-nums font-medium">{brl(lucro)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{pct(margem)}</TableCell>
                       </TableRow>
                     );
                   })}
