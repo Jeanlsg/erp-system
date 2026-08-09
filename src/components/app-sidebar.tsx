@@ -18,17 +18,13 @@ import {
   Building2,
   Package,
   Calendar,
-  Send,
   LineChart,
-  CheckCircle,
   Key,
-  Settings,
   Cog,
   Store,
   HelpCircle,
   ChevronDown,
   Mail,
-  Search,
 } from "lucide-react";
 
 import { useAuth, type Permission } from "@/lib/store/auth-store";
@@ -140,51 +136,8 @@ const groups: NavGroup[] = [
           { title: "Regiões de Entrega", url: "/gestao/regioes-entrega", icon: Truck },
         ],
       },
-      // Gestão Cobrança
-      {
-        title: "Gestão Cobrança",
-        icon: Send,
-        items: [
-          { title: "Parcelar Débitos", url: "/gestao/parcelar-debitos", icon: DollarSign },
-          { title: "Localizar Pessoas", url: "/gestao/localizar-pessoas", icon: Search },
-          { title: "Negativar Devedores", url: "/gestao/negativar-devedores", icon: Users },
-          { title: "Encaminhar para Protesto", url: "/gestao/protesto", icon: Send },
-          { title: "Recomendo/Não Recomendo", url: "/gestao/recomendacoes", icon: CheckCircle },
-        ],
-      },
-      // Gestão Recebimentos
-      {
-        title: "Gestão Recebimentos",
-        icon: LineChart,
-        items: [
-          { title: "Crediário Próprio", url: "/gestao/crediario-proprio", icon: CreditCard },
-          { title: "Boleto", url: "/gestao/boletos", icon: Barcode },
-          { title: "Crediário", url: "/gestao/crediario", icon: CreditCard },
-          { title: "Promissória", url: "/gestao/promissoria", icon: FileText },
-          { title: "Cheque", url: "/gestao/cheque", icon: FileText },
-          { title: "Dinheiro", url: "/gestao/dinheiro", icon: DollarSign },
-          { title: "Transferência (DOC/TED)", url: "/gestao/transferencia", icon: Truck },
-          { title: "Cartão de Débito", url: "/gestao/cartao-debito", icon: CreditCard },
-          { title: "Cartão de Crédito", url: "/gestao/cartao-credito", icon: CreditCard },
-        ],
-      },
-      // Análise de Crédito
-      {
-        title: "Análise de Crédito",
-        icon: BarChart3,
-        items: [
-          { title: "Consulta Pessoa Física", url: "/gestao/consulta-pf", icon: Users },
-          { title: "Consulta Pessoa Jurídica", url: "/gestao/consulta-pj", icon: Building2 },
-          { title: "Consulta de Cheque", url: "/gestao/consulta-cheque", icon: FileText },
-          { title: "Consultas Veiculares", url: "/gestao/consultas-veiculares", icon: Truck },
-        ],
-      },
       // Gestão Usuários (link direto)
       { title: "Gestão Usuários", url: "/gestao/usuarios", icon: Users, perm: "usuario.ver" },
-      // Gestão Agendas (link direto)
-      { title: "Gestão Agendas", url: "/gestao/agendas", icon: Calendar, perm: "config.ver" },
-      // Painel Gestor (badge novo)
-      { title: "Painel Gestor", url: "/painel-gestor", icon: Settings, badge: "novo", perm: "relatorio.ver" },
       // Faturamento (badge novo)
       { title: "Faturamento", url: "/faturamento", icon: FileText, badge: "novo", perm: "fiscal.emitir" },
     ],
@@ -205,7 +158,6 @@ const groups: NavGroup[] = [
       { title: "Configurações do Sistema", url: "/config/sistema", icon: Cog, perm: "config.ver" },
       { title: "Configurações Empresariais", url: "/config/empresarial", icon: Briefcase, perm: "config.editar" },
       { title: "Minhas Chaves", url: "/config/minhas-chaves", icon: Key, badge: "novo" },
-      { title: "Acessar meu Contador", url: "/config/contador", icon: Calculator },
       { title: "Downloads", url: "/config/downloads", icon: Barcode },
       {
         title: "Treinamento Sistema",

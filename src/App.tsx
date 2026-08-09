@@ -71,36 +71,10 @@ export default function App() {
         <Route path="gestao/email-inteligente" element={P("E-mail Inteligente", "Automação de emails", Mail)} />
         <Route path="gestao/agenda-compromissos" element={P("Agenda de Compromissos", "Tarefas e eventos", Calendar)} />
         <Route path="gestao/regioes-entrega" element={P("Regiões de Entrega", "Zonas de entrega", Truck)} />
-        
-        {/* Gestão Cobrança */}
-        <Route path="gestao/parcelar-debitos" element={P("Parcelar Débitos", "Negociação de dívidas", DollarSign)} />
-        <Route path="gestao/localizar-pessoas" element={P("Localizar Pessoas", "Busca unificada", Search)} />
-        <Route path="gestao/negativar-devedores" element={P("Negativar Devedores", "Gestão de inadimplentes", Users)} />
-        <Route path="gestao/protesto" element={P("Encaminhar para Protesto", "Protesto em cartório", Send)} />
-        <Route path="gestao/recomendacoes" element={P("Recomendo/Não Recomendo", "Avaliações", CheckCircle)} />
-        
-        {/* Gestão Recebimentos */}
-        <Route path="gestao/crediario-proprio" element={P("Crediário Próprio", "Carnê próprio", CreditCard)} />
-        <Route path="gestao/boletos" element={P("Boleto", "Emissão de boletos", Barcode)} />
-        <Route path="gestao/crediario" element={P("Crediário", "Carnês de crediário", CreditCard)} />
-        <Route path="gestao/promissoria" element={P("Promissória", "Notas promissórias", FileText)} />
-        <Route path="gestao/cheque" element={P("Cheque", "Controle de cheques", FileText)} />
-        <Route path="gestao/dinheiro" element={P("Dinheiro", "Caixa em espécie", DollarSign)} />
-        <Route path="gestao/transferencia" element={P("Transferência (DOC/TED)", "Transferências bancárias", Truck)} />
-        <Route path="gestao/cartao-debito" element={P("Cartão de Débito", "Recebimentos débito", CreditCard)} />
-        <Route path="gestao/cartao-credito" element={P("Cartão de Crédito", "Recebimentos crédito", CreditCard)} />
-        
-        {/* Análise de Crédito */}
-        <Route path="gestao/consulta-pf" element={P("Consulta Pessoa Física", "Consulta CPF", Users)} />
-        <Route path="gestao/consulta-pj" element={P("Consulta Pessoa Jurídica", "Consulta CNPJ", Building2)} />
-        <Route path="gestao/consulta-cheque" element={P("Consulta de Cheque", "Situação de cheques", FileText)} />
-        <Route path="gestao/consultas-veiculares" element={P("Consultas Veiculares", "Consulta de veículos", Truck)} />
-        
+
         <Route path="gestao/usuarios" element={P("Gestão Usuários", "Administrar usuários", Users)} />
-        <Route path="gestao/agendas" element={P("Gestão Agendas", "Todas as agendas", Calendar)} />
 
         {/* Outros destaques */}
-        <Route path="painel-gestor" element={P("Painel Gestor", "Dashboard executivo", Settings)} />
         <Route path="faturamento" element={P("Faturamento", "Emissão de notas", FileText)} />
 
         {/* ===== VENDAS PELA INTERNET ===== */}
@@ -110,7 +84,6 @@ export default function App() {
         <Route path="config/sistema" element={P("Configurações do Sistema", "Configurações técnicas", Cog)} />
         <Route path="config/empresarial" element={P("Configurações Empresariais", "Dados da empresa", Briefcase)} />
         <Route path="config/minhas-chaves" element={P("Minhas Chaves", "Chaves de acesso PIX", Key)} />
-        <Route path="config/contador" element={P("Acessar meu Contador", "Portal do contador", DollarSign)} />
         <Route path="config/downloads" element={P("Downloads", "Arquivos disponíveis", Barcode)} />
         <Route path="treinamento/tutoriais" element={P("Tutoriais", "Material de treinamento", HelpCircle)} />
 
