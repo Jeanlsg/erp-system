@@ -255,7 +255,7 @@ export function FinanceiroPage() {
             <Card>
               <CardHeader><CardTitle>Entradas Extra Caixa</CardTitle></CardHeader>
               <CardContent className="p-0">
-                {entradasExtras.length === 0 ? (
+                {(entradasExtras.data ?? []).length === 0 ? (
                   <div className="p-6 text-center text-muted-foreground text-sm">Nenhuma entrada extra no período</div>
                 ) : (
                   <table className="w-full">
@@ -263,7 +263,7 @@ export function FinanceiroPage() {
                       <tr><th className="text-left p-2">Data/Hora</th><th className="text-left p-2">Motivo</th><th className="text-left p-2">Forma</th><th className="text-right p-2">Valor</th></tr>
                     </thead>
                     <tbody>
-                      {entradasExtras.slice(0, 10).map((e: any) => (
+                      {entradasExtras.data?.slice(0, 10).map((e: any) => (
                         <tr key={e.id} className="border-b hover:bg-accent text-sm">
                           <td className="p-2 text-xs">{dateTime(e.data_hora)}</td>
                           <td className="p-2">{e.motivo}</td>
@@ -280,7 +280,7 @@ export function FinanceiroPage() {
             <Card>
               <CardHeader><CardTitle>Sangrias</CardTitle></CardHeader>
               <CardContent className="p-0">
-                {sangrias.length === 0 ? (
+                {(sangrias.data ?? []).length === 0 ? (
                   <div className="p-6 text-center text-muted-foreground text-sm">Nenhuma sangria no período</div>
                 ) : (
                   <table className="w-full">
@@ -288,7 +288,7 @@ export function FinanceiroPage() {
                       <tr><th className="text-left p-2">Data/Hora</th><th className="text-left p-2">Motivo</th><th className="text-right p-2">Valor</th></tr>
                     </thead>
                     <tbody>
-                      {sangrias.slice(0, 10).map((s: any) => (
+                      {sangrias.data?.slice(0, 10).map((s: any) => (
                         <tr key={s.id} className="border-b hover:bg-accent text-sm">
                           <td className="p-2 text-xs">{dateTime(s.data_hora)}</td>
                           <td className="p-2">{s.motivo}</td>

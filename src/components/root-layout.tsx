@@ -1,9 +1,10 @@
-import { Outlet, Link, useNavigate } from "react-router-dom";
+import { Outlet, Link, useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { LogOut, Store, User as UserIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppSidebar } from "@/components/app-sidebar";
+import { FeatureGuard } from "@/components/feature-guard";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -26,6 +27,7 @@ import { useLojas, isSupabaseConfigured } from "@/lib/supabase-queries";
 
 export function RootLayout() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, isAuthenticated } = useAuth();
   const { data: lojas = [] } = useLojas();
   const currentLojaId = useLojaAtualStore((s) => s.currentLojaId);
@@ -137,7 +139,9 @@ export function RootLayout() {
 
         <main className="flex-1">
           <div className="p-4 md:p-6">
-            <Outlet />
+            <FeatureGuard path={location.pathname}>
+              <Outlet />
+            </FeatureGuard>
           </div>
         </main>
       </div>

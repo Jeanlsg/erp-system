@@ -17,6 +17,7 @@ import type {
   RegiaoEntrega,
   Transportadora,
   Contato,
+  FeatureFlag,
 } from "@/types/database";
 
 export { isSupabaseConfigured };
@@ -444,11 +445,23 @@ export function useCreateProduto() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (produto: Partial<Produto>) => {
-      const { data, error } = await supabase.from("erp_produtos").insert(produto).select().single();
+      const { data, error } = await supabase.from('erp_produtos').insert(produto).select().single();
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["erp_produtos"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_produtos'] }),
+  });
+}
+
+export function useUpdateProduto() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: Partial<Produto> & { id: string }) => {
+      const { data, error } = await supabase.from('erp_produtos').update(updates).eq('id', id).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_produtos'] }),
   });
 }
 
@@ -2393,5 +2406,114 @@ export function useUpdateOcorrencia() {
       return data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_ocorrencias'] }),
+  });
+}
+
+// ========================================
+// FEATURE FLAGS (controle de páginas)
+// ========================================
+
+/** Busca todas as feature flags (cache global compartilhado por toda a UI). */
+export function useFeatureFlags() {
+  return useQuery<FeatureFlag[]>({
+    queryKey: ['erp_feature_flags'],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      const { data, error } = await supabase
+        .from('erp_feature_flags')
+        .select('*')
+        .order('categoria')
+        .order('ordem');
+      if (error) throw error;
+      return data ?? [];
+    },
+    staleTime: 30_000, // cache por 30s ? bom para não ter refetch constante
+  });
+}
+
+/** Retorna um Map<path, ativo> para consulta rápida na sidebar. */
+export function useFeatureFlagsMap() {
+  const { data } = useFeatureFlags();
+  const map: Record<string, boolean> = {};
+  for (const f of data ?? []) {
+    map[f.path] = f.ativo;
+  }
+  return map;
+}
+
+/** Verifica se uma rota/path está ativa. Retorna `true` se a flag não existir (fail-open). */
+export function useIsFeatureEnabled(path: string) {
+  const { data } = useFeatureFlags();
+  if (!data) return true; // enquanto carrega, permite
+  const flag = data.find((f) => f.path === path);
+  if (!flag) return true; // fail-open para rotas sem flag
+  return flag.ativo;
+}
+
+/** Atualiza o estado ativo/inativo de uma flag (somente admin). */
+export function useToggleFeatureFlag() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ativo, motivo, userId }: { id: string; ativo: boolean; motivo?: string; userId?: string }) => {
+      // A proteção contra desativação de flags do sistema essenciais
+      // (`is_protegida`) é feita **apenas na UI** do painel admin
+      // (/config/sistema) ? o switch fica travado e o motivo é mostrado
+      // como tooltip. A tabela aceita UPDATE de admin para qualquer flag,
+      // inclusive protegidas, para permitir ajustes via SQL se necessário.
+      const payload: Record<string, unknown> = { ativo };
+      if (!ativo) {
+        payload.desativado_em = new Date().toISOString();
+        payload.desativado_por = userId ?? null;
+        if (motivo) payload.motivo_desativacao = motivo;
+      } else {
+        payload.desativado_em = null;
+        payload.desativado_por = null;
+        payload.motivo_desativacao = null;
+      }
+      const { data, error } = await supabase
+        .from('erp_feature_flags')
+        .update(payload)
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_feature_flags'] }),
+  });
+}
+
+/** Atualiza qualquer campo de uma flag. */
+export function useUpdateFeatureFlag() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: Partial<FeatureFlag> & { id: string }) => {
+      const { data, error } = await supabase
+        .from('erp_feature_flags')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_feature_flags'] }),
+  });
+}
+
+/** Cria nova feature flag customizada. */
+export function useCreateFeatureFlag() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (item: Partial<FeatureFlag>) => {
+      const { data, error } = await supabase
+        .from('erp_feature_flags')
+        .insert({ ...item, is_system: false })
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_feature_flags'] }),
   });
 }

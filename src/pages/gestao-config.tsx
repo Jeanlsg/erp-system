@@ -9,26 +9,30 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Star, Search, Loader2, Plus, ThumbsUp, ThumbsDown, MessageSquare,
-  Bell, Trash2, Cog, Shield, FileText, BarChart3, Users, User,
-  Building2, Edit, Lock, CheckCircle, X, Barcode, Printer, CreditCard,
-  DollarSign, Banknote, Briefcase, Settings,
+  Star, Loader2, Plus, ThumbsUp, MessageSquare,
+  Bell, Trash2, CheckCircle, Lock, Settings, Briefcase,
 } from "lucide-react";
+
+// Componente local para ThumbsDown (não vem do lucide-react direto)
+const ThumbsDown = (props: any) => (
+  <svg xmlns="http://www.w3.org/2000/svg" {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17 14V2" />
+    <path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H17v12l-3.34 7A2 2 0 0 1 11.84 22c-.55 0-1.07-.22-1.45-.62-.39-.39-.6-.93-.55-1.48L10.3 18.12Z" />
+  </svg>
+);
 import {
   useAvaliacoes, useRecomendacoes, useCreateParceria,
-  useNotificacoes, useCreateNotificacao, useMarcarNotificacaoLida,
+  useNotificacoes, useMarcarNotificacaoLida,
   useCertificados, useCreateCertificado, useDeleteCertificado,
   useConfiguracoesSefaz, useUpsertConfiguracaoSefaz,
   useConfiguracoesGerais, useUpsertConfiguracao,
   useOcorrencias, useCreateOcorrencia, useUpdateOcorrencia,
-  useClientes, usePessoas, useProdutos, useCreateProduto, useUpdateProduto,
-  useCreatePessoa,
   isSupabaseConfigured,
 } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { useAuth } from "@/lib/store/auth-store";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
-import { brl, date, dateTime } from "@/lib/format";
+import { date, dateTime, brl } from "@/lib/format";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 
 // ====================================================================
@@ -443,7 +447,7 @@ export function OcorrenciasPage() {
             <Button onClick={handleCriar} disabled={!form.titulo || !form.descricao}>Registrar</Button>
           </DialogFooter>
         </DialogContent>
-      </Card>
+      </Dialog>
     </div>
   );
 }

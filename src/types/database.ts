@@ -502,6 +502,28 @@ export interface ConfiguracoesSefaz {
   updated_at: string;
 }
 
+// Feature Flags (controle de páginas)
+export interface FeatureFlag {
+  id: string;
+  chave: string;
+  path: string;
+  titulo: string;
+  descricao: string | null;
+  categoria: string;
+  icone: string | null;
+  ordem: number;
+  somente_admin: boolean;
+  ativo: boolean;
+  is_system: boolean;
+  /** Flag protegida — não pode ser desativada na UI; sempre visível para admin. */
+  is_protegida: boolean;
+  desativado_por: string | null;
+  desativado_em: string | null;
+  motivo_desativacao: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // Frota
 export interface Veiculo {
   id: string;

@@ -12,6 +12,8 @@ import { VisaoGeralPage } from "@/pages/visao-geral";
 import { FinanceiroPage } from "@/pages/financeiro";
 import { FornecedoresPage } from "@/pages/fornecedores";
 import { AgendaPage } from "@/pages/agenda";
+
+// Páginas principais implementadas
 import { FuncionariosPage } from "@/pages/funcionarios";
 import { TransportadorasPage } from "@/pages/transportadoras";
 import { EstoquePage } from "@/pages/estoque";
@@ -54,7 +56,27 @@ import { MarketplaceIFoodPage } from "@/pages/marketplace-ifood";
 import { GestaoHubPage } from "@/pages/gestao";
 import { TreinamentoPage } from "@/pages/treinamento";
 
-// Helper para gerar Placeholder com ícone padrão
+// ===== Novas páginas do MAPA_GESTAO_EMPRESARIAL.md =====
+import {
+  ConsultaChequePage, RecebimentoChequePage,
+  NegativarDevedoresPage, ParcelarDebitosPage, EncaminharProtestoPage,
+} from "@/pages/gestao-cobranca";
+
+import {
+  AvaliacoesPage, RecomendacoesPage, NotificacoesPage,
+  SolicitacaoParceriaPage, OcorrenciasPage,
+  ConfiguracoesGeraisPage, ConfiguracoesSefazPage, NfeCertificadoPage,
+} from "@/pages/gestao-config";
+
+import {
+  ConsultaPessoaFisicaPage, ConsultaPessoaJuridicaPage, DadosEmpresariaisPage,
+  CodigoBarrasPage, CartaoCreditoPage, CartaoDebitoPage, DinheiroPage,
+  LocalizarPessoasPage, ExclusaoInformacoesPage, DocumentosDemonstrativosPage,
+  PastaPrincipalPage, CadastroProdutosPage, GerarCrediarioPage,
+  UsuarioPermissoesPage, PainelContadorPage, EmpresarialPage,
+} from "@/pages/gesta-final";
+
+// Helper
 import { Coffee } from "lucide-react";
 
 const P = (title: string, description?: string, icon?: any) => (
@@ -98,25 +120,92 @@ export default function App() {
         {/* Financeiro */}
         <Route path="financeiro" element={<FinanceiroPage />} />
         <Route path="financeiro/relatorios" element={<FinanceiroPage />} />
+        <Route path="gestao/relatorios-financeiros" element={<FinanceiroPage />} />
 
-        {/* Gestão Empresarial */}
+        {/* Gestão Empresarial — Hub + Alias */}
         <Route path="gestao" element={<GestaoHubPage />} />
+        <Route path="gestao/empresarial" element={<EmpresarialPage />} />
+
+        {/* Clientes / Fornecedores / Funcionários */}
         <Route path="gestao/clientes" element={<CustomersPage />} />
+        <Route path="gestao/consulta-pessoa-fisica" element={<ConsultaPessoaFisicaPage />} />
+        <Route path="gestao/consulta-pessoa-juridica" element={<ConsultaPessoaJuridicaPage />} />
         <Route path="gestao/fornecedores" element={<FornecedoresPage />} />
         <Route path="gestao/funcionarios" element={<FuncionariosPage />} />
         <Route path="gestao/transportadoras" element={<TransportadorasPage />} />
         <Route path="gestao/estoque" element={<EstoquePage />} />
+        <Route path="gestao/cadastro-produtos" element={<CadastroProdutosPage />} />
         <Route path="gestao/entregas-futuras" element={<EntregasFuturasPage />} />
         <Route path="gestao/servicos" element={P("Serviços Oferecidos", "Catálogo de serviços", Coffee)} />
+
+        {/* Agenda / Documentos / Arquivos */}
         <Route path="gestao/agenda-telefonica" element={<AgendaTelefonicaPage />} />
         <Route path="gestao/documentos" element={<DocumentosPage />} />
-        <Route path="gestao/arquivos-pastas" element={<DocumentosPage />} />
+        <Route path="gestao/documentos-demonstrativos" element={<DocumentosDemonstrativosPage />} />
+        <Route path="gestao/arquivos-pastas" element={<PastaPrincipalPage />} />
+        <Route path="gestao/pasta-principal" element={<PastaPrincipalPage />} />
+
+        {/* Email / Agenda */}
         <Route path="gestao/email-inteligente" element={<EmailInteligentePage />} />
         <Route path="gestao/agenda-compromissos" element={<AgendaPage />} />
         <Route path="gestao/regioes-entrega" element={<RegioesEntregaPage />} />
+        <Route path="gestao/relatorio-entregas" element={<EntregasFuturasPage />} />
+
+        {/* Frota */}
         <Route path="gestao/consulta-veiculos" element={<VeiculosPage />} />
 
+        {/* Usuários */}
         <Route path="gestao/usuarios" element={<UsuariosPage />} />
+        <Route path="gestao/administrar-usuarios" element={<UsuariosPage />} />
+        <Route path="gestao/usuario-permissoes" element={<UsuarioPermissoesPage />} />
+
+        {/* Cobrança */}
+        <Route path="gestao/negativar-devedores" element={<NegativarDevedoresPage />} />
+        <Route path="gestao/parcelar-debitos" element={<ParcelarDebitosPage />} />
+        <Route path="gestao/encaminhar-protesto" element={<EncaminharProtestoPage />} />
+        <Route path="gestao/solicitacao-parceria" element={<SolicitacaoParceriaPage />} />
+
+        {/* Cheques */}
+        <Route path="gestao/consulta-cheque" element={<ConsultaChequePage />} />
+        <Route path="gestao/recebimento-cheque" element={<RecebimentoChequePage />} />
+
+        {/* Financeiro Avançado */}
+        <Route path="gestao/cartao-credito" element={<CartaoCreditoPage />} />
+        <Route path="gestao/cartao-debito" element={<CartaoDebitoPage />} />
+        <Route path="gestao/dinheiro" element={<DinheiroPage />} />
+
+        {/* Documentos / Código de Barras / Downloads */}
+        <Route path="gestao/codigo-barras" element={<CodigoBarrasPage />} />
+        <Route path="gestao/downloads" element={<DownloadsPage />} />
+
+        {/* Localizar / LGPD / Contador / Dados Empresariais */}
+        <Route path="gestao/localizar-pessoas" element={<LocalizarPessoasPage />} />
+        <Route path="gestao/exclusao-informacoes" element={<ExclusaoInformacoesPage />} />
+        <Route path="gestao/painel-contador" element={<PainelContadorPage />} />
+        <Route path="gestao/dados-empresariais" element={<DadosEmpresariaisPage />} />
+        <Route path="gestao/nfe-certificado" element={<NfeCertificadoPage />} />
+        <Route path="gestao/configuracoes-sefaz" element={<ConfiguracoesSefazPage />} />
+
+        {/* CRM / Notificações / Ocorrências */}
+        <Route path="gestao/avaliacoes" element={<AvaliacoesPage />} />
+        <Route path="gestao/recomendacoes" element={<RecomendacoesPage />} />
+        <Route path="gestao/notificacoes" element={<NotificacoesPage />} />
+        <Route path="gestao/ocorrencias" element={<OcorrenciasPage />} />
+
+        {/* Crediário com juros */}
+        <Route path="gestao/gerar-crediario" element={<GerarCrediarioPage />} />
+        <Route path="gestao/gerar-boleto" element={<GeradorBoletosPage />} />
+        <Route path="gestao/gerar-crediario-proprio" element={<CrediarioProprioPage />} />
+        <Route path="gestao/gerar-promissoria" element={<PromissoriaPage />} />
+
+        {/* Configurações */}
+        <Route path="gestao/configuracoes-gerais" element={<ConfiguracoesGeraisPage />} />
+
+        {/* Minhas Chaves (movido para /config) */}
+        <Route path="gestao/minhas-chaves" element={<ConfigChavesPixPage />} />
+
+        {/* Faturamento (alias) */}
+        <Route path="gestao/faturamento" element={<FaturamentoPage />} />
 
         {/* Outros destaques */}
         <Route path="faturamento" element={<FaturamentoPage />} />

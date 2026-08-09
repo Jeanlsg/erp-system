@@ -44,8 +44,8 @@ export function TabsTrigger({ value, children, className = "" }: { value: string
   );
 }
 
-export function TabsContent({ value, children }: { value: string; children: React.ReactNode }) {
+export function TabsContent({ value, children, className = "" }: { value: string; children: React.ReactNode; className?: string }) {
   const ctx = useContext(TabsContext);
   if (!ctx || ctx.value !== value) return null;
-  return <div className="mt-4">{children}</div>;
+  return <div className={`mt-4 ${className}`}>{children}</div>;
 }

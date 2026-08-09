@@ -10,31 +10,21 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  DollarSign, Search, Loader2, FileText, Trash2, Plus, CreditCard,
-  AlertTriangle, CheckCircle, UserCheck, BarChart3, Shield, X, Send,
-  Star, MapPin, Users, Calendar, Banknote, Receipt, Barcode,
-  Edit, Eye, Lock, Unlock, Building2, Briefcase, Settings,
+  DollarSign, Loader2, Trash2, Plus,
+  AlertTriangle, CheckCircle,
+  CreditCard,
 } from "lucide-react";
 import {
   useChequesFull, useCreateCheque, useUpdateCheque, useDeleteCheque,
   useNegativacoesFull, useCreateNegativacao, useDeleteNegativacao, useDesnegativar,
   useParcelamentosFull, useCreateParcelamento,
   useProtestosFull, useCreateProtesto, useDeleteProtesto,
-  useAvaliacoes, useRecomendacoes, useCreateParceria,
-  useNotificacoes, useCreateNotificacao, useMarcarNotificacaoLida,
-  useCertificados, useCreateCertificado, useDeleteCertificado,
-  useConfiguracoesSefaz, useUpsertConfiguracaoSefaz,
-  useConfiguracoesGerais, useUpsertConfiguracao,
-  useOcorrencias, useCreateOcorrencia, useUpdateOcorrencia,
-  useClientes, usePessoas, useLojas, useCreatePessoa, useUpdatePessoa,
-  useProdutos, useCreateProduto, useContasVencidas,
-  useVendas, useSangriasPorPeriodo, useEntradasExtrasPorPeriodo,
+  useClientes, useContasVencidas,
   isSupabaseConfigured,
 } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
-import { useAuth } from "@/lib/store/auth-store";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
-import { brl, date, dateTime } from "@/lib/format";
+import { brl, date } from "@/lib/format";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Link } from "react-router-dom";
 
@@ -367,7 +357,6 @@ export function ParcelarDebitosPage() {
   const { data: parcelamentos = [], isLoading } = useParcelamentosFull(lojaId ?? undefined);
   const create = useCreateParcelamento();
   const { data: pessoas = [] } = useClientes();
-  const { data: contasVencidas = [] } = useContasVencidas(lojaId ?? undefined);
 
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState({
