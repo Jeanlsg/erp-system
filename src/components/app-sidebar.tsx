@@ -7,7 +7,6 @@ import {
   FileText,
   Bike,
   MessageSquare,
-  Coffee,
   Barcode,
   DollarSign,
   CreditCard,
@@ -26,7 +25,6 @@ import {
   HelpCircle,
   ChevronDown,
   Mail,
-  Car,
 } from "lucide-react";
 
 import { useAuth, type Permission } from "@/lib/store/auth-store";

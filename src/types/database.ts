@@ -501,3 +501,139 @@ export interface ConfiguracoesSefaz {
   ativo: boolean;
   updated_at: string;
 }
+
+// Frota
+export interface Veiculo {
+  id: string;
+  loja_id: string | null;
+  placa: string;
+  chassi: string | null;
+  renavam: string | null;
+  marca: string | null;
+  modelo: string | null;
+  ano_fabricacao: number | null;
+  ano_modelo: number | null;
+  cor: string | null;
+  km_atual: number;
+  tipo_combustivel: string | null;
+  capacidade_carga: number | null;
+  status: string;
+  ipva_valor: number | null;
+  ipva_vencimento: string | null;
+  seguro_vencimento: string | null;
+  licenciamento_vencimento: string | null;
+  proxima_revisao_km: number | null;
+  proxima_revisao_data: string | null;
+  observacoes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VeiculoAbastecimento {
+  id: string;
+  veiculo_id: string;
+  data_abastecimento: string;
+  km_abastecimento: number;
+  litros: number;
+  valor_total: number;
+  preco_litro: number;
+  posto: string | null;
+  motorista_id: string | null;
+  created_at: string;
+}
+
+export interface VeiculoManutencao {
+  id: string;
+  veiculo_id: string;
+  tipo: string | null;
+  data_manutencao: string;
+  km_manutencao: number | null;
+  descricao: string | null;
+  valor: number | null;
+  oficina: string | null;
+  proxima_km: number | null;
+  proxima_data: string | null;
+  created_at: string;
+}
+
+// Regiões de Entrega
+export interface RegiaoEntrega {
+  id: string;
+  loja_id: string | null;
+  nome: string;
+  cep_inicio: string | null;
+  cep_fim: string | null;
+  bairros: string[] | null;
+  taxa: number;
+  prazo_dias: number | null;
+  valor_minimo: number | null;
+  ativo: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// Transportadoras
+export interface Transportadora {
+  id: string;
+  loja_id: string | null;
+  pessoa_id: string | null;
+  nome: string;
+  cnpj: string | null;
+  prazo_entrega_dias: number | null;
+  valor_fixo: number | null;
+  valor_kg: number | null;
+  regioes_atendidas: string[] | null;
+  ativo: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// Categorias de Produto
+export interface CategoriaProduto {
+  id: string;
+  nome: string;
+  descricao: string | null;
+  categoria_pai_id: string | null;
+  ativo: boolean;
+  created_at: string;
+}
+
+// Kits
+export interface Kit {
+  id: string;
+  loja_id: string | null;
+  nome: string;
+  descricao: string | null;
+  preco_venda: number;
+  ativo: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KitItem {
+  id: string;
+  kit_id: string;
+  produto_id: string;
+  quantidade: number;
+}
+
+// Agenda Telefônica
+export interface Contato {
+  id: string;
+  loja_id: string | null;
+  usuario_id: string | null;
+  pessoa_id: string | null;
+  nome: string;
+  empresa: string | null;
+  cargo: string | null;
+  categoria: string | null;
+  email: string | null;
+  telefone: string | null;
+  celular: string | null;
+  whatsapp: string | null;
+  endereco: string | null;
+  observacoes: string | null;
+  favorito: boolean;
+  created_at: string;
+  updated_at: string;
+}

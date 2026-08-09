@@ -11,6 +11,12 @@ import type {
   Pessoa,
   Conta,
   ProdutoComEstoque,
+  Veiculo,
+  VeiculoAbastecimento,
+  VeiculoManutencao,
+  RegiaoEntrega,
+  Transportadora,
+  Contato,
 } from "@/types/database";
 
 export { isSupabaseConfigured };
@@ -942,6 +948,778 @@ export function useVendasPorDiaView(lojaId?: string, dias: number = 7) {
         .select('*')
         .gte('dia', desde.toISOString().slice(0, 10))
         .order('dia', { ascending: true });
+      if (lojaId) query = query.eq('loja_id', lojaId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+// ========================================
+// VEÍCULOS / FROTA
+// ========================================
+export function useVeiculos(lojaId?: string) {
+  return useQuery<Veiculo[]>({
+    queryKey: ['erp_veiculos', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase.from('erp_veiculos').select('*').order('placa');
+      if (lojaId) query = query.eq('loja_id', lojaId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useCreateVeiculo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (veiculo: Partial<Veiculo>) => {
+      const { data, error } = await supabase.from('erp_veiculos').insert(veiculo).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_veiculos'] }),
+  });
+}
+
+export function useUpdateVeiculo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: Partial<Veiculo> & { id: string }) => {
+      const { data, error } = await supabase.from('erp_veiculos').update(updates).eq('id', id).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_veiculos'] }),
+  });
+}
+
+export function useDeleteVeiculo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('erp_veiculos').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_veiculos'] }),
+  });
+}
+
+export function useAbastecimentos(veiculoId?: string) {
+  return useQuery<VeiculoAbastecimento[]>({
+    queryKey: ['erp_veiculo_abastecimentos', veiculoId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase.from('erp_veiculo_abastecimentos').select('*').order('data_abastecimento', { ascending: false });
+      if (veiculoId) query = query.eq('veiculo_id', veiculoId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useCreateAbastecimento() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (item: Partial<VeiculoAbastecimento>) => {
+      const { data, error } = await supabase.from('erp_veiculo_abastecimentos').insert(item).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_veiculo_abastecimentos'] }),
+  });
+}
+
+export function useManutencoes(veiculoId?: string) {
+  return useQuery<VeiculoManutencao[]>({
+    queryKey: ['erp_veiculo_manutencoes', veiculoId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase.from('erp_veiculo_manutencoes').select('*').order('data_manutencao', { ascending: false });
+      if (veiculoId) query = query.eq('veiculo_id', veiculoId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useCreateManutencao() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (item: Partial<VeiculoManutencao>) => {
+      const { data, error } = await supabase.from('erp_veiculo_manutencoes').insert(item).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_veiculo_manutencoes'] }),
+  });
+}
+
+// ========================================
+// REGIÕES DE ENTREGA
+// ========================================
+export function useRegioesEntrega(lojaId?: string) {
+  return useQuery<RegiaoEntrega[]>({
+    queryKey: ['erp_regioes_entrega', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase.from('erp_regioes_entrega').select('*').eq('ativo', true).order('nome');
+      if (lojaId) query = query.eq('loja_id', lojaId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useCreateRegiao() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (regiao: Partial<RegiaoEntrega>) => {
+      const { data, error } = await supabase.from('erp_regioes_entrega').insert(regiao).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_regioes_entrega'] }),
+  });
+}
+
+export function useDeleteRegiao() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('erp_regioes_entrega').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_regioes_entrega'] }),
+  });
+}
+
+// ========================================
+// TRANSPORTADORAS
+// ========================================
+export function useTransportadoras(lojaId?: string) {
+  return useQuery<Transportadora[]>({
+    queryKey: ['erp_transportadoras', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase.from('erp_transportadoras').select('*').eq('ativo', true).order('nome');
+      if (lojaId) query = query.eq('loja_id', lojaId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useCreateTransportadora() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (t: Partial<Transportadora>) => {
+      const { data, error } = await supabase.from('erp_transportadoras').insert(t).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_transportadoras'] }),
+  });
+}
+
+export function useDeleteTransportadora() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('erp_transportadoras').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_transportadoras'] }),
+  });
+}
+
+// ========================================
+// AGENDA TELEFÔNICA / CONTATOS
+// ========================================
+export function useContatos(lojaId?: string) {
+  return useQuery<Contato[]>({
+    queryKey: ['erp_agenda_telefonica', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase.from('erp_agenda_telefonica').select('*').order('nome');
+      if (lojaId) query = query.eq('loja_id', lojaId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useCreateContato() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (c: Partial<Contato>) => {
+      const { data, error } = await supabase.from('erp_agenda_telefonica').insert(c).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_agenda_telefonica'] }),
+  });
+}
+
+export function useDeleteContato() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('erp_agenda_telefonica').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_agenda_telefonica'] }),
+  });
+}
+
+// ========================================
+// FUNCIONÁRIOS
+// ========================================
+export function useFuncionarios(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_funcionarios', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      const { data, error } = await supabase
+        .from('erp_funcionarios')
+        .select('*, pessoa:erp_pessoas(*)')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useCreateFuncionario() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (func: any) => {
+      const { data, error } = await supabase.from('erp_funcionarios').insert(func).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_funcionarios'] }),
+  });
+}
+
+export function useUpdateFuncionario() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: any) => {
+      const { data, error } = await supabase.from('erp_funcionarios').update(updates).eq('id', id).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_funcionarios'] }),
+  });
+}
+
+export function useDeleteFuncionario() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('erp_funcionarios').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_funcionarios'] }),
+  });
+}
+
+// ========================================
+// DOCUMENTOS
+// ========================================
+export function useDocumentos(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_documentos', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase.from('erp_documentos').select('*').order('data_upload', { ascending: false });
+      if (lojaId) query = query.eq('loja_id', lojaId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useCreateDocumento() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (doc: any) => {
+      const { data, error } = await supabase.from('erp_documentos').insert(doc).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_documentos'] }),
+  });
+}
+
+export function useDeleteDocumento() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('erp_documentos').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_documentos'] }),
+  });
+}
+
+// ========================================
+// DOWNLOADS
+// ========================================
+export function useDownloads() {
+  return useQuery<any[]>({
+    queryKey: ['erp_downloads'],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      const { data, error } = await supabase
+        .from('erp_downloads')
+        .select('*')
+        .eq('ativo', true)
+        .order('categoria', { ascending: true })
+        .order('nome');
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+// ========================================
+// EMAIL MARKETING
+// ========================================
+export function useEmailMarketing(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_email_marketing', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase.from('erp_email_marketing').select('*').order('created_at', { ascending: false });
+      if (lojaId) query = query.eq('loja_id', lojaId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useCreateEmailMarketing() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (item: any) => {
+      const { data, error } = await supabase.from('erp_email_marketing').insert(item).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_email_marketing'] }),
+  });
+}
+
+// ========================================
+// CLIENTES / FORNECEDORES (CRUD)
+// ========================================
+export function useCreatePessoa() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (pessoa: Partial<Pessoa>) => {
+      const { data, error } = await supabase.from('erp_pessoas').insert(pessoa).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_clientes'] });
+      qc.invalidateQueries({ queryKey: ['erp_fornecedores'] });
+    },
+  });
+}
+
+export function useUpdatePessoa() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: Partial<Pessoa> & { id: string }) => {
+      const { data, error } = await supabase.from('erp_pessoas').update(updates).eq('id', id).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_clientes'] });
+      qc.invalidateQueries({ queryKey: ['erp_fornecedores'] });
+    },
+  });
+}
+
+export function useDeletePessoa() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('erp_pessoas').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_clientes'] });
+      qc.invalidateQueries({ queryKey: ['erp_fornecedores'] });
+    },
+  });
+}
+
+// ========================================
+// PEDIDOS / DELIVERY
+// ========================================
+export function usePedidos(filters?: { lojaId?: string; status?: string }) {
+  return useQuery<any[]>({
+    queryKey: ['erp_pedidos', filters],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase.from('erp_pedidos').select('*').order('created_at', { ascending: false }).limit(200);
+      if (filters?.lojaId) query = query.eq('loja_id', filters.lojaId);
+      if (filters?.status) query = query.eq('status', filters.status);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useUpdatePedidoStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      const { data, error } = await supabase.from('erp_pedidos').update({ status }).eq('id', id).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_pedidos'] }),
+  });
+}
+
+// ========================================
+// NOTAS FISCAIS
+// ========================================
+export function useNotasFiscais(filters?: { lojaId?: string; tipo?: string; status?: string }) {
+  return useQuery<any[]>({
+    queryKey: ['erp_notas_fiscais', filters],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase.from('erp_notas_fiscais').select('*').order('created_at', { ascending: false }).limit(200);
+      if (filters?.lojaId) query = query.eq('loja_id', filters.lojaId);
+      if (filters?.tipo) query = query.eq('tipo', filters.tipo);
+      if (filters?.status) query = query.eq('status', filters.status);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+// ========================================
+// AVALIAÇÕES / RECOMENDAÇÕES (CRM)
+// ========================================
+export function useAvaliacoes(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_avaliacoes', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase.from('erp_avaliacoes').select('*, cliente:erp_pessoas(nome_razao)').order('data_avaliacao', { ascending: false });
+      if (lojaId) query = query.eq('loja_id', lojaId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+// ========================================
+// BANDEIRAS CARTÃO
+// ========================================
+export function useBandeirasCartao() {
+  return useQuery<any[]>({
+    queryKey: ['erp_bandeiras_cartao'],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      const { data, error } = await supabase.from('erp_bandeiras_cartao').select('*').eq('ativo', true).order('nome');
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+// ========================================
+// SERVIÇOS
+// ========================================
+export function useServicos(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_servicos', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase.from('erp_servicos').select('*').eq('ativo', true).order('nome');
+      if (lojaId) query = query.eq('loja_id', lojaId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+// ========================================
+// KITS
+// ========================================
+export function useKits(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_kits', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase.from('erp_kits').select('*, itens:erp_kit_itens(*)').eq('ativo', true).order('nome');
+      if (lojaId) query = query.eq('loja_id', lojaId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+// ========================================
+// CAIXA
+// ========================================
+export function useCaixas(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_caixa', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase.from('erp_caixa').select('*').order('data_abertura', { ascending: false });
+      if (lojaId) query = query.eq('loja_id', lojaId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useCaixaMovimentacoes(caixaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_caixa_movimentacoes', caixaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase.from('erp_caixa_movimentacoes').select('*').order('data_movimento', { ascending: false });
+      if (caixaId) query = query.eq('caixa_id', caixaId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+// ========================================
+// COMPRAS
+// ========================================
+export function useCompras(filters?: { lojaId?: string }) {
+  return useQuery<any[]>({
+    queryKey: ['erp_compras', filters],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase.from('erp_compras').select('*').order('data_compra', { ascending: false }).limit(200);
+      if (filters?.lojaId) query = query.eq('loja_id', filters.lojaId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+// ========================================
+// CERTIFICADOS DIGITAIS / SEFAZ / DADOS EMPRESARIAIS
+// ========================================
+export function useDadosEmpresariais(lojaId?: string) {
+  return useQuery<any | null>({
+    queryKey: ['erp_dados_empresariais', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured() || !lojaId) return null;
+      const { data, error } = await supabase.from('erp_dados_empresariais').select('*').eq('loja_id', lojaId).maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useUpsertDadosEmpresariais() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (item: any) => {
+      const { data, error } = await supabase.from('erp_dados_empresariais').upsert(item).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_dados_empresariais'] }),
+  });
+}
+
+export function useCertificados(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_certificados_digitais', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase.from('erp_certificados_digitais').select('*').order('data_validade', { ascending: true });
+      if (lojaId) query = query.eq('loja_id', lojaId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useConfiguracoesSefaz(lojaId?: string) {
+  return useQuery<any | null>({
+    queryKey: ['erp_configuracoes_sefaz', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured() || !lojaId) return null;
+      const { data, error } = await supabase.from('erp_configuracoes_sefaz').select('*').eq('loja_id', lojaId).maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+// ========================================
+// PARCERIAS / NEGATIVAÇÕES / PROTESTOS
+// ========================================
+export function useParcerias(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_parcerias', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase.from('erp_parcerias').select('*').order('created_at', { ascending: false });
+      if (lojaId) query = query.eq('loja_id', lojaId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useNegativacoes(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_negativacoes', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase.from('erp_negativacoes').select('*').order('data_negativacao', { ascending: false });
+      if (lojaId) query = query.eq('loja_id', lojaId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useCreateNegativacao() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (item: any) => {
+      const { data, error } = await supabase.from('erp_negativacoes').insert(item).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_negativacoes'] }),
+  });
+}
+
+export function useProtestos(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_protestos', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase.from('erp_protestos').select('*').order('data_protesto', { ascending: false });
+      if (lojaId) query = query.eq('loja_id', lojaId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useParcelamentos(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_parcelamentos', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase.from('erp_parcelamentos').select('*').order('data_contrato', { ascending: false });
+      if (lojaId) query = query.eq('loja_id', lojaId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useCreateParcelamento() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (item: any) => {
+      const { data, error } = await supabase.from('erp_parcelamentos').insert(item).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_parcelamentos'] }),
+  });
+}
+
+// ========================================
+// CARTÃO FIDELIDADE
+// ========================================
+export function useCartoesFidelidade(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_cartao_fidelidade', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase.from('erp_cartao_fidelidade').select('*').order('created_at', { ascending: false });
+      if (lojaId) query = query.eq('loja_id', lojaId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useCreateCartaoFidelidade() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (item: any) => {
+      const { data, error } = await supabase.from('erp_cartao_fidelidade').insert(item).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_cartao_fidelidade'] }),
+  });
+}
+
+// ========================================
+// MALA DIRETA / TORPEDOS
+// ========================================
+export function useMalaDireta(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_mala_direta', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase.from('erp_mala_direta').select('*').order('created_at', { ascending: false });
+      if (lojaId) query = query.eq('loja_id', lojaId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useTorpedos(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_torpedos', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase.from('erp_torpedos').select('*').order('created_at', { ascending: false });
       if (lojaId) query = query.eq('loja_id', lojaId);
       const { data, error } = await query;
       if (error) throw error;

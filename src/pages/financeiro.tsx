@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Wallet, Plus, Download, X, Loader2 } from "lucide-react";
+import { Wallet, Plus, Download, Loader2 } from "lucide-react";
 import { brl, date } from "@/lib/format";
 import { useContas, useCreateConta, isSupabaseConfigured } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
