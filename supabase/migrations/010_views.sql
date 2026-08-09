@@ -68,10 +68,10 @@ SELECT
 FROM erp_venda_itens vi
 JOIN erp_vendas v ON v.id = vi.venda_id
 JOIN erp_produtos p ON p.id = vi.produto_id
-JOIN erp_lojas l ON l.id = vi.loja_id
+JOIN erp_lojas l ON l.id = v.loja_id
 WHERE v.status = 'finalizada'
   AND vi.produto_id IS NOT NULL
-GROUP BY vi.produto_id, p.sku, p.nome, vi.loja_id, l.apelido;
+GROUP BY vi.produto_id, p.sku, p.nome, v.loja_id, l.apelido;
 
 -- ===== Estoque Baixo =====
 CREATE OR REPLACE VIEW v_erp_estoque_baixo AS
