@@ -137,9 +137,10 @@ export async function login(
     });
 
     if (!error && data.user) {
-      // Busca perfil do usuário
+      // Busca perfil do usuario no schema erp (erp.erp_usuarios)
+      // O id do erp_usuarios == auth.users.id (FK direta)
       const { data: perfil } = await supabase
-        .from("usuarios")
+        .from("erp_usuarios")
         .select("id, email, nome, role, ativo")
         .eq("id", data.user.id)
         .single();

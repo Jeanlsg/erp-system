@@ -16,6 +16,12 @@ export function getSupabase(): SupabaseClient | null {
         persistSession: true,
         autoRefreshToken: true,
       },
+      db: {
+        // Schema dedicado do ERP no banco unificado (apps_supabase).
+        // Tabelas do ERP ficam em schema 'erp' (ex: erp.erp_pessoas, erp.erp_usuarios).
+        // Tabelas do Overdrive ficam em 'public' (ex: public.leads).
+        schema: 'erp',
+      },
     });
   }
   return _supabase;
