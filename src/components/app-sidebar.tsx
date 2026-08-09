@@ -20,6 +20,7 @@ import {
   Calendar,
   LineChart,
   Key,
+  Settings,
   Cog,
   Store,
   HelpCircle,
