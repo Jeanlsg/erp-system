@@ -1,76 +1,115 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { LogIn } from "lucide-react";
 import { toast } from "sonner";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { signIn } from "@/lib/supabase";
-import { useAuthStore } from "@/stores/auth-store";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { login, useAuth } from "@/lib/store/auth-store";
+
+const demoUsers = [
+  { label: "Admin", email: "admin@powererp.com", senha: "admin123" },
+  { label: "Gerente", email: "gerente@powererp.com", senha: "gerente123" },
+  { label: "Caixa", email: "caixa@powererp.com", senha: "caixa123" },
+  { label: "Estoquista", email: "estoque@powererp.com", senha: "estoque123" },
+];
 
 export function LoginPage() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { setUser } = useAuthStore();
+  const { isAuthenticated } = useAuth();
+  const [email, setEmail] = useState("");
+  const [senha, setSenha] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
+  useEffect(() => {
+    if (isAuthenticated) navigate("/", { replace: true });
+  }, [isAuthenticated, navigate]);
+
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    
-    try {
-      const data = await signIn(email, password);
-      setUser({
-        id: data.user.id,
-        email: data.user.email!,
-        name: data.user.user_metadata?.name || email,
-      });
-      toast.success("Login realizado com sucesso!");
-      navigate("/");
-    } catch (error: any) {
-      toast.error(error.message || "Erro ao fazer login");
-    } finally {
-      setLoading(false);
+    const res = await login(email.trim(), senha);
+    setLoading(false);
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
     }
-  }
+    toast.success(`Bem-vindo, ${res.user.nome}`);
+    navigate("/", { replace: true });
+  };
+
+  const usarDemo = (u: { email: string; senha: string }) => {
+    setEmail(u.email);
+    setSenha(u.senha);
+  };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold">ERP System</CardTitle>
-          <CardDescription>Digite suas credenciais para acessar</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <label htmlFor="email" className="text-sm font-medium">Email</label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="seu@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
+    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
+      <div className="grid w-full max-w-4xl gap-6 md:grid-cols-2">
+        <div className="hidden flex-col justify-between rounded-xl border bg-sidebar p-8 text-sidebar-foreground md:flex">
+          <div className="flex h-16 w-16 items-center justify-center rounded-md bg-primary text-primary-foreground">
+            <span className="text-2xl font-bold">ERP</span>
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight">Power ERP</h2>
+            <p className="mt-2 text-sm text-sidebar-foreground/70">
+              Acesse o sistema para operar o PDV, gerir estoque, emitir notas fiscais e acompanhar os resultados da loja.
+            </p>
+          </div>
+          <div className="rounded-md border border-sidebar-border bg-sidebar-accent/40 p-3 text-xs text-sidebar-foreground/70">
+            Versão de demonstração. Use os atalhos ao lado para entrar com perfis pré-configurados.
+          </div>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Entrar</CardTitle>
+            <CardDescription>Use seu e-mail corporativo e senha.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={submit} className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="email">E-mail</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  autoComplete="username"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="senha">Senha</Label>
+                <Input
+                  id="senha"
+                  type="password"
+                  autoComplete="current-password"
+                  value={senha}
+                  onChange={(e) => setSenha(e.target.value)}
+                  required
+                />
+              </div>
+              <Button type="submit" className="w-full" disabled={loading}>
+                <LogIn className="mr-2 h-4 w-4" /> {loading ? "Entrando..." : "Entrar"}
+              </Button>
+            </form>
+
+            <div className="mt-6 space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">Acesso rápido (demo)</p>
+              <div className="grid grid-cols-2 gap-2">
+                {demoUsers.map((u) => (
+                  <Button key={u.email} type="button" variant="outline" size="sm" onClick={() => usarDemo(u)}>
+                    {u.label}
+                  </Button>
+                ))}
+              </div>
             </div>
-            <div className="space-y-2">
-              <label htmlFor="password" className="text-sm font-medium">Senha</label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Entrando..." : "Entrar"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
