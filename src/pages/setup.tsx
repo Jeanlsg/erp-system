@@ -340,7 +340,7 @@ export function SetupPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-red-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 p-4">
       <div className="mx-auto max-w-3xl py-8">
         {/* Header */}
         <div className="text-center mb-8">

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { FeatureGuard } from "@/components/feature-guard";
+import { NotificationIcons } from "@/components/notification-icons";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -21,6 +22,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useAuth, roleLabels, logout } from "@/lib/store/auth-store";
 import { useLojaAtualStore } from "@/lib/store/loja-atual";
 import { useLojas, isSupabaseConfigured } from "@/lib/supabase-queries";
@@ -110,37 +114,60 @@ export function RootLayout() {
             )}
           </div>
 
-          <div className="flex items-center gap-3">
-            <span className="hidden text-xs text-muted-foreground sm:inline">
-              {user ? roleLabels[user.role] : ""}
-            </span>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="rounded-full">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                    <UserIcon className="h-4 w-4" />
-                  </div>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>
-                  <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium">{user?.nome}</p>
-                    <p className="text-xs text-muted-foreground">{user?.email}</p>
-                  </div>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link to="/config/sistema">
-                    <UserIcon className="mr-2 h-4 w-4" /> Perfil
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
-                  <LogOut className="mr-2 h-4 w-4" /> Sair
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+          <div className="flex items-center gap-2">
+            <TooltipProvider delayDuration={150}>
+              {/* Ícones de notificação no header */}
+              {isSupabaseConfigured() && <NotificationIcons />}
+
+              {/* Divisor vertical */}
+              <div
+                aria-hidden="true"
+                className="mx-1 h-5 w-px bg-border"
+              />
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="rounded-full">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                          <UserIcon className="h-4 w-4" />
+                        </div>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <DropdownMenuLabel>
+                        <div className="flex flex-col space-y-1">
+                          <p className="text-sm font-medium">{user?.nome}</p>
+                          <p className="text-xs text-muted-foreground">{user?.email}</p>
+                          {user && (
+                            <p className="text-xs text-muted-foreground">
+                              {roleLabels[user.role]}
+                            </p>
+                          )}
+                        </div>
+                      </DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem asChild>
+                        <Link to="/config/sistema">
+                          <UserIcon className="mr-2 h-4 w-4" /> Perfil
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
+                        <LogOut className="mr-2 h-4 w-4" /> Sair
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="font-medium">{user?.nome ?? "Usuário"}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {user ? roleLabels[user.role] : ""}
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </header>
 

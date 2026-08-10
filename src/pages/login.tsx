@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { LogIn } from "lucide-react";
+import { LogIn, KeyRound, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { login, useAuth } from "@/lib/store/auth-store";
+import { supabase } from "@/lib/supabase";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -15,6 +16,7 @@ export function LoginPage() {
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated) navigate("/", { replace: true });
@@ -31,6 +33,25 @@ export function LoginPage() {
     }
     toast.success(`Bem-vindo, ${res.user.nome}`);
     navigate("/", { replace: true });
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email || !email.includes("@")) {
+      toast.error("Digite seu e-mail primeiro para redefinir a senha");
+      return;
+    }
+    setResetLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/auth/redefinir-senha`,
+      });
+      if (error) throw error;
+      toast.success("Email de redefinição enviado! Verifique sua caixa de entrada.");
+    } catch (err: any) {
+      toast.error(`Erro: ${err.message}`);
+    } finally {
+      setResetLoading(false);
+    }
   };
 
   return (
@@ -84,6 +105,24 @@ export function LoginPage() {
               <Button type="submit" className="w-full" disabled={loading}>
                 <LogIn className="mr-2 h-4 w-4" /> {loading ? "Entrando..." : "Entrar"}
               </Button>
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                disabled={resetLoading}
+                className="w-full text-xs text-muted-foreground hover:text-primary hover:underline transition-colors flex items-center justify-center gap-1"
+              >
+                {resetLoading ? (
+                  <>
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Enviando...
+                  </>
+                ) : (
+                  <>
+                    <KeyRound className="h-3 w-3" />
+                    Esqueci minha senha
+                  </>
+                )}
+              </button>
             </form>
           </CardContent>
         </Card>

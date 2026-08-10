@@ -1,11 +1,27 @@
+// ============================================================
+// Página: Notas Fiscais (NF-e / NFC-e)
+// Lista NFs emitidas, mostra vínculo com certificado digital,
+// permite visualizar detalhes e fazer download do XML/PDF.
+// ============================================================
+
 import { useState } from "react";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import {
+  Card, CardContent, CardHeader, CardTitle, CardDescription,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Loader2, Filter } from "lucide-react";
-import { useNotasFiscais, isSupabaseConfigured } from "@/lib/supabase-queries";
+import {
+  FileText, Loader2, Filter, Download, Eye, Lock,
+  CheckCircle2, AlertCircle, Clock, XCircle, Shield,
+} from "lucide-react";
+import {
+  useNotasFiscais, isSupabaseConfigured, supabase,
+} from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
-import { brl, date } from "@/lib/format";
+import { brl, date, dateTime } from "@/lib/format";
+import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog";
 
 export function NotasFiscaisPage() {
   const { lojaId } = useAutoSelectLoja();
@@ -17,86 +33,350 @@ export function NotasFiscaisPage() {
     status: filtroStatus || undefined,
   });
 
+  const [modalDetalhes, setModalDetalhes] = useState<any | null>(null);
+
   if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="Notas Fiscais" />;
 
-  const STATUS_VARIANT: Record<string, "default" | "destructive" | "outline"> = {
-    autorizada: "default", cancelada: "destructive", denegada: "destructive", rejeitada: "destructive",
+  const STATUS_VARIANT: Record<string, "default" | "destructive" | "outline" | "secondary"> = {
+    autorizada: "default",
+    cancelada: "destructive",
+    denegada: "destructive",
+    rejeitada: "destructive",
+    pendente: "outline",
+    processando: "secondary",
+  };
+
+  const STATUS_ICON: Record<string, any> = {
+    autorizada: CheckCircle2,
+    cancelada: XCircle,
+    denegada: XCircle,
+    rejeitada: XCircle,
+    pendente: Clock,
+    processando: Loader2,
   };
 
   const total = notas.reduce((s, n: any) => s + Number(n.valor_total ?? 0), 0);
   const autorizadas = notas.filter((n: any) => n.status === "autorizada").length;
   const canceladas = notas.filter((n: any) => n.status === "cancelada").length;
+  const pendentes = notas.filter((n: any) => ["pendente", "processando"].includes(n.status)).length;
+
+  const handleDownloadXML = async (nota: any) => {
+    if (!nota.xml_assinado) {
+      toast.error("XML não disponível");
+      return;
+    }
+    const blob = new Blob([nota.xml_assinado], { type: "application/xml" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `NFe_${nota.numero}_${nota.serie}.xml`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadPDF = async (nota: any) => {
+    if (!nota.pdf_url) {
+      toast.error("PDF não disponível");
+      return;
+    }
+    // Se for URL do storage, baixar; senão, abrir em nova aba
+    if (nota.pdf_url.startsWith("http")) {
+      window.open(nota.pdf_url, "_blank");
+    } else {
+      toast.info("DANFE em desenvolvimento");
+    }
+  };
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
             <FileText className="h-6 w-6" /> Notas Fiscais
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">{notas.length} nota(s) emitida(s)</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            {notas.length} nota(s) emitida(s) pela loja atual
+          </p>
         </div>
       </div>
 
+      {/* KPIs */}
       <div className="grid gap-4 sm:grid-cols-4">
-        <Card><CardContent className="p-4"><p className="text-xs uppercase text-muted-foreground">Total Emitidas</p><p className="text-2xl font-semibold">{notas.length}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs uppercase text-muted-foreground">Autorizadas</p><p className="text-2xl font-semibold text-green-600">{autorizadas}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs uppercase text-muted-foreground">Canceladas</p><p className="text-2xl font-semibold text-red-600">{canceladas}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs uppercase text-muted-foreground">Valor Total</p><p className="text-2xl font-semibold">{brl(total)}</p></CardContent></Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs uppercase text-muted-foreground">Total Emitidas</p>
+            <p className="text-2xl font-semibold">{notas.length}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs uppercase text-muted-foreground">Autorizadas</p>
+            <p className="text-2xl font-semibold text-green-600">{autorizadas}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs uppercase text-muted-foreground">Pendentes</p>
+            <p className="text-2xl font-semibold text-orange-600">{pendentes}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs uppercase text-muted-foreground">Valor Total</p>
+            <p className="text-2xl font-semibold">{brl(total)}</p>
+          </CardContent>
+        </Card>
       </div>
 
+      {/* Lista */}
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-2 flex-wrap">
-            <Filter className="h-4 w-4" />
-            <select className="h-9 rounded border border-input bg-transparent px-2 text-sm" value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)}>
-              <option value="">Todos tipos</option>
-              <option value="nfe">NF-e</option>
-              <option value="nfce">NFC-e</option>
-              <option value="cfe">CF-e</option>
-            </select>
-            <select className="h-9 rounded border border-input bg-transparent px-2 text-sm" value={filtroStatus} onChange={(e) => setFiltroStatus(e.target.value)}>
-              <option value="">Todos status</option>
-              <option value="autorizada">Autorizada</option>
-              <option value="cancelada">Cancelada</option>
-              <option value="denegada">Denegada</option>
-              <option value="rejeitada">Rejeitada</option>
-            </select>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <CardTitle>Notas Emitidas</CardTitle>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Filter className="h-4 w-4 text-muted-foreground" />
+              <select
+                className="h-9 rounded border border-input bg-transparent px-2 text-sm"
+                value={filtroTipo}
+                onChange={(e) => setFiltroTipo(e.target.value)}
+              >
+                <option value="">Todos tipos</option>
+                <option value="nfe">NF-e (modelo 55)</option>
+                <option value="nfce">NFC-e (modelo 65)</option>
+                <option value="cfe">CF-e</option>
+              </select>
+              <select
+                className="h-9 rounded border border-input bg-transparent px-2 text-sm"
+                value={filtroStatus}
+                onChange={(e) => setFiltroStatus(e.target.value)}
+              >
+                <option value="">Todos status</option>
+                <option value="autorizada">Autorizada</option>
+                <option value="cancelada">Cancelada</option>
+                <option value="denegada">Denegada</option>
+                <option value="rejeitada">Rejeitada</option>
+                <option value="pendente">Pendente</option>
+              </select>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="p-0">
           {isLoading ? (
-            <div className="p-8 text-center text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></div>
+            <div className="p-8 text-center">
+              <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
+            </div>
           ) : notas.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground">Nenhuma nota encontrada</div>
+            <div className="p-12 text-center space-y-3">
+              <FileText className="h-12 w-12 mx-auto text-muted-foreground" />
+              <p className="text-muted-foreground">Nenhuma nota fiscal emitida ainda</p>
+              <p className="text-xs text-muted-foreground">
+                As notas serão geradas automaticamente ao concluir vendas no PDV
+              </p>
+            </div>
           ) : (
-            <table className="w-full">
-              <thead className="border-b text-xs text-muted-foreground">
-                <tr>
-                  <th className="text-left p-3">Número</th>
-                  <th className="text-center p-3">Tipo</th>
-                  <th className="text-left p-3">Data Emissão</th>
-                  <th className="text-left p-3">Cliente</th>
-                  <th className="text-right p-3">Valor</th>
-                  <th className="text-center p-3">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {notas.map((n: any) => (
-                  <tr key={n.id} className="border-b hover:bg-accent">
-                    <td className="p-3 font-mono text-xs">{n.numero ?? "—"}</td>
-                    <td className="p-3 text-center"><Badge variant="outline">{n.tipo?.toUpperCase()}</Badge></td>
-                    <td className="p-3 text-sm">{n.data_emissao ? date(n.data_emissao) : "—"}</td>
-                    <td className="p-3 text-sm">{n.consumidor_nome ?? "—"}</td>
-                    <td className="p-3 text-right tabular-nums">{brl(n.valor_total ?? 0)}</td>
-                    <td className="p-3 text-center"><Badge variant={STATUS_VARIANT[n.status] ?? "outline"}>{n.status}</Badge></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="divide-y">
+              {notas.map((n: any) => {
+                const StatusIcon = STATUS_ICON[n.status] ?? FileText;
+                return (
+                  <div key={n.id} className="p-4 hover:bg-accent">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-3 flex-1 min-w-0">
+                        <div className={`h-10 w-10 rounded-full flex items-center justify-center ${
+                          n.status === "autorizada" ? "bg-green-100 text-green-700" :
+                          n.status === "cancelada" || n.status === "denegada" || n.status === "rejeitada" ? "bg-red-100 text-red-700" :
+                          "bg-yellow-100 text-yellow-700"
+                        }`}>
+                          <StatusIcon className="h-5 w-5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-mono font-semibold">#{n.numero}/{n.serie}</p>
+                            <Badge variant="outline">{n.tipo?.toUpperCase()}</Badge>
+                            <Badge variant={n.ambiente === "producao" ? "default" : "secondary"}>
+                              {n.ambiente === "producao" ? "Produção" : "Homologação"}
+                            </Badge>
+                            <Badge variant={STATUS_VARIANT[n.status]}>{n.status}</Badge>
+                          </div>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-2 text-sm">
+                            <div>
+                              <p className="text-xs text-muted-foreground">Data Emissão</p>
+                              <p>{dateTime(n.data_emissao)}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">Valor</p>
+                              <p className="font-semibold">{brl(n.valor_total)}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">Protocolo</p>
+                              <p className="font-mono text-xs">{n.protocolo ?? "—"}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">Chave</p>
+                              <p className="font-mono text-xs truncate" title={n.chave_acesso}>
+                                {n.chave_acesso ? `${n.chave_acesso.slice(0, 20)}...` : "—"}
+                              </p>
+                            </div>
+                          </div>
+                          {n.consumidor_nome && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Destinatário: {n.consumidor_nome} {n.consumidor_cpf_cnpj && `(${n.consumidor_cpf_cnpj})`}
+                            </p>
+                          )}
+                          {n.certificado_id && (
+                            <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                              <Shield className="h-3 w-3" /> Assinada com certificado digital
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <Button size="sm" variant="ghost" onClick={() => setModalDetalhes(n)} title="Ver detalhes">
+                          <Eye className="h-3 w-3" />
+                        </Button>
+                        {n.xml_assinado && (
+                          <Button size="sm" variant="ghost" onClick={() => handleDownloadXML(n)} title="Baixar XML">
+                            <Download className="h-3 w-3" />
+                          </Button>
+                        )}
+                        {n.pdf_url && (
+                          <Button size="sm" variant="ghost" onClick={() => handleDownloadPDF(n)} title="Ver DANFE">
+                            <FileText className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Modal de Detalhes */}
+      <Dialog open={!!modalDetalhes} onOpenChange={(open) => !open && setModalDetalhes(null)}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          {modalDetalhes && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  NF-e #{modalDetalhes.numero}/{modalDetalhes.serie}
+                </DialogTitle>
+                <DialogClose />
+              </DialogHeader>
+              <div className="space-y-4 text-sm">
+                {/* Status */}
+                <div className="flex items-center gap-2">
+                  <Badge variant={STATUS_VARIANT[modalDetalhes.status]}>
+                    {STATUS_ICON[modalDetalhes.status] && (
+                      <span className="mr-1">●</span>
+                    )}
+                    {modalDetalhes.status}
+                  </Badge>
+                  <Badge variant="outline">{modalDetalhes.tipo?.toUpperCase()}</Badge>
+                  <Badge variant={modalDetalhes.ambiente === "producao" ? "default" : "secondary"}>
+                    {modalDetalhes.ambiente}
+                  </Badge>
+                </div>
+
+                {/* Dados */}
+                <div className="grid grid-cols-2 gap-3 bg-muted p-3 rounded">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Data Emissão</p>
+                    <p className="font-medium">{dateTime(modalDetalhes.data_emissao)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Valor Total</p>
+                    <p className="font-medium text-lg">{brl(modalDetalhes.valor_total)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Protocolo</p>
+                    <p className="font-mono text-xs">{modalDetalhes.protocolo ?? "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Tipo Emissão</p>
+                    <p className="font-mono text-xs">{modalDetalhes.tipo_emissao ?? 1}</p>
+                  </div>
+                </div>
+
+                {/* Chave de Acesso */}
+                <div>
+                  <p className="text-xs text-muted-foreground">Chave de Acesso</p>
+                  <p className="font-mono text-xs break-all bg-muted p-2 rounded">{modalDetalhes.chave_acesso}</p>
+                </div>
+
+                {/* Destinatário */}
+                {modalDetalhes.consumidor_nome && (
+                  <div>
+                    <p className="text-xs text-muted-foreground">Destinatário</p>
+                    <p className="font-medium">{modalDetalhes.consumidor_nome}</p>
+                    {modalDetalhes.consumidor_cpf_cnpj && (
+                      <p className="text-xs text-muted-foreground font-mono">{modalDetalhes.consumidor_cpf_cnpj}</p>
+                    )}
+                    {modalDetalhes.consumidor_email && (
+                      <p className="text-xs text-muted-foreground">{modalDetalhes.consumidor_email}</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Valores detalhados */}
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div className="bg-muted p-2 rounded">
+                    <p className="text-muted-foreground">Desconto</p>
+                    <p className="font-semibold">{brl(modalDetalhes.valor_desconto ?? 0)}</p>
+                  </div>
+                  <div className="bg-muted p-2 rounded">
+                    <p className="text-muted-foreground">Frete</p>
+                    <p className="font-semibold">{brl(modalDetalhes.valor_frete ?? 0)}</p>
+                  </div>
+                  <div className="bg-muted p-2 rounded">
+                    <p className="text-muted-foreground">Seguro</p>
+                    <p className="font-semibold">{brl(modalDetalhes.valor_seguro ?? 0)}</p>
+                  </div>
+                </div>
+
+                {/* Certificado */}
+                <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900 rounded p-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Shield className="h-4 w-4 text-green-600" />
+                    <p className="text-sm font-semibold text-green-900 dark:text-green-200">
+                      Assinada com Certificado Digital
+                    </p>
+                  </div>
+                  <p className="text-xs text-green-700 dark:text-green-300">
+                    {modalDetalhes.certificado_id
+                      ? `Certificado ID: ${modalDetalhes.certificado_id.slice(0, 8)}...`
+                      : "Certificado vinculado a esta nota fiscal"}
+                  </p>
+                </div>
+
+                {/* Cancelamento */}
+                {modalDetalhes.status === "cancelada" && (
+                  <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded p-3">
+                    <p className="text-sm font-semibold text-red-900 dark:text-red-200">Cancelada</p>
+                    {modalDetalhes.data_cancelamento && (
+                      <p className="text-xs">Data: {dateTime(modalDetalhes.data_cancelamento)}</p>
+                    )}
+                    {modalDetalhes.motivo_cancelamento && (
+                      <p className="text-xs">Motivo: {modalDetalhes.motivo_cancelamento}</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Observações */}
+                {modalDetalhes.observacoes && (
+                  <div>
+                    <p className="text-xs text-muted-foreground">Observações</p>
+                    <p className="text-xs bg-muted p-2 rounded">{modalDetalhes.observacoes}</p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

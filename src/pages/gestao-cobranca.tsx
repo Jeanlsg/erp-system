@@ -322,7 +322,7 @@ export function NegativarDevedoresPage() {
             {contasVencidas.length > 0 && (
               <div className="bg-muted p-3 rounded text-xs">
                 <p className="font-semibold">⚠ Existem {contasVencidas.length} contas vencidas no sistema</p>
-                <Link to="/financeiro" className="text-blue-600 underline">Ver no Financeiro →</Link>
+                <Link to="/financeiro" className="text-red-600 underline">Ver no Financeiro →</Link>
               </div>
             )}
           </div>

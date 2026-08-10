@@ -80,7 +80,6 @@ const SIDEBAR_BG =
   "linear-gradient(180deg, oklch(0.34 0.14 27) 0%, oklch(0.24 0.11 27) 100%)";
 
 // Ícones auxiliares (locais — `as any` para compatibilidade com o tipo do lucide-react)
-const Phone: any = (props: any) => <Smartphone {...props} />;
 const Bell: any = (props: any) => (
   <svg xmlns="http://www.w3.org/2000/svg" {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
@@ -125,10 +124,8 @@ const sections: NavSection[] = [
   {
     label: "Catálogo",
     items: [
-      { title: "Produtos", url: "/produtos", icon: Package, perm: "produto.ver" },
-      { title: "Estoque", url: "/gestao/estoque", icon: Boxes, perm: "estoque.ajustar" },
+      { title: "Cadastro e Estoque", url: "/produtos-estoque-lotes", icon: Package, perm: "produto.ver" },
       { title: "Transferências", url: "/estoque.transferencia", icon: ArrowLeftRight, perm: "estoque.transferir" },
-      { title: "Lotes & Validade", url: "/lotes", icon: ScrollText, perm: "estoque.ver" },
       { title: "Compras", url: "/compras", icon: ShoppingBag, perm: "compra.criar" },
       { title: "Importar NFe", url: "/compras/importar-nfe", icon: Upload, perm: "compra.criar", badge: "novo" },
       { title: "Kits & Combos", url: "/kits", icon: PackagePlus, perm: "produto.ver" },
@@ -142,9 +139,7 @@ const sections: NavSection[] = [
       { title: "Pessoa Física", url: "/gestao/consulta-pessoa-fisica", icon: Users },
       { title: "Pessoa Jurídica", url: "/gestao/consulta-pessoa-juridica", icon: Building2 },
       { title: "Funcionários", url: "/gestao/funcionarios", icon: Building2, perm: "usuario.ver" },
-      { title: "Transportadoras", url: "/gestao/transportadoras", icon: Truck, perm: "loja.ver" },
       { title: "Regiões de Entrega", url: "/gestao/regioes-entrega", icon: MapPin },
-      { title: "Agenda Telefônica", url: "/gestao/agenda-telefonica", icon: Phone },
       { title: "Localizar Pessoas", url: "/gestao/localizar-pessoas", icon: Search },
       { title: "Lojas", url: "/lojas", icon: Store, perm: "loja.ver" },
     ],
@@ -235,8 +230,7 @@ const sections: NavSection[] = [
   {
     label: "Administração",
     items: [
-      { title: "Gestão Usuários", url: "/gestao/usuarios", icon: Users, perm: "usuario.ver" },
-      { title: "Permissões", url: "/gestao/usuario-permissoes", icon: Shield },
+      { title: "Usuários e Permissões", url: "/gestao/usuarios", icon: Users, perm: "usuario.ver" },
       { title: "Dados Empresariais", url: "/gestao/dados-empresariais", icon: Building2 },
       { title: "Configurações Sistema", url: "/config/sistema", icon: Cog, perm: "config.ver" },
       { title: "Configurações Gerais", url: "/gestao/configuracoes-gerais", icon: Settings },
@@ -390,7 +384,7 @@ function SidebarSection({
                 {!globalCollapsed && flagMap[item.url]?.is_protegida && (
                   <span
                     title="Página protegida — sempre ativa no sistema"
-                    className="flex items-center gap-0.5 rounded-full bg-blue-500/20 px-1.5 py-0.5 text-[9px] font-bold uppercase text-blue-200"
+                    className="flex items-center gap-0.5 rounded-full bg-red-500/20 px-1.5 py-0.5 text-[9px] font-bold uppercase text-red-200"
                   >
                     <Shield className="h-2.5 w-2.5" />
                   </span>

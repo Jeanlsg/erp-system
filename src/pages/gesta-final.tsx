@@ -673,7 +673,7 @@ export function LocalizarPessoasPage() {
           <Card key={p.id}>
             <CardContent className="p-4">
               <div className="flex items-start gap-3">
-                <div className={`h-10 w-10 rounded-full flex items-center justify-center ${p.tipo === "fisica" ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"}`}>
+                <div className={`h-10 w-10 rounded-full flex items-center justify-center ${p.tipo === "fisica" ? "bg-red-100 text-red-700" : "bg-purple-100 text-purple-700"}`}>
                   {p.tipo === "fisica" ? <User className="h-5 w-5" /> : <Building2 className="h-5 w-5" />}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -964,14 +964,6 @@ export function GerarCrediarioPage() {
 }
 
 // ====================================================================
-// USUÁRIO E PERMISSÕES
-// ====================================================================
-export function UsuarioPermissoesPage() {
-  const { UsuariosPage } = require("@/pages/usuarios");
-  return <UsuariosPage />;
-}
-
-// ====================================================================
 // PAINEL DO CONTADOR
 // ====================================================================
 export function PainelContadorPage() {
@@ -993,7 +985,7 @@ export function PainelContadorPage() {
       <div className="grid gap-4 sm:grid-cols-3">
         <Card>
           <CardContent className="p-6 text-center">
-            <FileText className="h-12 w-12 mx-auto text-blue-600 mb-2" />
+            <FileText className="h-12 w-12 mx-auto text-red-600 mb-2" />
             <p className="font-semibold">SPED Fiscal</p>
             <p className="text-xs text-muted-foreground mt-1">Geração do arquivo SPED</p>
             <Button variant="outline" size="sm" className="mt-3"><Download className="h-3 w-3 mr-1" /> Gerar</Button>

@@ -73,6 +73,8 @@ DELETE FROM erp.erp_compras;
 DELETE FROM erp.erp_pedidos;
 DELETE FROM erp.erp_notas_fiscais;
 
+DELETE FROM erp.erp_lotes;
+
 DELETE FROM erp.erp_caixa_movimentacoes;
 DELETE FROM erp.erp_caixa;
 DELETE FROM erp.erp_sangrias;

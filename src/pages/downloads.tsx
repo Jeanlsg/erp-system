@@ -42,7 +42,7 @@ export function DownloadsPage() {
                     <td className="p-3 text-center text-xs">{d.versao ?? "—"}</td>
                     <td className="p-3 text-center tabular-nums">{d.download_count ?? 0}</td>
                     <td className="p-3 text-center">
-                      {d.url_externa && <a href={d.url_externa} target="_blank" rel="noopener" className="text-blue-600 hover:underline text-xs">Baixar</a>}
+                      {d.url_externa && <a href={d.url_externa} target="_blank" rel="noopener" className="text-red-600 hover:underline text-xs">Baixar</a>}
                     </td>
                   </tr>
                 ))}

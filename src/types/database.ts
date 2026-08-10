@@ -579,3 +579,58 @@ export interface Contato {
   created_at: string;
   updated_at: string;
 }
+
+// =========================================
+// CAIXA / FRENTE DE CAIXA PDV
+// =========================================
+
+export type CaixaStatus = "aberto" | "fechado";
+export type CaixaOrigem = "pdv_online" | "pdv_offline" | "pdv_delivery";
+
+export interface Caixa {
+  id: string;
+  loja_id: string | null;
+  usuario_id: string | null;
+  numero_caixa: number;
+  status: CaixaStatus;
+  data_abertura: string | null;
+  data_fechamento: string | null;
+  valor_inicial: number;
+  valor_final: number | null;
+  total_vendas: number;
+  total_sangrias: number;
+  total_entradas_extras: number;
+  valor_troco: number;
+  observacoes: string | null;
+  encerrado_por: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CaixaCompleto extends Caixa {
+  loja?: Loja;
+  usuario?: Usuario;
+}
+
+export interface FechamentoCaixa {
+  id: string;
+  caixa_id: string;
+  usuario_id: string;
+  data_fechamento: string;
+  valor_inicial: number;
+  valor_final: number;
+  valor_vendas: number;
+  valor_sangrias: number;
+  valor_entradas: number;
+  valor_troco: number;
+  valor_dinheiro: number;
+  valor_pix: number;
+  valor_cartao_credito: number;
+  valor_cartao_debito: number;
+  valor_crediario: number;
+  valor_boleto: number;
+  valor_outros: number;
+  diferenca: number;
+  observacoes: string | null;
+  created_at: string;
+}

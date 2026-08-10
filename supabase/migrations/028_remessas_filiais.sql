@@ -14,7 +14,7 @@ CREATE TYPE erp_remessa_tipo AS ENUM (
 
 -- ===== Remessas entre Filiais (Cabeçalho) =====
 CREATE TABLE erp_remessas (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   loja_origem_id UUID NOT NULL REFERENCES erp_lojas(id),
   loja_destino_id UUID NOT NULL REFERENCES erp_lojas(id),
   usuario_id UUID NOT NULL REFERENCES erp_usuarios(id),
@@ -60,7 +60,7 @@ CREATE INDEX idx_erp_remessas_data ON erp_remessas(data_remessa);
 
 -- ===== Remessas Itens =====
 CREATE TABLE erp_remessa_itens (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   remessa_id UUID NOT NULL REFERENCES erp_remessas(id) ON DELETE CASCADE,
   produto_id UUID NOT NULL REFERENCES erp_produtos(id),
   -- Dados do produto

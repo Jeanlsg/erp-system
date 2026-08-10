@@ -325,7 +325,7 @@ function FeatureFlagsPanel() {
                                   <Lock className="absolute left-1.5 h-3 w-3 text-white" />
                                   <span className="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow translate-x-5" />
                                 </div>
-                                <Badge variant="outline" className="text-[9px] bg-blue-50 text-blue-700 border-blue-300">
+                                <Badge variant="outline" className="text-[9px] bg-red-50 text-red-700 border-red-300">
                                   <Lock className="h-2.5 w-2.5 mr-0.5" /> Protegida
                                 </Badge>
                               </div>
@@ -498,9 +498,9 @@ function ConfigTecnicasPanel() {
 
   return (
     <>
-      <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 rounded-md p-3 text-sm flex gap-2">
-        <Eye className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />
-        <p className="text-blue-900 dark:text-blue-200">
+      <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-md p-3 text-sm flex gap-2">
+        <Eye className="h-4 w-4 text-red-600 flex-shrink-0 mt-0.5" />
+        <p className="text-red-900 dark:text-red-200">
           Para ativar/desativar páginas no sistema, use a aba <strong>Feature Flags</strong> acima.
         </p>
       </div>

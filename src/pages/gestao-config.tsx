@@ -204,8 +204,8 @@ export function NotificacoesPage() {
           ) : (
             <div className="divide-y">
               {notificacoes.map((n: any) => (
-                <div key={n.id} className={`p-4 flex items-start gap-3 ${!n.lida ? "bg-blue-50 dark:bg-blue-950/20" : ""}`}>
-                  <div className={`mt-1 h-2 w-2 rounded-full ${!n.lida ? "bg-blue-600" : "bg-transparent"}`} />
+                <div key={n.id} className={`p-4 flex items-start gap-3 ${!n.lida ? "bg-red-50 dark:bg-red-950/20" : ""}`}>
+                  <div className={`mt-1 h-2 w-2 rounded-full ${!n.lida ? "bg-red-600" : "bg-transparent"}`} />
                   <div className="flex-1">
                     <p className="font-medium">{n.titulo}</p>
                     <p className="text-sm text-muted-foreground">{n.mensagem}</p>

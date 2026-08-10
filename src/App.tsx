@@ -4,9 +4,9 @@ import { RootLayout } from "@/components/root-layout";
 import { PlaceholderPage } from "@/components/placeholder-page";
 
 import { LoginPage } from "@/pages/login";
+import { RedefinirSenhaPage } from "@/pages/redefinir-senha";
 import { DashboardPage } from "@/pages/dashboard";
 import { SetupPage } from "@/pages/setup";
-import { ProductsPage } from "@/pages/products";
 import { OrdersPage } from "@/pages/orders";
 import { CustomersPage } from "@/pages/customers";
 import { VisaoGeralPage } from "@/pages/visao-geral";
@@ -16,9 +16,7 @@ import { AgendaPage } from "@/pages/agenda";
 
 // Páginas principais implementadas
 import { FuncionariosPage } from "@/pages/funcionarios";
-import { TransportadorasPage } from "@/pages/transportadoras";
-import { EstoquePage } from "@/pages/estoque";
-import { AgendaTelefonicaPage } from "@/pages/agenda-telefonica";
+import { ProdutosEstoqueLotesPage } from "@/pages/produtos-estoque-lotes";
 import { DocumentosPage } from "@/pages/documentos";
 import { EmailInteligentePage } from "@/pages/email-inteligente";
 import { RegioesEntregaPage } from "@/pages/regioes-entrega";
@@ -38,7 +36,6 @@ import { DownloadsPage } from "@/pages/downloads";
 import { LojasPage } from "@/pages/lojas";
 import { VendasPage } from "@/pages/vendas";
 import { KitsPage } from "@/pages/kits";
-import { LotesPage } from "@/pages/lotes";
 import { ComprasPage } from "@/pages/compras";
 import { RelatoriosPage } from "@/pages/relatorios";
 import { DevolucoesPage } from "@/pages/devolucoes";
@@ -67,15 +64,16 @@ import {
 import {
   AvaliacoesPage, RecomendacoesPage, NotificacoesPage,
   SolicitacaoParceriaPage, OcorrenciasPage,
-  ConfiguracoesGeraisPage, ConfiguracoesSefazPage, NfeCertificadoPage,
+  ConfiguracoesGeraisPage, ConfiguracoesSefazPage,
 } from "@/pages/gestao-config";
+import { NfeCertificadoPage } from "@/pages/nfe-certificado";
 
 import {
   ConsultaPessoaFisicaPage, ConsultaPessoaJuridicaPage, DadosEmpresariaisPage,
   CodigoBarrasPage, CartaoCreditoPage, CartaoDebitoPage, DinheiroPage,
   LocalizarPessoasPage, ExclusaoInformacoesPage, DocumentosDemonstrativosPage,
   PastaPrincipalPage, CadastroProdutosPage, GerarCrediarioPage,
-  UsuarioPermissoesPage, PainelContadorPage, EmpresarialPage,
+  PainelContadorPage, EmpresarialPage,
 } from "@/pages/gesta-final";
 
 // Helper
@@ -89,6 +87,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/auth/redefinir-senha" element={<RedefinirSenhaPage />} />
       <Route path="/setup" element={<SetupPage />} />
 
       <Route path="/" element={<RootLayout />}>
@@ -135,13 +134,10 @@ export default function App() {
         <Route path="gestao/consulta-pessoa-juridica" element={<ConsultaPessoaJuridicaPage />} />
         <Route path="gestao/fornecedores" element={<FornecedoresPage />} />
         <Route path="gestao/funcionarios" element={<FuncionariosPage />} />
-        <Route path="gestao/transportadoras" element={<TransportadorasPage />} />
-        <Route path="gestao/estoque" element={<EstoquePage />} />
         <Route path="gestao/cadastro-produtos" element={<CadastroProdutosPage />} />
         <Route path="gestao/servicos" element={P("Serviços Oferecidos", "Catálogo de serviços", Coffee)} />
 
         {/* Agenda / Documentos / Arquivos */}
-        <Route path="gestao/agenda-telefonica" element={<AgendaTelefonicaPage />} />
         <Route path="gestao/documentos" element={<DocumentosPage />} />
         <Route path="gestao/documentos-demonstrativos" element={<DocumentosDemonstrativosPage />} />
         <Route path="gestao/arquivos-pastas" element={<PastaPrincipalPage />} />
@@ -155,7 +151,7 @@ export default function App() {
         {/* Usuários */}
         <Route path="gestao/usuarios" element={<UsuariosPage />} />
         <Route path="gestao/administrar-usuarios" element={<UsuariosPage />} />
-        <Route path="gestao/usuario-permissoes" element={<UsuarioPermissoesPage />} />
+        <Route path="gestao/usuario-permissoes" element={<UsuariosPage />} />
 
         {/* Cobrança */}
         <Route path="gestao/negativar-devedores" element={<NegativarDevedoresPage />} />
@@ -225,10 +221,12 @@ export default function App() {
         <Route path="vendas" element={<VendasPage />} />
         <Route path="devolucoes" element={<DevolucoesPage />} />
         <Route path="kits" element={<KitsPage />} />
-        <Route path="lotes" element={<LotesPage />} />
-        <Route path="gestao/lotes" element={<LotesPage />} />
-        <Route path="produtos" element={<ProductsPage />} />
-        <Route path="estoque" element={<EstoquePage />} />
+        <Route path="lotes" element={<ProdutosEstoqueLotesPage />} />
+        <Route path="gestao/lotes" element={<ProdutosEstoqueLotesPage />} />
+        <Route path="produtos" element={<ProdutosEstoqueLotesPage />} />
+        <Route path="produtos-estoque-lotes" element={<ProdutosEstoqueLotesPage />} />
+        <Route path="estoque" element={<ProdutosEstoqueLotesPage />} />
+        <Route path="gestao/estoque" element={<ProdutosEstoqueLotesPage />} />
         <Route path="estoque.transferencia" element={<TransferenciaEstoquePage />} />
         <Route path="compras" element={<ComprasPage />} />
         <Route path="compras/importar-nfe" element={<ImportarNFePage />} />

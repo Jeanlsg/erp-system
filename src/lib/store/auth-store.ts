@@ -53,7 +53,7 @@ export const roleLabels: Record<Role, string> = {
   estoquista: "Estoquista",
 };
 
-const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
+export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   admin: [
     "pdv.usar", "caixa.abrir", "caixa.fechar", "venda.criar", "venda.cancelar", "venda.desconto",
     "produto.ver", "produto.criar", "produto.editar", "produto.excluir",
@@ -87,6 +87,8 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "relatorio.ver", "loja.ver",
   ],
 };
+
+export { ROLE_PERMISSIONS as DEFAULT_ROLE_PERMISSIONS };
 
 interface AuthState {
   user: User | null;

@@ -14,7 +14,7 @@ CREATE TYPE erp_nfe_entrada_tipo AS ENUM (
 
 -- ===== NFe de Entrada (Cabeçalho) =====
 CREATE TABLE erp_nfe_entrada (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   loja_id UUID NOT NULL REFERENCES erp_lojas(id),
   fornecedor_id UUID REFERENCES erp_pessoas(id),
   compra_id UUID REFERENCES erp_compras(id),
@@ -71,7 +71,7 @@ CREATE INDEX idx_erp_nfe_entrada_emitente_cnpj ON erp_nfe_entrada(emitente_cnpj)
 
 -- ===== NFe de Entrada (Itens) =====
 CREATE TABLE erp_nfe_entrada_itens (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   nfe_entrada_id UUID NOT NULL REFERENCES erp_nfe_entrada(id) ON DELETE CASCADE,
   produto_id UUID REFERENCES erp_produtos(id),
   -- Dados do XML

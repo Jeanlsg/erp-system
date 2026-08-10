@@ -42,7 +42,7 @@ export function RelatoriosPage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <p className="text-xs uppercase text-muted-foreground">Vendas</p>
-                <ShoppingCart className="h-4 w-4 text-blue-600" />
+                <ShoppingCart className="h-4 w-4 text-red-600" />
               </div>
               <p className="text-2xl font-semibold mt-2">{vendas.length}</p>
             </CardContent>
