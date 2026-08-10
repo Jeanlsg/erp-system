@@ -51,6 +51,7 @@ import {
   ChevronRight,
   Minus,
   Flag,
+  Upload,
 } from "lucide-react";
 
 import { useAuth, type Permission } from "@/lib/store/auth-store";
@@ -129,6 +130,7 @@ const sections: NavSection[] = [
       { title: "Transferências", url: "/estoque.transferencia", icon: ArrowLeftRight, perm: "estoque.transferir" },
       { title: "Lotes & Validade", url: "/lotes", icon: ScrollText, perm: "estoque.ver" },
       { title: "Compras", url: "/compras", icon: ShoppingBag, perm: "compra.criar" },
+      { title: "Importar NFe", url: "/compras/importar-nfe", icon: Upload, perm: "compra.criar", badge: "novo" },
       { title: "Kits & Combos", url: "/kits", icon: PackagePlus, perm: "produto.ver" },
       { title: "Fornecedores", url: "/gestao/fornecedores", icon: Truck, perm: "compra.ver" },
     ],
@@ -154,8 +156,6 @@ const sections: NavSection[] = [
       { title: "Agenda Compromissos", url: "/gestao/agenda-compromissos", icon: Calendar },
       { title: "Documentos", url: "/gestao/documentos", icon: FolderTree },
       { title: "Arquivos e Pastas", url: "/gestao/arquivos-pastas", icon: FolderTree },
-      { title: "Veículos / Frota", url: "/gestao/consulta-veiculos", icon: Car },
-      { title: "Entregas Futuras", url: "/gestao/entregas-futuras", icon: Truck },
     ],
   },
   {
@@ -198,6 +198,7 @@ const sections: NavSection[] = [
     items: [
       { title: "Notas Fiscais", url: "/notas-fiscais", icon: FileText, perm: "fiscal.emitir" },
       { title: "Faturamento", url: "/faturamento", icon: FileText, perm: "fiscal.emitir", badge: "novo" },
+      { title: "Remessas entre Filiais", url: "/remessas", icon: ArrowLeftRight, perm: "fiscal.emitir", badge: "novo" },
       { title: "Certificado Digital", url: "/gestao/nfe-certificado", icon: Lock, perm: "fiscal.emitir" },
       { title: "Configurações SEFAZ", url: "/gestao/configuracoes-sefaz", icon: Settings, perm: "fiscal.emitir" },
       { title: "Painel do Contador", url: "/gestao/painel-contador", icon: Calculator },

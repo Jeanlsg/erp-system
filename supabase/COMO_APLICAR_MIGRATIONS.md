@@ -114,10 +114,15 @@ supabase/
     ├── 008_alter_tables.sql            # 60+ ALTER TABLE
     ├── 009_rls_policies.sql            # 100+ policies RLS
     ├── 010_views.sql                   # 8 views úteis
-    └── 011_agenda_cheques.sql          # Agenda, Cheques
+    ├── 011_agenda_cheques.sql          # Agenda, Cheques
+    ├── 012_security_hardening.sql      # Hardening de segurança
+    ├── 024_veiculos.sql                # Frota
+    ├── 025_feature_flags.sql
+    ├── 027_nfe_entrada.sql             # 🆕 Importação de NFe de compra
+    └── 028_remessas_filiais.sql        # 🆕 Remessas entre filiais
 ```
 
-**Ordem importa!** Execute sempre na sequência 001 → 011.
+**Ordem importa!** Execute sempre na sequência 001 → 028.
 
 ---
 

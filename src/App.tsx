@@ -5,6 +5,7 @@ import { PlaceholderPage } from "@/components/placeholder-page";
 
 import { LoginPage } from "@/pages/login";
 import { DashboardPage } from "@/pages/dashboard";
+import { SetupPage } from "@/pages/setup";
 import { ProductsPage } from "@/pages/products";
 import { OrdersPage } from "@/pages/orders";
 import { CustomersPage } from "@/pages/customers";
@@ -21,8 +22,6 @@ import { AgendaTelefonicaPage } from "@/pages/agenda-telefonica";
 import { DocumentosPage } from "@/pages/documentos";
 import { EmailInteligentePage } from "@/pages/email-inteligente";
 import { RegioesEntregaPage } from "@/pages/regioes-entrega";
-import { VeiculosPage } from "@/pages/consulta-veiculos";
-import { EntregasFuturasPage } from "@/pages/entregas-futuras";
 import { UsuariosPage } from "@/pages/usuarios";
 import { CaixaPage } from "@/pages/caixa";
 import { PDVPage } from "@/pages/pdv";
@@ -39,6 +38,7 @@ import { DownloadsPage } from "@/pages/downloads";
 import { LojasPage } from "@/pages/lojas";
 import { VendasPage } from "@/pages/vendas";
 import { KitsPage } from "@/pages/kits";
+import { LotesPage } from "@/pages/lotes";
 import { ComprasPage } from "@/pages/compras";
 import { RelatoriosPage } from "@/pages/relatorios";
 import { DevolucoesPage } from "@/pages/devolucoes";
@@ -50,6 +50,8 @@ import { ConfigSistemaPage } from "@/pages/config.sistema";
 import { ConfigEmpresarialPage } from "@/pages/config.empresarial";
 import { ConfigChavesPixPage } from "@/pages/config.minhas-chaves";
 import { FaturamentoPage } from "@/pages/faturamento";
+import { ImportarNFePage } from "@/pages/compras.importar-nfe";
+import { RemessasPage } from "@/pages/remessas";
 import { PedidoPage, OrcamentoPage, OrdemServicoPage, ConsignacaoPage, LocacaoPage } from "@/pages/controle-comercial";
 import { IFoodPage, ExAppPedidosPage, TEFPage } from "@/pages/integracoes";
 import { MarketplaceIFoodPage } from "@/pages/marketplace-ifood";
@@ -87,6 +89,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/setup" element={<SetupPage />} />
 
       <Route path="/" element={<RootLayout />}>
         <Route index element={<DashboardPage />} />
@@ -135,7 +138,6 @@ export default function App() {
         <Route path="gestao/transportadoras" element={<TransportadorasPage />} />
         <Route path="gestao/estoque" element={<EstoquePage />} />
         <Route path="gestao/cadastro-produtos" element={<CadastroProdutosPage />} />
-        <Route path="gestao/entregas-futuras" element={<EntregasFuturasPage />} />
         <Route path="gestao/servicos" element={P("Serviços Oferecidos", "Catálogo de serviços", Coffee)} />
 
         {/* Agenda / Documentos / Arquivos */}
@@ -149,10 +151,6 @@ export default function App() {
         <Route path="gestao/email-inteligente" element={<EmailInteligentePage />} />
         <Route path="gestao/agenda-compromissos" element={<AgendaPage />} />
         <Route path="gestao/regioes-entrega" element={<RegioesEntregaPage />} />
-        <Route path="gestao/relatorio-entregas" element={<EntregasFuturasPage />} />
-
-        {/* Frota */}
-        <Route path="gestao/consulta-veiculos" element={<VeiculosPage />} />
 
         {/* Usuários */}
         <Route path="gestao/usuarios" element={<UsuariosPage />} />
@@ -227,10 +225,20 @@ export default function App() {
         <Route path="vendas" element={<VendasPage />} />
         <Route path="devolucoes" element={<DevolucoesPage />} />
         <Route path="kits" element={<KitsPage />} />
+        <Route path="lotes" element={<LotesPage />} />
+        <Route path="gestao/lotes" element={<LotesPage />} />
         <Route path="produtos" element={<ProductsPage />} />
         <Route path="estoque" element={<EstoquePage />} />
         <Route path="estoque.transferencia" element={<TransferenciaEstoquePage />} />
         <Route path="compras" element={<ComprasPage />} />
+        <Route path="compras/importar-nfe" element={<ImportarNFePage />} />
+        <Route path="gestao/compras/importar-nfe" element={<ImportarNFePage />} />
+
+        {/* Remessas entre Filiais */}
+        <Route path="remessas" element={<RemessasPage />} />
+        <Route path="gestao/remessas" element={<RemessasPage />} />
+        <Route path="gestao/transferencia-estoque" element={<RemessasPage />} />
+        <Route path="estoque.transferencia" element={<RemessasPage />} />
         <Route path="fornecedores" element={<FornecedoresPage />} />
         <Route path="funcionarios" element={<FuncionariosPage />} />
         <Route path="fiscal" element={<FiscalPage />} />

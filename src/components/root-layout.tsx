@@ -54,6 +54,13 @@ export function RootLayout() {
     }
   }, [lojas, currentLojaId, setCurrentLojaId]);
 
+  // Redirecionar para setup se não houver nenhuma loja cadastrada
+  useEffect(() => {
+    if (hydrated && isAuthenticated && lojas.length === 0) {
+      navigate("/setup", { replace: true });
+    }
+  }, [hydrated, isAuthenticated, lojas.length, navigate]);
+
   function handleLogout() {
     logout();
     toast.success("Logout realizado!");

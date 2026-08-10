@@ -11,9 +11,6 @@ import type {
   Pessoa,
   Conta,
   ProdutoComEstoque,
-  Veiculo,
-  VeiculoAbastecimento,
-  VeiculoManutencao,
   RegiaoEntrega,
   Transportadora,
   Contato,
@@ -877,10 +874,590 @@ export function useCreateSangria() {
     mutationFn: async (sangria: any) => {
       const { data, error } = await supabase.from('erp_sangrias').insert(sangria).select().single();
       if (error) throw error;
+return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_feature_flags'] }),
+  });
+}
+
+// =====================================
+// NFE ENTRADA (Importação de XML)
+// =====================================
+export function useNFeEntrada(filters?: { lojaId?: string; status?: string }) {
+  return useQuery<any[]>({
+    queryKey: ['erp_nfe_entrada', filters],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase
+        .from('erp_nfe_entrada')
+        .select('*')
+        .order('data_emissao', { ascending: false })
+        .limit(200);
+      if (filters?.lojaId) query = query.eq('loja_id', filters.lojaId);
+      if (filters?.status) query = query.eq('status', filters.status);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useCreateNFeEntrada() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (item: any) => {
+      const { data, error } = await supabase
+        .from('erp_nfe_entrada')
+        .insert(item)
+        .select()
+        .single();
+      if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_sangrias'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_nfe_entrada'] }),
   });
+}
+
+export function useUpdateNFeEntrada() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: any) => {
+      const { data, error } = await supabase
+        .from('erp_nfe_entrada')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_nfe_entrada'] }),
+  });
+}
+
+export function useDeleteNFeEntrada() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('erp_nfe_entrada').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_nfe_entrada'] }),
+  });
+}
+
+/**
+ * Importa uma NFe completa: cria produtos novos (se necessário), atualiza estoque,
+ * cria compra e registra os itens. Tudo em uma transação lógica.
+ */
+export function useImportarNFe() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: {
+      loja_id: string;
+      usuario_id: string;
+      nfe: any;
+      itens: any[]; // itens com produto_id mapeado
+      fornecedor_id?: string;
+    }) => {
+      const { loja_id, usuario_id, nfe, itens, fornecedor_id } = params;
+
+      // 1. Criar/buscar fornecedor
+      let fId = fornecedor_id;
+      if (!fId && nfe.emitente.cnpj) {
+        const { data: existente } = await supabase
+          .from('erp_pessoas')
+          .select('id')
+          .eq('cpf_cnpj', nfe.emitente.cnpj)
+          .maybeSingle();
+
+        if (existente) {
+          fId = existente.id;
+        } else {
+          const { data: novo } = await supabase
+            .from('erp_pessoas')
+            .insert({
+              tipo: nfe.emitente.cnpj.length === 11 ? 'fisica' : 'juridica',
+              cpf_cnpj: nfe.emitente.cnpj,
+              nome_razao: nfe.emitente.nome,
+              nome_fantasia: nfe.emitente.fantasia || null,
+              email: null,
+              telefone: null,
+              endereco: nfe.emitente.endereco || null,
+              ativo: true,
+            })
+            .select()
+            .single();
+          fId = novo.id;
+        }
+      }
+
+      // 2. Criar compra
+      const { data: compra, error: compraErr } = await supabase
+        .from('erp_compras')
+        .insert({
+          loja_id,
+          fornecedor_id: fId,
+          usuario_id,
+          data_compra: nfe.data_emissao,
+          total: nfe.valor_total,
+          status: 'processada',
+          observacoes: `Importado da NFe ${nfe.numero}/${nfe.serie}`,
+        })
+        .select()
+        .single();
+      if (compraErr) throw compraErr;
+
+      // 3. Criar NFe de entrada
+      const { data: nfeEntrada, error: nfeErr } = await supabase
+        .from('erp_nfe_entrada')
+        .insert({
+          loja_id,
+          fornecedor_id: fId,
+          compra_id: compra.id,
+          chave_acesso: nfe.chave_acesso,
+          numero: nfe.numero,
+          serie: nfe.serie,
+          tipo: 'nfe',
+          data_emissao: nfe.data_emissao,
+          valor_produtos: nfe.valor_produtos,
+          valor_frete: nfe.valor_frete,
+          valor_seguro: nfe.valor_seguro,
+          valor_desconto: nfe.valor_desconto,
+          valor_icms: nfe.valor_icms,
+          valor_ipi: nfe.valor_ipi,
+          valor_pis: nfe.valor_pis,
+          valor_cofins: nfe.valor_cofins,
+          valor_total: nfe.valor_total,
+          emitente_cnpj: nfe.emitente.cnpj,
+          emitente_nome: nfe.emitente.nome,
+          emitente_fantasia: nfe.emitente.fantasia,
+          emitente_endereco: nfe.emitente.endereco || null,
+          xml_original: nfe.xml_original,
+          status: 'processada',
+          usuario_id,
+        })
+        .select()
+        .single();
+      if (nfeErr) throw nfeErr;
+
+      // 4. Processar cada item
+      for (const item of itens) {
+        let produtoId = item.produto_id;
+
+        // Criar produto se não existir
+        if (!produtoId || item.acao === 'criar_novo') {
+          const sku = item.codigo_produto || `NFe-${nfe.numero}-${item.numero_item}`;
+          const precoCusto = item.valor_unitario;
+          const precoVenda = precoCusto * (1 + (item.margem_desejada || 0.5));
+
+          const { data: novoProduto, error: prodErr } = await supabase
+            .from('erp_produtos')
+            .insert({
+              sku,
+              nome: item.nome,
+              codigo_barras: item.codigo_ean || null,
+              preco_custo: precoCusto,
+              preco_venda: precoVenda,
+              unidade: item.unidade || 'UN',
+              ncm: item.ncm || null,
+              ativo: true,
+              tipo_produto: 'revenda',
+            })
+            .select()
+            .single();
+          if (prodErr) throw prodErr;
+          produtoId = novoProduto.id;
+        } else {
+          // Atualizar preço de custo se necessário
+          await supabase
+            .from('erp_produtos')
+            .update({
+              preco_custo: item.valor_unitario,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', produtoId);
+        }
+
+        // Criar item da compra
+        await supabase.from('erp_compra_itens').insert({
+          compra_id: compra.id,
+          produto_id: produtoId,
+          preco_custo: item.valor_unitario,
+          quantidade: item.quantidade,
+          subtotal: item.valor_total,
+        });
+
+        // Adicionar ao estoque
+        const { data: estoqueExistente } = await supabase
+          .from('erp_estoque')
+          .select('quantidade')
+          .eq('produto_id', produtoId)
+          .eq('loja_id', loja_id)
+          .maybeSingle();
+
+        if (estoqueExistente) {
+          await supabase
+            .from('erp_estoque')
+            .update({
+              quantidade: estoqueExistente.quantidade + item.quantidade,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('produto_id', produtoId)
+            .eq('loja_id', loja_id);
+        } else {
+          await supabase.from('erp_estoque').insert({
+            produto_id: produtoId,
+            loja_id,
+            quantidade: item.quantidade,
+          });
+        }
+
+        // Registrar item da NFe de entrada
+        await supabase.from('erp_nfe_entrada_itens').insert({
+          nfe_entrada_id: nfeEntrada.id,
+          produto_id: produtoId,
+          numero_item: item.numero_item,
+          codigo_produto: item.codigo_produto,
+          codigo_ean: item.codigo_ean,
+          nome: item.nome,
+          ncm: item.ncm,
+          cfop: item.cfop,
+          unidade: item.unidade,
+          quantidade: item.quantidade,
+          valor_unitario: item.valor_unitario,
+          valor_total: item.valor_total,
+          valor_desconto: item.valor_desconto || 0,
+          icms_origem: item.icms_origem,
+          icms_csosn: item.icms_csosn,
+          icms_aliquota: item.icms_aliquota || 0,
+          icms_valor: item.icms_valor || 0,
+          ipi_valor: item.ipi_valor || 0,
+          produto_criado: item.acao === 'criar_novo',
+          estoque_atualizado: true,
+          custo_unitario_final: item.valor_unitario + (item.ipi_valor || 0) / item.quantidade,
+        });
+      }
+
+      return { nfeEntrada, compra };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_nfe_entrada'] });
+      qc.invalidateQueries({ queryKey: ['erp_produtos'] });
+      qc.invalidateQueries({ queryKey: ['erp_estoque'] });
+      qc.invalidateQueries({ queryKey: ['erp_compras'] });
+      qc.invalidateQueries({ queryKey: ['erp_pessoas'] });
+    },
+  });
+}
+
+// =====================================
+// REMESSAS ENTRE FILIAIS
+// =====================================
+export function useRemessas(filters?: { lojaId?: string; status?: string; tipo?: string }) {
+  return useQuery<any[]>({
+    queryKey: ['erp_remessas', filters],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase
+        .from('erp_remessas')
+        .select(`
+          *,
+          origem:erp_lojas!loja_origem_id(id, nome, apelido, cnpj, uf),
+          destino:erp_lojas!loja_destino_id(id, nome, apelido, cnpj, uf),
+          itens:erp_remessa_itens(
+            *,
+            produto:erp_produtos(id, nome, sku, preco_custo, preco_venda)
+          ),
+          usuario:erp_usuarios(id, nome)
+        `)
+        .order('data_remessa', { ascending: false })
+        .limit(200);
+      if (filters?.lojaId) {
+        query = query.or(`loja_origem_id.eq.${filters.lojaId},loja_destino_id.eq.${filters.lojaId}`);
+      }
+      if (filters?.status) query = query.eq('status', filters.status);
+      if (filters?.tipo) query = query.eq('tipo', filters.tipo);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useCreateRemessa() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: any) => {
+      const { itens, ...remessa } = params;
+
+      // Criar remessa
+      const { data: novaRemessa, error } = await supabase
+        .from('erp_remessas')
+        .insert({ ...remessa, status: 'rascunho' })
+        .select()
+        .single();
+      if (error) throw error;
+
+      // Criar itens
+      if (itens && itens.length > 0) {
+        const itensParaInserir = itens.map((i: any) => ({
+          ...i,
+          remessa_id: novaRemessa.id,
+        }));
+        const { error: itensErr } = await supabase
+          .from('erp_remessa_itens')
+          .insert(itensParaInserir);
+        if (itensErr) throw itensErr;
+
+        // Atualizar valor total
+        const total = itens.reduce((s: number, i: any) => s + Number(i.subtotal || 0), 0);
+        await supabase
+          .from('erp_remessas')
+          .update({ valor_produtos: total, valor_total: total + Number(remessa.valor_frete || 0) })
+          .eq('id', novaRemessa.id);
+      }
+
+      return novaRemessa;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_remessas'] }),
+  });
+}
+
+export function useUpdateRemessa() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: any) => {
+      const { data, error } = await supabase
+        .from('erp_remessas')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_remessas'] }),
+  });
+}
+
+export function useDeleteRemessa() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('erp_remessas').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_remessas'] }),
+  });
+}
+
+/**
+ * Processa remessa: marca como em_transito, baixa estoque origem.
+ * Quando emitida a NFe, baixa estoque origem e cria NFe no banco.
+ */
+export function useEmitirNFeRemessa() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ remessa_id, loja_id }: { remessa_id: string; loja_id: string }) => {
+      // 1. Buscar remessa completa
+      const { data: remessa, error: remessaErr } = await supabase
+        .from('erp_remessas')
+        .select(`
+        .,
+          origem:erp_lojas!loja_origem_id(*),
+          destino:erp_lojas!loja_destino_id(*),
+          itens:erp_remessa_itens(*)
+        `)
+        .eq('id', remessa_id)
+        .single();
+      if (remessaErr) throw remessaErr;
+      if (!remessa) throw new Error('Remessa não encontrada');
+
+      // 2. Determinar CFOP (mesma UF ou outra)
+      const mesmaUF = remessa.origem.uf === remessa.destino.uf;
+      const cfop = mesmaUF ? '5152' : '6152';
+
+      // 3. Buscar próxima numeração de NFe
+      const { data: configSefaz } = await supabase
+        .from('erp_configuracoes_sefaz')
+        .select('*')
+        .eq('loja_id', loja_id)
+        .maybeSingle();
+
+      const proximoNumero = (configSefaz?.numeracao_atual_nfe ?? 0) + 1;
+
+      // 4. Gerar chave de acesso (44 dígitos - modelo simplificado para homologação)
+      const chaveAcesso = gerarChaveAcessoMock(remessa.origem.uf ?? 'SP');
+
+      // 5. Criar NFe no banco (representação, integração SEFAZ real fica como TODO)
+      const { data: nfe, error: nfeErr } = await supabase
+        .from('erp_notas_fiscais')
+        .insert({
+          loja_id: remessa.loja_origem_id,
+          tipo: 'nfe',
+          numero: proximoNumero,
+          serie: configSefaz?.serie_nfe ?? 1,
+          chave_acesso: chaveAcesso,
+          status: 'autorizada',
+          valor_total: remessa.valor_total,
+          data_emissao: new Date().toISOString(),
+          observacoes: `NFe de remessa para filial ${remessa.destino.apelido} - CFOP ${cfop}`,
+        })
+        .select()
+        .single();
+      if (nfeErr) throw nfeErr;
+
+      // 6. Atualizar numeração
+      if (configSefaz) {
+        await supabase
+          .from('erp_configuracoes_sefaz')
+          .update({ numeracao_atual_nfe: proximoNumero })
+          .eq('loja_id', loja_id);
+      }
+
+      // 7. Baixar estoque da origem
+      for (const item of remessa.itens) {
+        const { data: estoque } = await supabase
+          .from('erp_estoque')
+          .select('quantidade')
+          .eq('produto_id', item.produto_id)
+          .eq('loja_id', remessa.loja_origem_id)
+          .maybeSingle();
+
+        if (estoque) {
+          await supabase
+            .from('erp_estoque')
+            .update({
+              quantidade: Math.max(0, estoque.quantidade - item.quantidade),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('produto_id', item.produto_id)
+            .eq('loja_id', remessa.loja_origem_id);
+
+          // Marcar item como baixado
+          await supabase
+            .from('erp_remessa_itens')
+            .update({
+              estoque_origem_baixado: true,
+              data_baixa_origem: new Date().toISOString(),
+            })
+            .eq('id', item.id);
+        }
+      }
+
+      // 8. Atualizar remessa
+      await supabase
+        .from('erp_remessas')
+        .update({
+          status: 'nf_emitida',
+          nfe_remessa_id: nfe.id,
+          nfe_remessa_numero: proximoNumero,
+          nfe_remessa_chave: chaveAcesso,
+          cfop_utilizado: cfop,
+          natureza_operacao: mesmaUF
+            ? 'Remessa de mercadoria entre filiais - mesma UF'
+            : 'Remessa de mercadoria entre filiais - outra UF',
+        })
+        .eq('id', remessa_id);
+
+      return { nfe, cfop };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_remessas'] });
+      qc.invalidateQueries({ queryKey: ['erp_estoque'] });
+      qc.invalidateQueries({ queryKey: ['erp_notas_fiscais'] });
+    },
+  });
+}
+
+/**
+ * Confirma o recebimento da remessa no destino: adiciona ao estoque destino.
+ */
+export function useReceberRemessa() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ remessa_id, usuario_id }: { remessa_id: string; usuario_id: string }) => {
+      const { data: remessa, error } = await supabase
+        .from('erp_remessas')
+        .select(`*, itens:erp_remessa_itens(*)`)
+        .eq('id', remessa_id)
+        .single();
+      if (error) throw error;
+      if (!remessa) throw new Error('Remessa não encontrada');
+      if (!['nf_emitida', 'em_transito'].includes(remessa.status)) {
+        throw new Error(`Status inválido para receber: ${remessa.status}`);
+      }
+
+      // Adicionar ao estoque destino
+      for (const item of remessa.itens) {
+        const { data: estoque } = await supabase
+          .from('erp_estoque')
+          .select('quantidade')
+          .eq('produto_id', item.produto_id)
+          .eq('loja_id', remessa.loja_destino_id)
+          .maybeSingle();
+
+        if (estoque) {
+          await supabase
+            .from('erp_estoque')
+            .update({
+              quantidade: estoque.quantidade + item.quantidade,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('produto_id', item.produto_id)
+            .eq('loja_id', remessa.loja_destino_id);
+        } else {
+          await supabase.from('erp_estoque').insert({
+            produto_id: item.produto_id,
+            loja_id: remessa.loja_destino_id,
+            quantidade: item.quantidade,
+          });
+        }
+
+        // Marcar item como recebido
+        await supabase
+          .from('erp_remessa_itens')
+          .update({
+            estoque_destino_adicionado: true,
+            data_entrada_destino: new Date().toISOString(),
+          })
+          .eq('id', item.id);
+      }
+
+      // Atualizar status da remessa
+      await supabase
+        .from('erp_remessas')
+        .update({
+          status: 'recebida',
+          data_recebimento: new Date().toISOString(),
+          recebido_por: usuario_id,
+        })
+        .eq('id', remessa_id);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_remessas'] });
+      qc.invalidateQueries({ queryKey: ['erp_estoque'] });
+    },
+  });
+}
+
+/**
+ * Gera chave de acesso mock (44 dígitos).
+ * NOTA: Em produção, a chave real deve vir da SEFAZ via biblioteca de integração.
+ */
+function gerarChaveAcessoMock(uf: string): string {
+  const ufCode = String(parseInt(uf, 36) || 35).padStart(2, '0');
+  const ano = new Date().getFullYear().toString().slice(-2);
+  const mes = String(new Date().getMonth() + 1).padStart(2, '0');
+  const random = Math.floor(Math.random() * 100000000000000).toString().padStart(14, '0');
+  const cnpj = '00000000000000';
+  const modelo = '55';
+  const serie = '001';
+  const numero = String(Math.floor(Math.random() * 999999999)).padStart(9, '0');
+  const tipoEmissao = '1';
+  const codigo = Math.floor(Math.random() * 99999999).toString().padStart(8, '0');
+  return (ufCode + ano + mes + cnpj + modelo + serie + numero + tipoEmissao + codigo).padEnd(44, '0').slice(0, 44);
 }
 
 export function useEntradasExtras(caixaId?: string) {
@@ -966,110 +1543,6 @@ export function useVendasPorDiaView(lojaId?: string, dias: number = 7) {
       if (error) throw error;
       return data ?? [];
     },
-  });
-}
-
-// ========================================
-// VEÍCULOS / FROTA
-// ========================================
-export function useVeiculos(lojaId?: string) {
-  return useQuery<Veiculo[]>({
-    queryKey: ['erp_veiculos', lojaId],
-    queryFn: async () => {
-      if (!isSupabaseConfigured()) return [];
-      let query = supabase.from('erp_veiculos').select('*').order('placa');
-      if (lojaId) query = query.eq('loja_id', lojaId);
-      const { data, error } = await query;
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-}
-
-export function useCreateVeiculo() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (veiculo: Partial<Veiculo>) => {
-      const { data, error } = await supabase.from('erp_veiculos').insert(veiculo).select().single();
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_veiculos'] }),
-  });
-}
-
-export function useUpdateVeiculo() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, ...updates }: Partial<Veiculo> & { id: string }) => {
-      const { data, error } = await supabase.from('erp_veiculos').update(updates).eq('id', id).select().single();
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_veiculos'] }),
-  });
-}
-
-export function useDeleteVeiculo() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from('erp_veiculos').delete().eq('id', id);
-      if (error) throw error;
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_veiculos'] }),
-  });
-}
-
-export function useAbastecimentos(veiculoId?: string) {
-  return useQuery<VeiculoAbastecimento[]>({
-    queryKey: ['erp_veiculo_abastecimentos', veiculoId],
-    queryFn: async () => {
-      if (!isSupabaseConfigured()) return [];
-      let query = supabase.from('erp_veiculo_abastecimentos').select('*').order('data_abastecimento', { ascending: false });
-      if (veiculoId) query = query.eq('veiculo_id', veiculoId);
-      const { data, error } = await query;
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-}
-
-export function useCreateAbastecimento() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (item: Partial<VeiculoAbastecimento>) => {
-      const { data, error } = await supabase.from('erp_veiculo_abastecimentos').insert(item).select().single();
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_veiculo_abastecimentos'] }),
-  });
-}
-
-export function useManutencoes(veiculoId?: string) {
-  return useQuery<VeiculoManutencao[]>({
-    queryKey: ['erp_veiculo_manutencoes', veiculoId],
-    queryFn: async () => {
-      if (!isSupabaseConfigured()) return [];
-      let query = supabase.from('erp_veiculo_manutencoes').select('*').order('data_manutencao', { ascending: false });
-      if (veiculoId) query = query.eq('veiculo_id', veiculoId);
-      const { data, error } = await query;
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-}
-
-export function useCreateManutencao() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (item: Partial<VeiculoManutencao>) => {
-      const { data, error } = await supabase.from('erp_veiculo_manutencoes').insert(item).select().single();
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_veiculo_manutencoes'] }),
   });
 }
 

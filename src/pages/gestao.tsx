@@ -12,7 +12,6 @@ const links = [
   { title: "Documentos", url: "/gestao/documentos", icon: FileText, desc: "Arquivos e contratos" },
   { title: "E-mail Inteligente", url: "/gestao/email-inteligente", icon: Mail, desc: "Automações de marketing" },
   { title: "Regiões de Entrega", url: "/gestao/regioes-entrega", icon: Truck, desc: "Zonas de frete" },
-  { title: "Veículos", url: "/gestao/consulta-veiculos", icon: Package, desc: "Frota" },
 ];
 
 export function GestaoHubPage() {

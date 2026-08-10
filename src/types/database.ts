@@ -238,32 +238,6 @@ export interface ProdutoComEstoque extends Produto {
 }
 
 // Novos tipos
-export interface Veiculo {
-  id: string;
-  loja_id: string | null;
-  placa: string;
-  chassi: string | null;
-  renavam: string | null;
-  marca: string | null;
-  modelo: string | null;
-  ano_fabricacao: number | null;
-  ano_modelo: number | null;
-  cor: string | null;
-  km_atual: number;
-  tipo_combustivel: string | null;
-  capacidade_carga: number | null;
-  status: string;
-  ipva_valor: number | null;
-  ipva_vencimento: string | null;
-  seguro_vencimento: string | null;
-  licenciamento_vencimento: string | null;
-  proxima_revisao_km: number | null;
-  proxima_revisao_data: string | null;
-  observacoes: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
 export interface Cheque {
   id: string;
   loja_id: string;
@@ -522,60 +496,6 @@ export interface FeatureFlag {
   motivo_desativacao: string | null;
   created_at: string;
   updated_at: string;
-}
-
-// Frota
-export interface Veiculo {
-  id: string;
-  loja_id: string | null;
-  placa: string;
-  chassi: string | null;
-  renavam: string | null;
-  marca: string | null;
-  modelo: string | null;
-  ano_fabricacao: number | null;
-  ano_modelo: number | null;
-  cor: string | null;
-  km_atual: number;
-  tipo_combustivel: string | null;
-  capacidade_carga: number | null;
-  status: string;
-  ipva_valor: number | null;
-  ipva_vencimento: string | null;
-  seguro_vencimento: string | null;
-  licenciamento_vencimento: string | null;
-  proxima_revisao_km: number | null;
-  proxima_revisao_data: string | null;
-  observacoes: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface VeiculoAbastecimento {
-  id: string;
-  veiculo_id: string;
-  data_abastecimento: string;
-  km_abastecimento: number;
-  litros: number;
-  valor_total: number;
-  preco_litro: number;
-  posto: string | null;
-  motorista_id: string | null;
-  created_at: string;
-}
-
-export interface VeiculoManutencao {
-  id: string;
-  veiculo_id: string;
-  tipo: string | null;
-  data_manutencao: string;
-  km_manutencao: number | null;
-  descricao: string | null;
-  valor: number | null;
-  oficina: string | null;
-  proxima_km: number | null;
-  proxima_data: string | null;
-  created_at: string;
 }
 
 // Regiões de Entrega
