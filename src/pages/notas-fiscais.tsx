@@ -15,7 +15,7 @@ import {
   CheckCircle2, AlertCircle, Clock, XCircle, Shield,
 } from "lucide-react";
 import {
-  useNotasFiscais, isSupabaseConfigured, supabase,
+  useNotasFiscais, useVendas, useEmitirNFeVenda, isSupabaseConfigured, supabase,
 } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
@@ -34,8 +34,28 @@ export function NotasFiscaisPage() {
   });
 
   const [modalDetalhes, setModalDetalhes] = useState<any | null>(null);
+  const [modalEmitir, setModalEmitir] = useState(false);
+  const [vendaSelecionada, setVendaSelecionada] = useState("");
+  const emitir = useEmitirNFeVenda();
+  const { data: vendas = [] } = useVendas({ lojaId: lojaId ?? undefined });
 
   if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="Notas Fiscais" />;
+
+  // Vendas finalizadas que ainda não têm NF-e vinculada
+  const notasVendaIds = new Set(notas.map((n: any) => n.venda_id).filter(Boolean));
+  const vendasSemNota = vendas.filter((v: any) => v.status === "finalizada" && !notasVendaIds.has(v.id));
+
+  const handleEmitir = async () => {
+    if (!vendaSelecionada || !lojaId) return;
+    try {
+      const r = await emitir.mutateAsync({ venda_id: vendaSelecionada, loja_id: lojaId });
+      toast.success(`NF-e nº ${r.numero} autorizada! Protocolo ${r.protocolo}${r.ambiente !== "producao" ? " (HOMOLOGAÇÃO — sem valor fiscal)" : ""}`);
+      setModalEmitir(false);
+      setVendaSelecionada("");
+    } catch (e: any) {
+      toast.error(e.message, { duration: 10000 });
+    }
+  };
 
   const STATUS_VARIANT: Record<string, "default" | "destructive" | "outline" | "secondary"> = {
     autorizada: "default",
@@ -61,6 +81,18 @@ export function NotasFiscaisPage() {
   const pendentes = notas.filter((n: any) => ["pendente", "processando"].includes(n.status)).length;
 
   const handleDownloadXML = async (nota: any) => {
+    // Notas novas: XML autorizado no bucket fiscal
+    if (nota.xml_path) {
+      const { data, error } = await supabase.storage.from("fiscal").download(nota.xml_path);
+      if (error || !data) { toast.error("Falha ao baixar XML do storage"); return; }
+      const url = URL.createObjectURL(data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `NFe_${nota.chave_acesso ?? nota.numero}.xml`;
+      a.click();
+      URL.revokeObjectURL(url);
+      return;
+    }
     if (!nota.xml_assinado) {
       toast.error("XML não disponível");
       return;
@@ -75,6 +107,14 @@ export function NotasFiscaisPage() {
   };
 
   const handleDownloadPDF = async (nota: any) => {
+    // Notas novas: DANFE no bucket fiscal
+    if (nota.danfe_path) {
+      const { data, error } = await supabase.storage.from("fiscal").download(nota.danfe_path);
+      if (error || !data) { toast.error("Falha ao baixar DANFE"); return; }
+      const url = URL.createObjectURL(data);
+      window.open(url, "_blank");
+      return;
+    }
     if (!nota.pdf_url) {
       toast.error("PDF não disponível");
       return;
@@ -99,6 +139,9 @@ export function NotasFiscaisPage() {
             {notas.length} nota(s) emitida(s) pela loja atual
           </p>
         </div>
+        <Button onClick={() => setModalEmitir(true)}>
+          <FileText className="mr-2 h-4 w-4" /> Emitir NF-e
+        </Button>
       </div>
 
       {/* KPIs */}
@@ -234,12 +277,12 @@ export function NotasFiscaisPage() {
                         <Button size="sm" variant="ghost" onClick={() => setModalDetalhes(n)} title="Ver detalhes">
                           <Eye className="h-3 w-3" />
                         </Button>
-                        {n.xml_assinado && (
+                        {(n.xml_assinado || n.xml_path) && (
                           <Button size="sm" variant="ghost" onClick={() => handleDownloadXML(n)} title="Baixar XML">
                             <Download className="h-3 w-3" />
                           </Button>
                         )}
-                        {n.pdf_url && (
+                        {(n.pdf_url || n.danfe_path) && (
                           <Button size="sm" variant="ghost" onClick={() => handleDownloadPDF(n)} title="Ver DANFE">
                             <FileText className="h-3 w-3" />
                           </Button>
@@ -253,6 +296,45 @@ export function NotasFiscaisPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Modal de Emissão */}
+      <Dialog open={modalEmitir} onOpenChange={setModalEmitir}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Emitir NF-e de Venda</DialogTitle><DialogClose /></DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <p className="text-sm mb-1 font-medium">Venda finalizada (sem nota) *</p>
+              <select
+                className="w-full h-9 rounded-md border bg-background px-2 text-sm"
+                value={vendaSelecionada}
+                onChange={(e) => setVendaSelecionada(e.target.value)}
+              >
+                <option value="">Selecione...</option>
+                {vendasSemNota.map((v: any) => (
+                  <option key={v.id} value={v.id}>
+                    #{v.numero_pedido ?? v.id.slice(0, 8)} — {date(v.data_venda)} — {brl(v.total)}
+                    {v.cliente?.nome_razao ? ` — ${v.cliente.nome_razao}` : ""}
+                  </option>
+                ))}
+              </select>
+              {vendasSemNota.length === 0 && (
+                <p className="text-xs text-muted-foreground mt-1">Nenhuma venda finalizada sem nota.</p>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              A emissão é <strong>real</strong>: a nota é transmitida à SEFAZ no ambiente configurado
+              ({"homologação"} até a virada de produção). Requisitos: certificado A1 ativo, SEFAZ
+              configurada e NCM em todos os produtos da venda.
+            </p>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setModalEmitir(false)}>Cancelar</Button>
+            <Button onClick={handleEmitir} disabled={emitir.isPending || !vendaSelecionada}>
+              {emitir.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Transmitindo...</> : "Emitir e Transmitir"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal de Detalhes */}
       <Dialog open={!!modalDetalhes} onOpenChange={(open) => !open && setModalDetalhes(null)}>

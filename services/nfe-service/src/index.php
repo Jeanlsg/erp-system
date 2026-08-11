@@ -1,0 +1,453 @@
+<?php
+/**
+ * ============================================================================
+ * nfe-service — Emissão de NF-e self-hosted (nfephp-org/sped-nfe)
+ * ERP XLife · xlifevps · rede interna do projeto `apps`
+ *
+ * Stateless: certificado e dados chegam na requisição, nada é gravado em disco.
+ * Auth: Authorization: Bearer $NFE_SERVICE_TOKEN (exceto /healthz)
+ * ============================================================================
+ */
+
+declare(strict_types=1);
+require __DIR__ . '/../vendor/autoload.php';
+
+use NFePHP\NFe\Make;
+use NFePHP\NFe\Tools;
+use NFePHP\NFe\Common\Standardize;
+use NFePHP\NFe\Complements;
+use NFePHP\Common\Certificate;
+use NFePHP\DA\NFe\Danfe;
+
+// ---------------------------------------------------------------------------
+// Infra HTTP mínima
+// ---------------------------------------------------------------------------
+
+header('Content-Type: application/json; charset=utf-8');
+$path   = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
+$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+
+function out(int $code, array $body): never {
+    http_response_code($code);
+    echo json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
+function body(): array {
+    $raw = file_get_contents('php://input') ?: '{}';
+    $data = json_decode($raw, true);
+    if (!is_array($data)) out(400, ['erro' => 'JSON inválido']);
+    return $data;
+}
+
+if ($path === '/healthz') out(200, ['status' => 'ok']);
+
+// Auth
+$token = getenv('NFE_SERVICE_TOKEN') ?: '';
+$auth  = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+if ($token === '' || !hash_equals("Bearer {$token}", $auth)) {
+    out(401, ['erro' => 'não autorizado']);
+}
+
+// ---------------------------------------------------------------------------
+// Helpers sped-nfe
+// ---------------------------------------------------------------------------
+
+/** Monta o Tools (conexão SEFAZ) a partir do bloco `emitente` + `certificado`. */
+function makeTools(array $req): Tools {
+    foreach (['certificado', 'emitente', 'ambiente'] as $k) {
+        if (empty($req[$k])) out(422, ['erro' => "campo obrigatório ausente: {$k}"]);
+    }
+    $cert = $req['certificado'];
+    if (empty($cert['pfx_base64']) || !isset($cert['senha'])) {
+        out(422, ['erro' => 'certificado.pfx_base64 e certificado.senha são obrigatórios']);
+    }
+    $pfx = base64_decode($cert['pfx_base64'], true);
+    if ($pfx === false) out(422, ['erro' => 'pfx_base64 inválido']);
+
+    try {
+        $certificate = Certificate::readPfx($pfx, (string)$cert['senha']);
+    } catch (\Throwable $e) {
+        out(422, ['erro' => 'certificado inválido ou senha incorreta', 'detalhe' => $e->getMessage()]);
+    }
+
+    $emit = $req['emitente'];
+    $config = json_encode([
+        'atualizacao' => date('Y-m-d H:i:s'),
+        'tpAmb'       => (int)$req['ambiente'],           // 1=produção 2=homologação
+        'razaosocial' => $emit['razao'] ?? '',
+        'cnpj'        => preg_replace('/\D/', '', $emit['cnpj'] ?? ''),
+        'siglaUF'     => $emit['uf'] ?? 'BA',
+        'schemes'     => 'PL_009_V4',
+        'versao'      => '4.00',
+        'tokenIBPT'   => '',
+        'CSC'         => $req['csc'] ?? '',
+        'CSCid'       => $req['csc_id'] ?? '',
+    ]);
+
+    $tools = new Tools($config, $certificate);
+    $tools->model((string)($req['nota']['modelo'] ?? '55'));
+    return $tools;
+}
+
+/** Constrói o XML da NF-e a partir do payload padronizado do ERP. */
+function buildXml(array $req): string {
+    $emit  = $req['emitente'];
+    $dest  = $req['destinatario'];
+    $nota  = $req['nota'];
+    $itens = $req['itens'] ?? [];
+    if (count($itens) === 0) out(422, ['erro' => 'nota sem itens']);
+
+    $tpAmb  = (int)$req['ambiente'];
+    $cnpj   = preg_replace('/\D/', '', $emit['cnpj']);
+    $numero = (int)$nota['numero'];
+    $serie  = (int)($nota['serie'] ?? 1);
+    $dhEmi  = date('Y-m-d\TH:i:sP');
+    $cNF    = str_pad((string)random_int(0, 99999999), 8, '0', STR_PAD_LEFT);
+
+    $make = new Make();
+
+    $std = new stdClass();
+    $std->versao = '4.00';
+    $make->taginfNFe($std);
+
+    // --- ide ---
+    $cUFmap = ['AC'=>12,'AL'=>27,'AP'=>16,'AM'=>13,'BA'=>29,'CE'=>23,'DF'=>53,'ES'=>32,'GO'=>52,
+        'MA'=>21,'MT'=>51,'MS'=>50,'MG'=>31,'PA'=>15,'PB'=>25,'PR'=>41,'PE'=>26,'PI'=>22,'RJ'=>33,
+        'RN'=>24,'RS'=>43,'RO'=>11,'RR'=>14,'SC'=>42,'SP'=>35,'SE'=>28,'TO'=>17];
+    $ufEmit  = $emit['uf'];
+    $ufDest  = $dest['endereco']['uf'] ?? $ufEmit;
+
+    $std = new stdClass();
+    $std->cUF      = $cUFmap[$ufEmit] ?? 29;
+    $std->cNF      = $cNF;
+    $std->natOp    = $nota['natureza'] ?? 'VENDA DE MERCADORIA';
+    $std->mod      = (int)($nota['modelo'] ?? 55);
+    $std->serie    = $serie;
+    $std->nNF      = $numero;
+    $std->dhEmi    = $dhEmi;
+    $std->tpNF     = 1;                                   // saída
+    $std->idDest   = ($ufEmit === $ufDest) ? 1 : 2;       // 1=interna 2=interestadual
+    $std->cMunFG   = (int)($emit['endereco']['codigo_municipio'] ?? 0);
+    $std->tpImp    = 1;                                   // DANFE retrato
+    $std->tpEmis   = 1;                                   // normal
+    $std->tpAmb    = $tpAmb;
+    $std->finNFe   = (int)($nota['finalidade'] ?? 1);     // 1=normal
+    $std->indFinal = (int)($nota['consumidor_final'] ?? 1);
+    $std->indPres  = (int)($nota['presenca'] ?? 1);       // 1=presencial
+    $std->procEmi  = 0;
+    $std->verProc  = 'xlife-erp 1.0';
+    $make->tagide($std);
+
+    // --- emitente ---
+    $std = new stdClass();
+    $std->xNome = $emit['razao'];
+    $std->xFant = $emit['fantasia'] ?? null;
+    $std->IE    = preg_replace('/\D/', '', $emit['ie'] ?? '');
+    $std->CRT   = (int)($emit['crt'] ?? 1);               // 1=Simples Nacional
+    $std->CNPJ  = $cnpj;
+    $make->tagemit($std);
+
+    $e = $emit['endereco'];
+    $std = new stdClass();
+    $std->xLgr    = $e['logradouro'] ?? '';
+    $std->nro     = $e['numero'] ?? 'S/N';
+    $std->xBairro = $e['bairro'] ?? '';
+    $std->cMun    = (int)($e['codigo_municipio'] ?? 0);
+    $std->xMun    = $e['municipio'] ?? '';
+    $std->UF      = $ufEmit;
+    $std->CEP     = preg_replace('/\D/', '', $e['cep'] ?? '');
+    $std->cPais   = 1058;
+    $std->xPais   = 'BRASIL';
+    $std->fone    = preg_replace('/\D/', '', $e['fone'] ?? '') ?: null;
+    $make->tagenderEmit($std);
+
+    // --- destinatário ---
+    $docDest = preg_replace('/\D/', '', $dest['cpf_cnpj'] ?? '');
+    $std = new stdClass();
+    // Em homologação a SEFAZ exige esta razão social fixa:
+    $std->xNome = $tpAmb === 2
+        ? 'NF-E EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL'
+        : ($dest['nome'] ?? 'CONSUMIDOR');
+    if (strlen($docDest) === 14) {
+        $std->CNPJ = $docDest;
+        $std->indIEDest = (int)($dest['ind_ie'] ?? 9);
+        if (!empty($dest['ie'])) { $std->IE = preg_replace('/\D/', '', $dest['ie']); $std->indIEDest = 1; }
+    } elseif (strlen($docDest) === 11) {
+        $std->CPF = $docDest;
+        $std->indIEDest = 9;
+    } else {
+        out(422, ['erro' => 'destinatario.cpf_cnpj inválido (NF-e modelo 55 exige CPF ou CNPJ)']);
+    }
+    $make->tagdest($std);
+
+    if (!empty($dest['endereco']['logradouro'])) {
+        $d = $dest['endereco'];
+        $std = new stdClass();
+        $std->xLgr    = $d['logradouro'];
+        $std->nro     = $d['numero'] ?? 'S/N';
+        $std->xBairro = $d['bairro'] ?? '';
+        $std->cMun    = (int)($d['codigo_municipio'] ?? 0);
+        $std->xMun    = $d['municipio'] ?? '';
+        $std->UF      = $ufDest;
+        $std->CEP     = preg_replace('/\D/', '', $d['cep'] ?? '');
+        $std->cPais   = 1058;
+        $std->xPais   = 'BRASIL';
+        $make->tagenderDest($std);
+    }
+
+    // --- itens ---
+    $nItem = 0;
+    foreach ($itens as $item) {
+        $nItem++;
+        $q  = (float)$item['quantidade'];
+        $vu = (float)$item['valor_unitario'];
+        $vProd = round($q * $vu, 2);
+
+        $std = new stdClass();
+        $std->item      = $nItem;
+        $std->cProd     = (string)($item['codigo'] ?? $nItem);
+        $std->cEAN      = !empty($item['ean']) ? preg_replace('/\D/', '', $item['ean']) : 'SEM GTIN';
+        $std->xProd     = $tpAmb === 2 && $nItem === 1
+            ? 'NOTA FISCAL EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL'
+            : mb_substr((string)$item['descricao'], 0, 120);
+        $std->NCM       = preg_replace('/\D/', '', $item['ncm'] ?? '');
+        if (!empty($item['cest'])) $std->CEST = preg_replace('/\D/', '', $item['cest']);
+        $std->CFOP      = (string)($item['cfop'] ?? '5102');
+        $std->uCom      = $item['unidade'] ?? 'UN';
+        $std->qCom      = number_format($q, 4, '.', '');
+        $std->vUnCom    = number_format($vu, 10, '.', '');
+        $std->vProd     = number_format($vProd, 2, '.', '');
+        $std->cEANTrib  = $std->cEAN;
+        $std->uTrib     = $std->uCom;
+        $std->qTrib     = $std->qCom;
+        $std->vUnTrib   = $std->vUnCom;
+        $std->indTot    = 1;
+        $make->tagprod($std);
+
+        if ($std->NCM === '') out(422, ['erro' => "item {$nItem}: NCM obrigatório (cadastre no produto)"]);
+
+        $std = new stdClass();
+        $std->item = $nItem;
+        $make->tagimposto($std);
+
+        // ICMS — Simples Nacional (CSOSN) ou regime normal (CST)
+        $std = new stdClass();
+        $std->item  = $nItem;
+        $std->orig  = (int)($item['origem'] ?? 0);
+        if ((int)($req['emitente']['crt'] ?? 1) === 3) {
+            $std->CST = (string)($item['cst'] ?? '00');
+            if ($std->CST === '00') {
+                $std->modBC  = 3;
+                $std->vBC    = number_format($vProd, 2, '.', '');
+                $std->pICMS  = number_format((float)($item['aliquota_icms'] ?? 18), 4, '.', '');
+                $std->vICMS  = number_format(round($vProd * (float)($item['aliquota_icms'] ?? 18) / 100, 2), 2, '.', '');
+            }
+            $make->tagICMS($std);
+        } else {
+            $std->CSOSN = (string)($item['csosn'] ?? '102');
+            $make->tagICMSSN($std);
+        }
+
+        // PIS/COFINS — Simples Nacional: CST 49/99 (outras operações, sem destaque)
+        $std = new stdClass();
+        $std->item = $nItem;
+        $std->CST  = '49';
+        $std->qBCProd = null; $std->vAliqProd = null; $std->vPIS = null;
+        $make->tagPIS($std);
+
+        $std = new stdClass();
+        $std->item = $nItem;
+        $std->CST  = '49';
+        $std->qBCProd = null; $std->vAliqProd = null; $std->vCOFINS = null;
+        $make->tagCOFINS($std);
+    }
+
+    // --- totais (a lib soma sozinha quando o std vem vazio) ---
+    $make->tagICMSTot(new stdClass());
+
+    // --- transporte ---
+    $std = new stdClass();
+    $std->modFrete = (int)($req['frete']['modalidade'] ?? 9);   // 9 = sem frete
+    $make->tagtransp($std);
+
+    // --- pagamento ---
+    $std = new stdClass();
+    $make->tagpag($std);
+    foreach (($req['pagamentos'] ?? [['forma' => '90', 'valor' => 0]]) as $pag) {
+        $std = new stdClass();
+        $std->tPag = str_pad((string)($pag['forma'] ?? '99'), 2, '0', STR_PAD_LEFT);
+        $std->vPag = number_format((float)($pag['valor'] ?? 0), 2, '.', '');
+        $make->tagdetPag($std);
+    }
+
+    if (!empty($nota['observacoes'])) {
+        $std = new stdClass();
+        $std->infCpl = mb_substr((string)$nota['observacoes'], 0, 2000);
+        $make->taginfAdic($std);
+    }
+
+    try {
+        $xml = $make->getXML();
+    } catch (\Throwable $e) {
+        out(422, ['erro' => 'falha ao montar XML', 'detalhes' => $make->getErrors() ?: [$e->getMessage()]]);
+    }
+    return $xml;
+}
+
+/** Extrai resposta padronizada do retorno da SEFAZ. */
+function std(string $response): stdClass {
+    return (new Standardize())->toStd($response);
+}
+
+// ---------------------------------------------------------------------------
+// Rotas
+// ---------------------------------------------------------------------------
+
+try {
+    // ---------- STATUS DO SERVIÇO SEFAZ ----------
+    if ($path === '/v1/status' && $method === 'POST') {
+        $req = body();
+        $tools = makeTools($req);
+        $st = std($tools->sefazStatus());
+        out(200, [
+            'online'   => (string)($st->cStat ?? '') === '107',
+            'cstat'    => (string)($st->cStat ?? ''),
+            'motivo'   => (string)($st->xMotivo ?? ''),
+            'uf'       => $req['emitente']['uf'] ?? '',
+            'ambiente' => (int)$req['ambiente'],
+        ]);
+    }
+
+    // ---------- EMITIR ----------
+    if ($path === '/v1/nfe/emitir' && $method === 'POST') {
+        $req = body();
+        $tools = makeTools($req);
+
+        $xml = buildXml($req);
+        $signed = $tools->signNFe($xml);
+
+        // Envio síncrono (indSinc=1) — resposta já traz o protocolo
+        $resp = $tools->sefazEnviaLote([$signed], (string)time(), 1);
+        $st = std($resp);
+
+        // Assíncrono em algumas UFs: consultar recibo
+        if ((string)($st->cStat ?? '') === '103' && !empty($st->infRec->nRec)) {
+            sleep(3);
+            $resp = $tools->sefazConsultaRecibo((string)$st->infRec->nRec);
+            $st = std($resp);
+        }
+
+        $prot  = $st->protNFe->infProt ?? $st;
+        $cstat = (string)($prot->cStat ?? $st->cStat ?? '');
+        $chave = (string)($prot->chNFe ?? '');
+
+        if ($cstat === '100') {   // autorizada
+            $xmlProtocolado = Complements::toAuthorize($signed, $resp);
+
+            // DANFE
+            $danfeB64 = null;
+            try {
+                $danfe = new Danfe($xmlProtocolado);
+                $danfeB64 = base64_encode($danfe->render());
+            } catch (\Throwable $e) { /* DANFE é acessório — não falha a emissão */ }
+
+            out(200, [
+                'autorizada'      => true,
+                'cstat'           => $cstat,
+                'motivo'          => (string)($prot->xMotivo ?? ''),
+                'chave'           => $chave,
+                'protocolo'       => (string)($prot->nProt ?? ''),
+                'data_autorizacao'=> (string)($prot->dhRecbto ?? ''),
+                'xml_base64'      => base64_encode($xmlProtocolado),
+                'danfe_pdf_base64'=> $danfeB64,
+            ]);
+        }
+
+        out(200, [
+            'autorizada' => false,
+            'cstat'      => $cstat,
+            'motivo'     => (string)($prot->xMotivo ?? $st->xMotivo ?? 'sem resposta da SEFAZ'),
+            'chave'      => $chave,
+            'xml_assinado_base64' => base64_encode($signed),
+        ]);
+    }
+
+    // ---------- CANCELAR ----------
+    if ($path === '/v1/nfe/cancelar' && $method === 'POST') {
+        $req = body();
+        foreach (['chave', 'protocolo', 'justificativa'] as $k) {
+            if (empty($req[$k])) out(422, ['erro' => "campo obrigatório: {$k}"]);
+        }
+        if (mb_strlen($req['justificativa']) < 15) out(422, ['erro' => 'justificativa deve ter no mínimo 15 caracteres']);
+        $tools = makeTools($req);
+        $resp = $tools->sefazCancela($req['chave'], $req['justificativa'], $req['protocolo']);
+        $st = std($resp);
+        $ev = $st->retEvento->infEvento ?? $st;
+        $cstat = (string)($ev->cStat ?? $st->cStat ?? '');
+        out(200, [
+            'cancelada'  => in_array($cstat, ['135', '155'], true),
+            'cstat'      => $cstat,
+            'motivo'     => (string)($ev->xMotivo ?? $st->xMotivo ?? ''),
+            'protocolo'  => (string)($ev->nProt ?? ''),
+        ]);
+    }
+
+    // ---------- CARTA DE CORREÇÃO ----------
+    if ($path === '/v1/nfe/cce' && $method === 'POST') {
+        $req = body();
+        foreach (['chave', 'correcao'] as $k) {
+            if (empty($req[$k])) out(422, ['erro' => "campo obrigatório: {$k}"]);
+        }
+        if (mb_strlen($req['correcao']) < 15) out(422, ['erro' => 'correção deve ter no mínimo 15 caracteres']);
+        $tools = makeTools($req);
+        $resp = $tools->sefazCCe($req['chave'], $req['correcao'], (int)($req['sequencia'] ?? 1));
+        $st = std($resp);
+        $ev = $st->retEvento->infEvento ?? $st;
+        $cstat = (string)($ev->cStat ?? $st->cStat ?? '');
+        out(200, [
+            'registrada' => $cstat === '135',
+            'cstat'      => $cstat,
+            'motivo'     => (string)($ev->xMotivo ?? $st->xMotivo ?? ''),
+            'protocolo'  => (string)($ev->nProt ?? ''),
+        ]);
+    }
+
+    // ---------- INUTILIZAR NUMERAÇÃO ----------
+    if ($path === '/v1/nfe/inutilizar' && $method === 'POST') {
+        $req = body();
+        foreach (['serie', 'numero_inicial', 'numero_final', 'justificativa'] as $k) {
+            if (!isset($req[$k]) || $req[$k] === '') out(422, ['erro' => "campo obrigatório: {$k}"]);
+        }
+        $tools = makeTools($req);
+        $resp = $tools->sefazInutiliza(
+            (int)$req['serie'], (int)$req['numero_inicial'], (int)$req['numero_final'],
+            (string)$req['justificativa']
+        );
+        $st = std($resp);
+        $inf = $st->infInut ?? $st;
+        $cstat = (string)($inf->cStat ?? $st->cStat ?? '');
+        out(200, [
+            'inutilizada' => $cstat === '102',
+            'cstat'       => $cstat,
+            'motivo'      => (string)($inf->xMotivo ?? $st->xMotivo ?? ''),
+        ]);
+    }
+
+    // ---------- DANFE a partir de XML autorizado ----------
+    if ($path === '/v1/danfe' && $method === 'POST') {
+        $req = body();
+        if (empty($req['xml_base64'])) out(422, ['erro' => 'xml_base64 obrigatório']);
+        $xml = base64_decode($req['xml_base64'], true);
+        if ($xml === false) out(422, ['erro' => 'xml_base64 inválido']);
+        $danfe = new Danfe($xml);
+        out(200, ['danfe_pdf_base64' => base64_encode($danfe->render())]);
+    }
+
+    out(404, ['erro' => 'rota não encontrada', 'rotas' => [
+        'GET /healthz', 'POST /v1/status', 'POST /v1/nfe/emitir', 'POST /v1/nfe/cancelar',
+        'POST /v1/nfe/cce', 'POST /v1/nfe/inutilizar', 'POST /v1/danfe',
+    ]]);
+} catch (\Throwable $e) {
+    out(500, ['erro' => 'falha interna', 'detalhe' => $e->getMessage()]);
+}

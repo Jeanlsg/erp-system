@@ -1,0 +1,17 @@
+{
+    "name": "xlife/nfe-service",
+    "description": "Microserviço de emissão de NF-e (sped-nfe) — ERP XLife",
+    "type": "project",
+    "require": {
+        "php": ">=8.1",
+        "ext-soap": "*",
+        "ext-openssl": "*",
+        "ext-dom": "*",
+        "nfephp-org/sped-nfe": "^5.1",
+        "nfephp-org/sped-da": "^1.1"
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "allow-plugins": false
+    }
+}

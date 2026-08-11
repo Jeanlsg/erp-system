@@ -79,7 +79,7 @@ export function ProdutosEstoqueLotesPage() {
   const [formProduto, setFormProduto] = useState({
     sku: "", nome: "", preco_custo: "0", preco_venda: "0",
     unidade: "UN", estoque_minimo: "0", marca: "", codigo_barras: "",
-    categoria_id: "",
+    categoria_id: "", ncm: "", cest: "", cfop_padrao: "5102", csosn: "102",
   });
   const [formCategoria, setFormCategoria] = useState({ nome: "", descricao: "" });
 
@@ -175,6 +175,7 @@ export function ProdutosEstoqueLotesPage() {
     setFormProduto({
       sku: "", nome: "", preco_custo: "0", preco_venda: "0",
       unidade: "UN", estoque_minimo: "0", marca: "", codigo_barras: "",
+      ncm: "", cest: "", cfop_padrao: "5102", csosn: "102",
       categoria_id: "",
     });
     setModalProduto(true);
@@ -194,6 +195,8 @@ export function ProdutosEstoqueLotesPage() {
       marca: p.marca ?? "",
       codigo_barras: p.codigo_barras ?? "",
       categoria_id: cat?.id ?? "",
+      ncm: p.ncm ?? "", cest: p.cest ?? "",
+      cfop_padrao: p.cfop_padrao ?? "5102", csosn: p.csosn ?? "102",
     });
     setModalProduto(true);
   };
@@ -213,6 +216,10 @@ export function ProdutosEstoqueLotesPage() {
       marca: formProduto.marca || null,
       codigo_barras: formProduto.codigo_barras || null,
       categoria_id: formProduto.categoria_id || null,
+      ncm: formProduto.ncm.replace(/\D/g, "") || null,
+      cest: formProduto.cest.replace(/\D/g, "") || null,
+      cfop_padrao: formProduto.cfop_padrao || "5102",
+      csosn: formProduto.csosn || "102",
     };
     try {
       if (editId) {
@@ -679,6 +686,45 @@ export function ProdutosEstoqueLotesPage() {
                     <option key={c.id} value={c.id}>{c.nome}</option>
                   ))}
                 </select>
+              </div>
+            </div>
+
+            {/* ===== DADOS FISCAIS (obrigatórios para emitir NF-e) ===== */}
+            <div className="border rounded-md p-3 space-y-3">
+              <p className="text-sm font-medium">Dados Fiscais <span className="text-xs text-muted-foreground">(NCM é obrigatório para NF-e)</span></p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>NCM *</Label>
+                  <Input maxLength={8} placeholder="21069090" value={formProduto.ncm}
+                    onChange={(e) => setFormProduto({ ...formProduto, ncm: e.target.value })} />
+                </div>
+                <div>
+                  <Label>CEST</Label>
+                  <Input maxLength={7} placeholder="1706200" value={formProduto.cest}
+                    onChange={(e) => setFormProduto({ ...formProduto, cest: e.target.value })} />
+                </div>
+                <div>
+                  <Label>CFOP padrão</Label>
+                  <select className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                    value={formProduto.cfop_padrao}
+                    onChange={(e) => setFormProduto({ ...formProduto, cfop_padrao: e.target.value })}>
+                    <option value="5102">5102 — Venda (dentro do estado)</option>
+                    <option value="5405">5405 — Venda ST (dentro do estado)</option>
+                    <option value="6102">6102 — Venda (fora do estado)</option>
+                    <option value="6404">6404 — Venda ST (fora do estado)</option>
+                  </select>
+                </div>
+                <div>
+                  <Label>CSOSN (Simples Nacional)</Label>
+                  <select className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                    value={formProduto.csosn}
+                    onChange={(e) => setFormProduto({ ...formProduto, csosn: e.target.value })}>
+                    <option value="102">102 — Sem permissão de crédito</option>
+                    <option value="101">101 — Com permissão de crédito</option>
+                    <option value="500">500 — ICMS cobrado por ST</option>
+                    <option value="400">400 — Não tributada pelo Simples</option>
+                  </select>
+                </div>
               </div>
             </div>
           </div>

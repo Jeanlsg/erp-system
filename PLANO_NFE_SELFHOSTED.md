@@ -245,3 +245,30 @@ Checklist **por CNPJ** (BA e PE são independentes):
 6. Retry/pendências + export do contador
 7. Go-live produção loja a loja
 8. Fase 2: NFC-e no PDV (CSC por loja)
+
+---
+
+## ✅ Status da implantação (11/08/2026)
+
+| Item | Estado |
+|---|---|
+| Migration 038 (NCM/CEST/CFOP/CSOSN em produtos, xml_path/cstat na NF, bucket `fiscal`) | **aplicada** |
+| Migration 039 (código IBGE do município — Juazeiro 2918407, Petrolina 2611101) | **aplicada** |
+| Tela de produtos com bloco "Dados Fiscais" | **feita** |
+| `nfe-service` buildado e rodando na VPS | **no ar** — container `nfe-service`, rede `apps_supabase_default`, 512 MB/0.5 CPU, restart automático. Fonte em `/opt/nfe-service` (e `services/nfe-service/` no repo) |
+| Token do serviço | gerado; guardado em `public.integrations` (provider `nfe_service`) e `/opt/nfe-service/.env` |
+| Edge Function `emitir-nfe` | **deployada** (volume de functions + restart) — valida usuário ERP (admin/gerente), pré-requisitos, monta payload, chama o serviço, grava resultado real + XML/DANFE no bucket, baixa estoque de origem em remessas |
+| Front | mock de emissão **removido**; `useEmitirNFeRemessa` e `useEmitirNFeVenda` chamam a Edge Function; botão "Emitir NF-e" em Notas Fiscais com download de XML/DANFE do bucket |
+| Testes | `/healthz` ok · auth 401 sem token · 422 com certificado inválido · Edge Function responde e recusa não-autenticados |
+
+### Próximo passo (depende de você)
+1. Subir o certificado A1 (.pfx + senha) em **Fiscal → Certificado Digital** para a loja Juazeiro
+2. Conferir IE e endereço da loja em Dados Empresariais
+3. Cadastrar NCM nos 20 produtos (tela de produtos → Dados Fiscais)
+4. Emitir uma nota de **homologação** (ambiente já está `homologacao`) em Notas Fiscais → Emitir NF-e
+5. Repetir para Petrolina · virar produção loja a loja depois do teste
+
+### Operação
+- Rebuild do serviço: `cd /opt/nfe-service && docker build -t nfe-service:latest . && docker rm -f nfe-service && <docker run do item acima>`
+- Logs: `docker logs nfe-service --tail 50`
+- Atualizar sped-nfe (Nota Técnica nova): editar `composer.json`, rebuild

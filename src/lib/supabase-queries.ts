@@ -19,7 +19,7 @@ import type {
   Caixa,
 } from "@/types/database";
 
-export { isSupabaseConfigured };
+export { isSupabaseConfigured, supabase };
 
 // ========================================
 // USURIOS
@@ -1875,174 +1875,29 @@ export function useDeleteRemessa() {
 }
 
 /**
- * Processa remessa: marca como em_transito, baixa estoque origem.
- * Quando emitida a NFe, baixa estoque origem e cria NFe no banco.
+ * Emite a NF-e da remessa via Edge Function `emitir-nfe` (emissão REAL na SEFAZ
+ * pelo microserviço nfe-service — sped-nfe). Substitui a antiga emissão simulada.
  */
 export function useEmitirNFeRemessa() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ remessa_id, loja_id }: { remessa_id: string; loja_id: string }) => {
-      // 0. Verificar se a loja tem certificado + SEFAZ configurados
-      const { data: podeEmitir, error: podeErr } = await supabase
-        .rpc('loja_pode_emitir_nfe', { p_loja_id: loja_id })
-        .single();
-
-      if (podeErr) {
-        console.warn('Aviso: funo loja_pode_emitir_nfe no disponvel:', podeErr.message);
+      const { data, error } = await supabase.functions.invoke('emitir-nfe', {
+        body: { remessa_id, loja_id },
+      });
+      if (error) {
+        // FunctionsHttpError: o corpo tem o motivo real (pré-requisito, rejeição, etc.)
+        let detalhe = error.message;
+        try {
+          const ctx = await (error as any).context?.json?.();
+          if (ctx?.erro) detalhe = ctx.faltas ? `${ctx.erro}: ${ctx.faltas.join(', ')}` : ctx.erro;
+        } catch { /* mantém a mensagem padrão */ }
+        throw new Error(detalhe);
       }
-
-      // 1. Buscar remessa completa
-      const { data: remessa, error: remessaErr } = await supabase
-        .from('erp_remessas')
-        .select(`
-        .,
-          origem:erp_lojas!loja_origem_id(*),
-          destino:erp_lojas!loja_destino_id(*),
-          itens:erp_remessa_itens(*)
-        `)
-        .eq('id', remessa_id)
-        .single();
-      if (remessaErr) throw remessaErr;
-      if (!remessa) throw new Error('Remessa no encontrada');
-
-      // 2. Determinar CFOP (mesma UF ou outra)
-      const mesmaUF = remessa.origem.uf === remessa.destino.uf;
-      const cfop = mesmaUF ? '5152' : '6152';
-
-      // 3. Buscar config SEFAZ + certificado ativo da loja
-      const { data: configSefaz } = await supabase
-        .from('erp_configuracoes_sefaz')
-        .select('*')
-        .eq('loja_id', loja_id)
-        .maybeSingle();
-
-      const { data: certificado } = await supabase
-        .from('erp_certificados_digitais')
-        .select('id, data_validade, ativo')
-        .eq('loja_id', loja_id)
-        .eq('ativo', true)
-        .order('data_validade', { ascending: false })
-        .maybeSingle();
-
-      // 4. Incrementar numerao automaticamente (ou usar a atual)
-      let proximoNumero = (configSefaz?.numeracao_atual_nfe ?? 0) + 1;
-      // Tentar usar a funo SQL para incrementar
-      try {
-        const { data: novoNum } = await supabase.rpc('incrementar_numeracao_nfe', {
-          p_loja_id: loja_id,
-          p_tipo: 'nfe',
-        });
-        if (novoNum) proximoNumero = Number(novoNum);
-      } catch (e) {
-        // Fallback: incrementar manualmente abaixo
+      if (data && data.autorizada === false) {
+        throw new Error(`SEFAZ rejeitou (cStat ${data.cstat}): ${data.motivo}`);
       }
-
-      // 5. Gerar chave de acesso real (44 dgitos) via SQL
-      let chaveAcesso = '';
-      try {
-        const { data: chave } = await supabase.rpc('gerar_chave_acesso_nfe', {
-          p_uf: remessa.origem.uf ?? 'SP',
-          p_data_emissao: new Date().toISOString().split('T')[0],
-          p_cnpj: (remessa.origem.cnpj ?? '00000000000000').replace(/\D/g, ''),
-          p_modelo: '55',
-          p_serie: configSefaz?.serie_nfe ?? 1,
-          p_numero: proximoNumero,
-          p_tipo_emissao: 1,
-        });
-        chaveAcesso = chave ?? '';
-      } catch (e) {
-        // Fallback mock
-        const ufCode = String(parseInt(remessa.origem.uf ?? '35', 36) || 35).padStart(2, '0');
-        const random = Math.floor(Math.random() * 100000000000000).toString().padStart(14, '0');
-        chaveAcesso = (ufCode + new Date().getFullYear().toString().slice(-2) +
-          String(new Date().getMonth() + 1).padStart(2, '0') +
-          '00000000000000' + '55' + '001' +
-          String(proximoNumero).padStart(9, '0') + '1' + random).padEnd(44, '0').slice(0, 44);
-      }
-
-      // 6. Criar NFe vinculada a certificado + SEFAZ
-      const { data: nfe, error: nfeErr } = await supabase
-        .from('erp_notas_fiscais')
-        .insert({
-          loja_id: remessa.loja_origem_id,
-          tipo: 'nfe',
-          numero: proximoNumero,
-          serie: configSefaz?.serie_nfe ?? 1,
-          chave_acesso: chaveAcesso,
-          protocolo: 'PROT' + Date.now().toString().slice(-10), // Mock - SEFAZ real retorna protocolo real
-          status: 'autorizada',
-          valor_total: remessa.valor_total,
-          data_emissao: new Date().toISOString(),
-          observacoes: `NFe de remessa para filial ${remessa.destino.apelido} - CFOP ${cfop}`,
-          // Vnculos
-          certificado_id: certificado?.id ?? null,
-          configuracao_sefaz_id: configSefaz?.id ?? null,
-          ambiente: configSefaz?.ambiente ?? 'homologacao',
-          tipo_emissao: 1,
-          data_processamento: new Date().toISOString(),
-          codigo_retorno: '100', // 100 = autorizado na SEFAZ
-          mensagem_retorno: podeEmitir && !podeEmitir.pode_emitir
-            ? `MOCK: ${podeEmitir.mensagem} - Emitida em modo simulado`
-            : 'Autorizado o uso da NF-e',
-        })
-        .select()
-        .single();
-      if (nfeErr) throw nfeErr;
-
-      // 7. Atualizar numerao na config SEFAZ (caso RPC no tenha funcionado)
-      if (configSefaz) {
-        await supabase
-          .from('erp_configuracoes_sefaz')
-          .update({ numeracao_atual_nfe: proximoNumero })
-          .eq('loja_id', loja_id);
-      }
-
-      // 8. Baixar estoque da origem
-      for (const item of remessa.itens) {
-        const { data: estoque } = await supabase
-          .from('erp_estoque')
-          .select('quantidade')
-          .eq('produto_id', item.produto_id)
-          .eq('loja_id', remessa.loja_origem_id)
-          .maybeSingle();
-
-        if (estoque) {
-          await supabase
-            .from('erp_estoque')
-            .update({
-              quantidade: Math.max(0, estoque.quantidade - item.quantidade),
-              updated_at: new Date().toISOString(),
-            })
-            .eq('produto_id', item.produto_id)
-            .eq('loja_id', remessa.loja_origem_id);
-
-          // Marcar item como baixado
-          await supabase
-            .from('erp_remessa_itens')
-            .update({
-              estoque_origem_baixado: true,
-              data_baixa_origem: new Date().toISOString(),
-            })
-            .eq('id', item.id);
-        }
-      }
-
-      // 9. Atualizar remessa
-      await supabase
-        .from('erp_remessas')
-        .update({
-          status: 'nf_emitida',
-          nfe_remessa_id: nfe.id,
-          nfe_remessa_numero: proximoNumero,
-          nfe_remessa_chave: chaveAcesso,
-          cfop_utilizado: cfop,
-          natureza_operacao: mesmaUF
-            ? 'Remessa de mercadoria entre filiais - mesma UF'
-            : 'Remessa de mercadoria entre filiais - outra UF',
-        })
-        .eq('id', remessa_id);
-
-      return { nfe, cfop, certificado, configSefaz, modoSimulado: podeEmitir && !podeEmitir.pode_emitir };
+      return data;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['erp_remessas'] });
@@ -2053,8 +1908,35 @@ export function useEmitirNFeRemessa() {
 }
 
 /**
- * Confirma o recebimento da remessa no destino: adiciona ao estoque destino.
+ * Emite a NF-e de uma VENDA finalizada via Edge Function `emitir-nfe`.
  */
+export function useEmitirNFeVenda() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ venda_id, loja_id }: { venda_id: string; loja_id: string }) => {
+      const { data, error } = await supabase.functions.invoke('emitir-nfe', {
+        body: { venda_id, loja_id },
+      });
+      if (error) {
+        let detalhe = error.message;
+        try {
+          const ctx = await (error as any).context?.json?.();
+          if (ctx?.erro) detalhe = ctx.faltas ? `${ctx.erro}: ${ctx.faltas.join(', ')}` : (ctx.produtos ? `${ctx.erro} (${ctx.produtos.join(', ')})` : ctx.erro);
+        } catch { /* mantém a mensagem padrão */ }
+        throw new Error(detalhe);
+      }
+      if (data && data.autorizada === false) {
+        throw new Error(`SEFAZ rejeitou (cStat ${data.cstat}): ${data.motivo}`);
+      }
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_notas_fiscais'] });
+      qc.invalidateQueries({ queryKey: ['erp_vendas'] });
+    },
+  });
+}
+
 export function useReceberRemessa() {
   const qc = useQueryClient();
   return useMutation({
