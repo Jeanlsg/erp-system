@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ShoppingCart, Plus, Search, Loader2 } from "lucide-react";
@@ -67,9 +68,9 @@ export function OrdersPage() {
             {vendas.length} pedido(s) registrado(s)
           </p>
         </div>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" /> Novo Pedido
-        </Button>
+        <Button asChild>
+          <Link to="/pdv"><Plus className="mr-2 h-4 w-4" /> Novo Pedido (PDV)</Link>
+          </Button>
       </div>
 
       <div className="flex items-center gap-2">

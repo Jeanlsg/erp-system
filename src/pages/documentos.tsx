@@ -9,6 +9,7 @@ import { useDocumentos, useCreateDocumento, useDeleteDocumento, isSupabaseConfig
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { useAuth } from "@/lib/store/auth-store";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { supabase } from "@/lib/supabase";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { date } from "@/lib/format";
 
@@ -30,6 +31,17 @@ export function DocumentosPage() {
   });
 
   if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="Documentos" />;
+
+  const baixar = async (d: any) => {
+    const { data, error } = await supabase.storage.from("midias").download(d.storage_path);
+    if (error || !data) { alert("Falha ao baixar o arquivo: " + (error?.message ?? "não encontrado")); return; }
+    const url = URL.createObjectURL(data);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = d.nome + (d.extensao ? `.${d.extensao}` : "");
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const filtrados = documentos.filter((d) => {
     if (!search) return true;
@@ -108,7 +120,9 @@ export function DocumentosPage() {
                     <td className="p-3 text-center">
                       <div className="flex items-center justify-center gap-1">
                         {d.storage_path && (
-                          <Button variant="ghost" size="icon"><Download className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="icon" title="Baixar" onClick={() => baixar(d)}>
+                            <Download className="h-4 w-4" />
+                          </Button>
                         )}
                         <Button variant="ghost" size="icon" onClick={() => { if (confirm("Excluir?")) del.mutate(d.id); }}>
                           <Trash2 className="h-4 w-4 text-destructive" />

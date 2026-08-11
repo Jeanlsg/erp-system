@@ -139,6 +139,9 @@ const sections: NavSection[] = [
       { title: "Pessoa Física", url: "/gestao/consulta-pessoa-fisica", icon: Users },
       { title: "Pessoa Jurídica", url: "/gestao/consulta-pessoa-juridica", icon: Building2 },
       { title: "Funcionários", url: "/gestao/funcionarios", icon: Building2, perm: "usuario.ver" },
+      { title: "Transportadoras", url: "/gestao/transportadoras", icon: Truck },
+      { title: "Agenda Telefônica", url: "/gestao/agenda-telefonica", icon: Smartphone },
+      { title: "Serviços", url: "/gestao/servicos", icon: Wrench },
       { title: "Regiões de Entrega", url: "/gestao/regioes-entrega", icon: MapPin },
       { title: "Localizar Pessoas", url: "/gestao/localizar-pessoas", icon: Search },
       { title: "Lojas", url: "/lojas", icon: Store, perm: "loja.ver" },
@@ -157,7 +160,7 @@ const sections: NavSection[] = [
     label: "Financeiro",
     items: [
       { title: "Relatórios Financeiros", url: "/financeiro", icon: LineChart, perm: "financeiro.ver" },
-      { title: "Contas a Pagar/Receber", url: "/financeiro", icon: Banknote, perm: "financeiro.ver" },
+      { title: "Contas a Pagar/Receber", url: "/financeiro?aba=apagar", icon: Banknote, perm: "financeiro.ver" },
       { title: "Cheques", url: "/gestao/consulta-cheque", icon: ScrollText },
       { title: "Recebimento Cheque", url: "/gestao/recebimento-cheque", icon: ScrollText },
       { title: "Cartão de Crédito", url: "/gestao/cartao-credito", icon: CreditCard },

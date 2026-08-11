@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Mail, Plus, Loader2 } from "lucide-react";
-import { useEmailMarketing, useCreateEmailMarketing, isSupabaseConfigured } from "@/lib/supabase-queries";
+import { useEmailMarketing, useCreateEmailMarketing, useConfiguracoesGerais, useUpsertConfiguracao, isSupabaseConfigured } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
@@ -14,7 +14,12 @@ export function EmailInteligentePage() {
   const { lojaId } = useAutoSelectLoja();
   const { data: campanhas = [], isLoading } = useEmailMarketing(lojaId ?? undefined);
   const create = useCreateEmailMarketing();
+  const { data: configs = [] } = useConfiguracoesGerais();
+  const upsertConfig = useUpsertConfiguracao();
   const [modalAberto, setModalAberto] = useState(false);
+  const [configurando, setConfigurando] = useState<{ tipo: string; descricao: string } | null>(null);
+  const [autoAtiva, setAutoAtiva] = useState(false);
+  const [autoTemplate, setAutoTemplate] = useState("");
   const [form, setForm] = useState({
     nome: "",
     assunto: "",
@@ -32,6 +37,30 @@ export function EmailInteligentePage() {
     { tipo: "Carrinho Abandonado", descricao: "Lembrete de carrinho não finalizado", icone: "🛒" },
     { tipo: "Avaliação", descricao: "Solicitar avaliação 15 dias após entrega", icone: "⭐" },
   ];
+
+  const chaveAuto = (tipo: string) => `email_auto_${tipo.toLowerCase().normalize("NFD").replace(/[^a-z ]/g, "").replace(/ /g, "_")}`;
+  const configAuto = (tipo: string) => {
+    const raw = (configs as any[]).find((c) => c.chave === chaveAuto(tipo))?.valor;
+    try { return raw ? JSON.parse(raw) : null; } catch { return null; }
+  };
+
+  const abrirConfig = (a: { tipo: string; descricao: string }) => {
+    const atual = configAuto(a.tipo);
+    setAutoAtiva(atual?.ativa ?? false);
+    setAutoTemplate(atual?.template ?? "");
+    setConfigurando(a);
+  };
+
+  const salvarConfig = async () => {
+    if (!configurando) return;
+    await upsertConfig.mutateAsync({
+      chave: chaveAuto(configurando.tipo),
+      valor: JSON.stringify({ ativa: autoAtiva, template: autoTemplate }),
+      categoria: "email_inteligente",
+      descricao: `Automação: ${configurando.tipo}`,
+    } as any);
+    setConfigurando(null);
+  };
 
   const rascunhos = campanhas.filter((c) => c.status === "rascunho").length;
   const agendadas = campanhas.filter((c) => c.status === "agendada").length;
@@ -73,9 +102,12 @@ export function EmailInteligentePage() {
             <Card key={a.tipo}>
               <CardContent className="p-4">
                 <div className="text-2xl mb-2">{a.icone}</div>
-                <p className="font-semibold">{a.tipo}</p>
+                <p className="font-semibold flex items-center gap-2">
+                  {a.tipo}
+                  {configAuto(a.tipo)?.ativa && <Badge className="text-[10px]">Ativa</Badge>}
+                </p>
                 <p className="text-xs text-muted-foreground mt-1">{a.descricao}</p>
-                <Button variant="outline" size="sm" className="mt-3 w-full">
+                <Button variant="outline" size="sm" className="mt-3 w-full" onClick={() => abrirConfig(a)}>
                   Configurar
                 </Button>
               </CardContent>
@@ -131,6 +163,34 @@ export function EmailInteligentePage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setModalAberto(false)}>Cancelar</Button>
             <Button onClick={handleCriar} disabled={create.isPending || !form.nome}>{create.isPending ? "Salvando..." : "Criar"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!configurando} onOpenChange={(o) => !o && setConfigurando(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Configurar — {configurando?.tipo}</DialogTitle><DialogClose /></DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">{configurando?.descricao}</p>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={autoAtiva} onChange={(e) => setAutoAtiva(e.target.checked)} />
+              Automação ativa
+            </label>
+            <div>
+              <Label>Mensagem / template do email</Label>
+              <textarea
+                className="w-full min-h-24 rounded-md border bg-background p-2 text-sm"
+                value={autoTemplate}
+                onChange={(e) => setAutoTemplate(e.target.value)}
+                placeholder="Olá {{nome}}, ..."
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfigurando(null)}>Cancelar</Button>
+            <Button onClick={salvarConfig} disabled={upsertConfig.isPending}>
+              {upsertConfig.isPending ? "Salvando..." : "Salvar"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

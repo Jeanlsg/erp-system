@@ -22,7 +22,7 @@ import type {
 export { isSupabaseConfigured };
 
 // ========================================
-// USUÁRIOS
+// USURIOS
 // ========================================
 
 export function useUsuarios() {
@@ -90,10 +90,10 @@ export function useDesbloquearUsuario() {
 }
 
 /**
- * Atualiza as permissões granulares de um usuário.
- * O campo `permissoes` é um JSONB no formato:
+ * Atualiza as permisses granulares de um usurio.
+ * O campo `permissoes`  um JSONB no formato:
  *   { "pdv.usar": true, "caixa.abrir": false, ... }
- * Se uma permissão não estiver listada, usa a permissão padrão do role.
+ * Se uma permisso no estiver listada, usa a permisso padro do role.
  */
 export function useUpdatePermissoesUsuario() {
   const qc = useQueryClient();
@@ -115,8 +115,8 @@ export function useUpdatePermissoesUsuario() {
 }
 
 /**
- * Reseta a senha de um usuário (apenas admin).
- * Nota: A senha em si é gerenciada pelo Supabase Auth.
+ * Reseta a senha de um usurio (apenas admin).
+ * Nota: A senha em si  gerenciada pelo Supabase Auth.
  * Aqui apenas resetamos tentativas e desbloqueamos.
  */
 export function useResetarAcessoUsuario() {
@@ -315,10 +315,10 @@ export interface ProdutoCompleto {
  * Hook que consome a view consolidada v_erp_produto_completo.
  * Combina dados de produtos + estoque por loja + resumo de lotes.
  *
- * @param filters.lojaId - filtra por loja específica (undefined = todas)
- * @param filters.search - busca por nome, SKU ou código de barras
+ * @param filters.lojaId - filtra por loja especfica (undefined = todas)
+ * @param filters.search - busca por nome, SKU ou cdigo de barras
  * @param filters.statusEstoque - filtra por status (sem_estoque, baixo, ok, excesso)
- * @param filters.severidadeLote - filtra por severidade do lote mais próximo
+ * @param filters.severidadeLote - filtra por severidade do lote mais prximo
  */
 export function useProdutosCompleto(filters?: {
   lojaId?: string;
@@ -339,7 +339,7 @@ export function useProdutosCompleto(filters?: {
       const { data, error } = await query.order("nome");
       if (error) throw error;
 
-      // Filtro de busca no client (não pode usar ilike em views sem permissões)
+      // Filtro de busca no client (no pode usar ilike em views sem permisses)
       let result = (data ?? []) as ProdutoCompleto[];
       if (filters?.search) {
         const s = filters.search.toLowerCase();
@@ -357,7 +357,7 @@ export function useProdutosCompleto(filters?: {
 }
 
 /**
- * Versão agregada (sem filtro de loja): uma linha por produto
+ * Verso agregada (sem filtro de loja): uma linha por produto
  * com estoque total somado de todas as lojas.
  */
 export function useProdutosTotal(filters?: {
@@ -892,7 +892,7 @@ export function useLotes(lojaId?: string) {
       if (produtosRes.error) throw produtosRes.error;
       if (estoqueRes.error) throw estoqueRes.error;
 
-      // Mapas para lookup rápido
+      // Mapas para lookup rpido
       const produtoMap: Record<string, any> = {};
       for (const p of produtosRes.data ?? []) produtoMap[p.id] = p;
 
@@ -934,7 +934,7 @@ export function useLotes(lojaId?: string) {
         };
       });
 
-      // Filtra por loja se especificado (filtro client-side pois já temos o join)
+      // Filtra por loja se especificado (filtro client-side pois j temos o join)
       if (lojaId) {
         result = result.filter((l) => l.loja_id === lojaId);
       }
@@ -1000,7 +1000,7 @@ export function useDeleteLote() {
 }
 
 // ========================================
-// NOTIFICAÇÕES
+// NOTIFICAES
 // ========================================
 export function useNotificacoes(usuarioId?: string) {
   return useQuery<any[]>({
@@ -1248,7 +1248,7 @@ export function useCaixaConfig() {
   });
 }
 
-// Nova versão de useCreateVenda com integração de caixa
+// Nova verso de useCreateVenda com integrao de caixa
 export function useCreateVenda() {
   const qc = useQueryClient();
   return useMutation({
@@ -1299,7 +1299,7 @@ export function useCreateVenda() {
   });
 }
 
-// Atualizar estoque após venda
+// Atualizar estoque aps venda
 export function useBaixarEstoqueVenda() {
   return useMutation({
     mutationFn: async ({ lojaId, itens }: { lojaId: string; itens: any[] }) => {
@@ -1414,7 +1414,7 @@ export function useTopProdutosView(lojaId?: string, limite: number = 10) {
 }
 
 // ========================================
-// BOLETOS / CHEQUES / PROMISSÓRIAS
+// BOLETOS / CHEQUES / PROMISSRIAS
 // ========================================
 export function useBoletos(filters?: { lojaId?: string; status?: string }) {
   return useQuery<any[]>({
@@ -1503,7 +1503,7 @@ return data;
 }
 
 // =====================================
-// NFE ENTRADA (Importação de XML)
+// NFE ENTRADA (Importao de XML)
 // =====================================
 export function useNFeEntrada(filters?: { lojaId?: string; status?: string }) {
   return useQuery<any[]>({
@@ -1569,8 +1569,8 @@ export function useDeleteNFeEntrada() {
 }
 
 /**
- * Importa uma NFe completa: cria produtos novos (se necessário), atualiza estoque,
- * cria compra e registra os itens. Tudo em uma transação lógica.
+ * Importa uma NFe completa: cria produtos novos (se necessrio), atualiza estoque,
+ * cria compra e registra os itens. Tudo em uma transao lgica.
  */
 export function useImportarNFe() {
   const qc = useQueryClient();
@@ -1667,7 +1667,7 @@ export function useImportarNFe() {
       for (const item of itens) {
         let produtoId = item.produto_id;
 
-        // Criar produto se não existir
+        // Criar produto se no existir
         if (!produtoId || item.acao === 'criar_novo') {
           const sku = item.codigo_produto || `NFe-${nfe.numero}-${item.numero_item}`;
           const precoCusto = item.valor_unitario;
@@ -1691,7 +1691,7 @@ export function useImportarNFe() {
           if (prodErr) throw prodErr;
           produtoId = novoProduto.id;
         } else {
-          // Atualizar preço de custo se necessário
+          // Atualizar preo de custo se necessrio
           await supabase
             .from('erp_produtos')
             .update({
@@ -1888,7 +1888,7 @@ export function useEmitirNFeRemessa() {
         .single();
 
       if (podeErr) {
-        console.warn('Aviso: função loja_pode_emitir_nfe não disponível:', podeErr.message);
+        console.warn('Aviso: funo loja_pode_emitir_nfe no disponvel:', podeErr.message);
       }
 
       // 1. Buscar remessa completa
@@ -1903,7 +1903,7 @@ export function useEmitirNFeRemessa() {
         .eq('id', remessa_id)
         .single();
       if (remessaErr) throw remessaErr;
-      if (!remessa) throw new Error('Remessa não encontrada');
+      if (!remessa) throw new Error('Remessa no encontrada');
 
       // 2. Determinar CFOP (mesma UF ou outra)
       const mesmaUF = remessa.origem.uf === remessa.destino.uf;
@@ -1924,9 +1924,9 @@ export function useEmitirNFeRemessa() {
         .order('data_validade', { ascending: false })
         .maybeSingle();
 
-      // 4. Incrementar numeração automaticamente (ou usar a atual)
+      // 4. Incrementar numerao automaticamente (ou usar a atual)
       let proximoNumero = (configSefaz?.numeracao_atual_nfe ?? 0) + 1;
-      // Tentar usar a função SQL para incrementar
+      // Tentar usar a funo SQL para incrementar
       try {
         const { data: novoNum } = await supabase.rpc('incrementar_numeracao_nfe', {
           p_loja_id: loja_id,
@@ -1937,7 +1937,7 @@ export function useEmitirNFeRemessa() {
         // Fallback: incrementar manualmente abaixo
       }
 
-      // 5. Gerar chave de acesso real (44 dígitos) via SQL
+      // 5. Gerar chave de acesso real (44 dgitos) via SQL
       let chaveAcesso = '';
       try {
         const { data: chave } = await supabase.rpc('gerar_chave_acesso_nfe', {
@@ -1974,7 +1974,7 @@ export function useEmitirNFeRemessa() {
           valor_total: remessa.valor_total,
           data_emissao: new Date().toISOString(),
           observacoes: `NFe de remessa para filial ${remessa.destino.apelido} - CFOP ${cfop}`,
-          // Vínculos
+          // Vnculos
           certificado_id: certificado?.id ?? null,
           configuracao_sefaz_id: configSefaz?.id ?? null,
           ambiente: configSefaz?.ambiente ?? 'homologacao',
@@ -1989,7 +1989,7 @@ export function useEmitirNFeRemessa() {
         .single();
       if (nfeErr) throw nfeErr;
 
-      // 7. Atualizar numeração na config SEFAZ (caso RPC não tenha funcionado)
+      // 7. Atualizar numerao na config SEFAZ (caso RPC no tenha funcionado)
       if (configSefaz) {
         await supabase
           .from('erp_configuracoes_sefaz')
@@ -2065,9 +2065,9 @@ export function useReceberRemessa() {
         .eq('id', remessa_id)
         .single();
       if (error) throw error;
-      if (!remessa) throw new Error('Remessa não encontrada');
+      if (!remessa) throw new Error('Remessa no encontrada');
       if (!['nf_emitida', 'em_transito'].includes(remessa.status)) {
-        throw new Error(`Status inválido para receber: ${remessa.status}`);
+        throw new Error(`Status invlido para receber: ${remessa.status}`);
       }
 
       // Adicionar ao estoque destino
@@ -2124,8 +2124,8 @@ export function useReceberRemessa() {
 }
 
 /**
- * Gera chave de acesso mock (44 dígitos).
- * NOTA: Em produção, a chave real deve vir da SEFAZ via biblioteca de integração.
+ * Gera chave de acesso mock (44 dgitos).
+ * NOTA: Em produo, a chave real deve vir da SEFAZ via biblioteca de integrao.
  */
 function gerarChaveAcessoMock(uf: string): string {
   const ufCode = String(parseInt(uf, 36) || 35).padStart(2, '0');
@@ -2171,7 +2171,7 @@ export function useCreateEntradaExtra() {
 }
 
 // ========================================
-// CHAVES PIX / CONTAS BANCÁRIAS
+// CHAVES PIX / CONTAS BANCRIAS
 // ========================================
 export function useChavesPix(lojaId?: string) {
   return useQuery<any[]>({
@@ -2228,7 +2228,7 @@ export function useVendasPorDiaView(lojaId?: string, dias: number = 7) {
 }
 
 // ========================================
-// REGIÕES DE ENTREGA
+// REGIES DE ENTREGA
 // ========================================
 export function useRegioesEntrega(lojaId?: string) {
   return useQuery<RegiaoEntrega[]>({
@@ -2308,7 +2308,7 @@ export function useDeleteTransportadora() {
 }
 
 // ========================================
-// AGENDA TELEFÔNICA / CONTATOS
+// AGENDA TELEFNICA / CONTATOS
 // ========================================
 export function useContatos(lojaId?: string) {
   return useQuery<Contato[]>({
@@ -2348,7 +2348,7 @@ export function useDeleteContato() {
 }
 
 // ========================================
-// FUNCIONÁRIOS
+// FUNCIONRIOS
 // ========================================
 export function useFuncionarios(lojaId?: string) {
   return useQuery<any[]>({
@@ -2586,7 +2586,7 @@ export function useNotasFiscais(filters?: { lojaId?: string; tipo?: string; stat
 }
 
 // ========================================
-// AVALIAÇÕES / RECOMENDAÇÕES (CRM)
+// AVALIAES / RECOMENDAES (CRM)
 // ========================================
 export function useAvaliacoes(lojaId?: string) {
   return useQuery<any[]>({
@@ -2603,7 +2603,7 @@ export function useAvaliacoes(lojaId?: string) {
 }
 
 // ========================================
-// BANDEIRAS CARTÃO
+// BANDEIRAS CARTO
 // ========================================
 export function useBandeirasCartao() {
   return useQuery<any[]>({
@@ -2618,16 +2618,15 @@ export function useBandeirasCartao() {
 }
 
 // ========================================
-// SERVIÇOS
+// SERVIOS
 // ========================================
 export function useServicos(lojaId?: string) {
   return useQuery<any[]>({
     queryKey: ['erp_servicos', lojaId],
     queryFn: async () => {
       if (!isSupabaseConfigured()) return [];
-      let query = supabase.from('erp_servicos').select('*').eq('ativo', true).order('nome');
-      if (lojaId) query = query.eq('loja_id', lojaId);
-      const { data, error } = await query;
+      // erp_servicos nao tem loja_id â€” servicos sao globais
+      const { data, error } = await supabase.from('erp_servicos').select('*').order('nome');
       if (error) throw error;
       return data ?? [];
     },
@@ -2642,9 +2641,8 @@ export function useKits(lojaId?: string) {
     queryKey: ['erp_kits', lojaId],
     queryFn: async () => {
       if (!isSupabaseConfigured()) return [];
-      let query = supabase.from('erp_kits').select('*, itens:erp_kit_itens(*)').eq('ativo', true).order('nome');
-      if (lojaId) query = query.eq('loja_id', lojaId);
-      const { data, error } = await query;
+      // erp_kits nao tem loja_id â€” kits sao globais
+      const { data, error } = await supabase.from('erp_kits').select('*, itens:erp_kit_itens(*, produto:erp_produtos(nome, preco_venda))').eq('ativo', true).order('nome');
       if (error) throw error;
       return data ?? [];
     },
@@ -2690,7 +2688,7 @@ export function useCompras(filters?: { lojaId?: string }) {
     queryKey: ['erp_compras', filters],
     queryFn: async () => {
       if (!isSupabaseConfigured()) return [];
-      let query = supabase.from('erp_compras').select('*').order('data_compra', { ascending: false }).limit(200);
+      let query = supabase.from('erp_compras').select('*, fornecedor:erp_pessoas!erp_compras_fornecedor_id_fkey(nome_razao), itens:erp_compra_itens(*)').order('data_compra', { ascending: false }).limit(200);
       if (filters?.lojaId) query = query.eq('loja_id', filters.lojaId);
       const { data, error } = await query;
       if (error) throw error;
@@ -2753,7 +2751,7 @@ export function useConfiguracoesSefaz(lojaId?: string) {
 }
 
 // ========================================
-// PARCERIAS / NEGATIVAÇÕES / PROTESTOS
+// PARCERIAS / NEGATIVAES / PROTESTOS
 // ========================================
 export function useParcerias(lojaId?: string) {
   return useQuery<any[]>({
@@ -2836,7 +2834,7 @@ export function useCreateParcelamento() {
 }
 
 // ========================================
-// CARTÃO FIDELIDADE
+// CARTO FIDELIDADE
 // ========================================
 export function useCartoesFidelidade(lojaId?: string) {
   return useQuery<any[]>({
@@ -2896,7 +2894,7 @@ export function useTorpedos(lojaId?: string) {
 }
 
 // ========================================
-// RELATÓRIOS FINANCEIROS · FLUXO DE CAIXA
+// RELATRIOS FINANCEIROS  FLUXO DE CAIXA
 // ========================================
 export interface FluxoCaixaKpis {
   vendas_count: number;
@@ -2944,7 +2942,7 @@ export function useFluxoCaixaKpis(
       if (error) throw error;
       if (!vendas || vendas.length === 0) return empty;
 
-      // Buscar itens das vendas do período
+      // Buscar itens das vendas do perodo
       const vendaIds = vendas.map((v: any) => v.id);
       const { data: itens } = await supabase
         .from('erp_venda_itens')
@@ -2996,7 +2994,7 @@ export function useFluxoCaixaKpis(
   });
 }
 
-// Breakdown por forma de pagamento (vendas finalizadas no período)
+// Breakdown por forma de pagamento (vendas finalizadas no perodo)
 export function useFormasRecebimento(
   lojaId: string | undefined,
   dataInicio?: string,
@@ -3031,7 +3029,7 @@ export function useFormasRecebimento(
   });
 }
 
-// Top 10 produtos mais vendidos no período
+// Top 10 produtos mais vendidos no perodo
 export function useTopProdutosVendidos(
   lojaId: string | undefined,
   dataInicio?: string,
@@ -3118,7 +3116,7 @@ export function useTopProdutosVendidos(
   });
 }
 
-// Taxas de cartões (bandeiras cadastradas + total vendido em cartão no período)
+// Taxas de cartes (bandeiras cadastradas + total vendido em carto no perodo)
 export function useTaxasCartao(
   lojaId: string | undefined,
   dataInicio?: string,
@@ -3169,7 +3167,7 @@ export function useTaxasCartao(
   });
 }
 
-// Sangrias por período
+// Sangrias por perodo
 export function useSangriasPorPeriodo(
   lojaId: string | undefined,
   dataInicio?: string,
@@ -3200,7 +3198,7 @@ export function useSangriasPorPeriodo(
   });
 }
 
-// Entradas extras por período
+// Entradas extras por perodo
 export function useEntradasExtrasPorPeriodo(
   lojaId: string | undefined,
   dataInicio?: string,
@@ -3231,7 +3229,7 @@ export function useEntradasExtrasPorPeriodo(
   });
 }
 
-// Vendas por dia (para gráfico)
+// Vendas por dia (para grfico)
 export function useVendasPorPeriodo(
   lojaId: string | undefined,
   dataInicio?: string,
@@ -3361,7 +3359,7 @@ export function useDeleteProtesto() {
 }
 
 // ========================================
-// NEGATIVAÇÕES
+// NEGATIVAES
 // ========================================
 export function useNegativacoesFull(lojaId?: string) {
   return useQuery<any[]>({
@@ -3422,7 +3420,7 @@ export function useParcelamentosFull(lojaId?: string) {
 }
 
 // ========================================
-// RECOMENDAÇÕES
+// RECOMENDAES
 // ========================================
 export function useRecomendacoes(lojaId?: string) {
   return useQuery<any[]>({
@@ -3455,7 +3453,7 @@ export function useCreateParceria() {
 }
 
 // ========================================
-// CONFIGURAÇÕES GERAIS DO SISTEMA
+// CONFIGURAES GERAIS DO SISTEMA
 // ========================================
 export function useConfiguracoesGerais() {
   return useQuery<any[]>({
@@ -3473,7 +3471,7 @@ export function useUpsertConfiguracao() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (item: any) => {
-      const { data, error } = await supabase.from('erp_configuracoes_sistema').upsert(item).select().single();
+      const { data, error } = await supabase.from('erp_configuracoes_sistema').upsert(item, { onConflict: 'chave' }).select().single();
       if (error) throw error;
       return data;
     },
@@ -3508,7 +3506,7 @@ export function useDeleteCertificado() {
 }
 
 // ========================================
-// CONFIGURAÇÕES SEFAZ (CRUD)
+// CONFIGURAES SEFAZ (CRUD)
 // ========================================
 export function useUpsertConfiguracaoSefaz() {
   const qc = useQueryClient();
@@ -3523,7 +3521,7 @@ export function useUpsertConfiguracaoSefaz() {
 }
 
 // ========================================
-// OCORRÊNCIAS / PENDÊNCIAS
+// OCORRNCIAS / PENDNCIAS
 // ========================================
 export function useOcorrencias(lojaId?: string) {
   return useQuery<any[]>({
@@ -3564,7 +3562,7 @@ export function useUpdateOcorrencia() {
 }
 
 // ========================================
-// FEATURE FLAGS (controle de páginas)
+// FEATURE FLAGS (controle de pginas)
 // ========================================
 
 /** Busca todas as feature flags (cache global compartilhado por toda a UI). */
@@ -3581,11 +3579,11 @@ export function useFeatureFlags() {
       if (error) throw error;
       return data ?? [];
     },
-    staleTime: 30_000, // cache por 30s ? bom para não ter refetch constante
+    staleTime: 30_000, // cache por 30s ? bom para no ter refetch constante
   });
 }
 
-/** Retorna um Map<path, ativo> para consulta rápida na sidebar. */
+/** Retorna um Map<path, ativo> para consulta rpida na sidebar. */
 export function useFeatureFlagsMap() {
   const { data } = useFeatureFlags();
   const map: Record<string, boolean> = {};
@@ -3595,7 +3593,7 @@ export function useFeatureFlagsMap() {
   return map;
 }
 
-/** Verifica se uma rota/path está ativa. Retorna `true` se a flag não existir (fail-open). */
+/** Verifica se uma rota/path est ativa. Retorna `true` se a flag no existir (fail-open). */
 export function useIsFeatureEnabled(path: string) {
   const { data } = useFeatureFlags();
   if (!data) return true; // enquanto carrega, permite
@@ -3609,11 +3607,11 @@ export function useToggleFeatureFlag() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ativo, motivo, userId }: { id: string; ativo: boolean; motivo?: string; userId?: string }) => {
-      // A proteção contra desativação de flags do sistema essenciais
-      // (`is_protegida`) é feita **apenas na UI** do painel admin
-      // (/config/sistema) ? o switch fica travado e o motivo é mostrado
+      // A proteo contra desativao de flags do sistema essenciais
+      // (`is_protegida`)  feita **apenas na UI** do painel admin
+      // (/config/sistema) ? o switch fica travado e o motivo  mostrado
       // como tooltip. A tabela aceita UPDATE de admin para qualquer flag,
-      // inclusive protegidas, para permitir ajustes via SQL se necessário.
+      // inclusive protegidas, para permitir ajustes via SQL se necessrio.
       const payload: Record<string, unknown> = { ativo };
       if (!ativo) {
         payload.desativado_em = new Date().toISOString();
@@ -3669,5 +3667,411 @@ export function useCreateFeatureFlag() {
       return data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_feature_flags'] }),
+  });
+}
+// ========================================
+// KITS â€” CRUD (kit + itens)
+// ========================================
+
+export function useCreateKit() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ itens, ...kit }: { nome: string; descricao?: string | null; preco_kit: number; itens: { produto_id: string; quantidade: number }[] }) => {
+      const { data, error } = await supabase.from('erp_kits').insert({ ...kit, ativo: true }).select().single();
+      if (error) throw error;
+      if (itens.length > 0) {
+        const { error: e2 } = await supabase.from('erp_kit_itens').insert(itens.map((i) => ({ ...i, kit_id: data.id })));
+        if (e2) throw e2;
+      }
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_kits'] }),
+  });
+}
+
+export function useUpdateKit() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, itens, ...updates }: { id: string; nome?: string; descricao?: string | null; preco_kit?: number; itens?: { produto_id: string; quantidade: number }[] }) => {
+      const { data, error } = await supabase.from('erp_kits').update(updates).eq('id', id).select().single();
+      if (error) throw error;
+      if (itens) {
+        await supabase.from('erp_kit_itens').delete().eq('kit_id', id);
+        if (itens.length > 0) {
+          const { error: e2 } = await supabase.from('erp_kit_itens').insert(itens.map((i) => ({ ...i, kit_id: id })));
+          if (e2) throw e2;
+        }
+      }
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_kits'] }),
+  });
+}
+
+export function useDeleteKit() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('erp_kits').update({ ativo: false }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_kits'] }),
+  });
+}
+
+// ========================================
+// LOJAS â€” CRUD
+// ========================================
+
+export function useCreateLoja() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (loja: Partial<Loja>) => {
+      const { data, error } = await supabase.from('erp_lojas').insert(loja).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_lojas'] }),
+  });
+}
+
+export function useUpdateLoja() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: Partial<Loja> & { id: string }) => {
+      const { data, error } = await supabase.from('erp_lojas').update(updates).eq('id', id).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_lojas'] }),
+  });
+}
+
+// ========================================
+// COMPRAS â€” criaÃ§Ã£o manual
+// ========================================
+
+export function useCreateCompra() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ itens, ...compra }: {
+      loja_id: string; fornecedor_id: string; usuario_id: string;
+      observacoes?: string | null; status?: string;
+      itens: { produto_id: string; preco_custo: number; quantidade: number }[];
+    }) => {
+      const total = itens.reduce((s, i) => s + i.preco_custo * i.quantidade, 0);
+      const { data, error } = await supabase.from('erp_compras')
+        .insert({ ...compra, total, status: compra.status ?? 'pendente' })
+        .select().single();
+      if (error) throw error;
+      if (itens.length > 0) {
+        const { error: e2 } = await supabase.from('erp_compra_itens')
+          .insert(itens.map((i) => ({ ...i, compra_id: data.id, subtotal: i.preco_custo * i.quantidade })));
+        if (e2) throw e2;
+      }
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_compras'] }),
+  });
+}
+
+export function useUpdateCompraStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      const { error } = await supabase.from('erp_compras').update({ status }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_compras'] }),
+  });
+}
+
+// ========================================
+// PEDIDOS â€” criaÃ§Ã£o
+// ========================================
+
+export function useCreatePedido() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (pedido: {
+      loja_id: string; cliente_id: string; endereco_entrega: any;
+      tipo_pedido?: string; taxa_entrega?: number; observacoes?: string | null;
+      previsao_entrega?: string | null; status?: string;
+    }) => {
+      const { data, error } = await supabase.from('erp_pedidos')
+        .insert({ status: 'pendente', ...pedido })
+        .select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_pedidos'] }),
+  });
+}
+
+// ========================================
+// SERVIÃ‡OS â€” CRUD
+// ========================================
+
+export function useCreateServico() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (servico: { nome: string; descricao?: string | null; valor: number; comissao_percentual?: number | null }) => {
+      const { data, error } = await supabase.from('erp_servicos').insert({ ...servico, ativo: true }).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_servicos'] }),
+  });
+}
+
+export function useUpdateServico() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: { id: string; nome?: string; descricao?: string | null; valor?: number; comissao_percentual?: number | null; ativo?: boolean }) => {
+      const { data, error } = await supabase.from('erp_servicos').update(updates).eq('id', id).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_servicos'] }),
+  });
+}
+
+export function useDeleteServico() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('erp_servicos').update({ ativo: false }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_servicos'] }),
+  });
+}
+
+// ========================================
+// DEVOLUÃ‡Ã•ES â€” registrar devoluÃ§Ã£o de venda
+// ========================================
+
+export function useRegistrarDevolucao() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ vendaId, motivo, estornarEstoque, lojaId }: { vendaId: string; motivo?: string; estornarEstoque: boolean; lojaId?: string }) => {
+      // 1) Marca a venda como devolvida
+      const { data: venda, error } = await supabase.from('erp_vendas')
+        .update({ status: 'devolvida', observacoes: motivo ?? null })
+        .eq('id', vendaId).select('id, loja_id').single();
+      if (error) throw error;
+
+      // 2) Estorna estoque dos itens (opcional)
+      if (estornarEstoque) {
+        const { data: itens, error: e2 } = await supabase.from('erp_venda_itens')
+          .select('produto_id, quantidade').eq('venda_id', vendaId).not('produto_id', 'is', null);
+        if (e2) throw e2;
+        const loja = lojaId ?? venda.loja_id;
+        for (const item of itens ?? []) {
+          const { data: est } = await supabase.from('erp_estoque')
+            .select('id, quantidade').eq('produto_id', item.produto_id).eq('loja_id', loja).maybeSingle();
+          if (est) {
+            await supabase.from('erp_estoque').update({ quantidade: est.quantidade + item.quantidade }).eq('id', est.id);
+          }
+        }
+      }
+      return venda;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_devolucoes'] });
+      qc.invalidateQueries({ queryKey: ['erp_vendas'] });
+      qc.invalidateQueries({ queryKey: ['erp_estoque'] });
+    },
+  });
+}
+
+// ========================================
+// CONTROLE COMERCIAL â€” OrÃ§amentos, OS, ConsignaÃ§Ãµes, LocaÃ§Ãµes
+// (migration 037_controle_comercial.sql)
+// ========================================
+
+export function useOrcamentos(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_orcamentos', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase.from('erp_orcamentos')
+        .select('*, cliente:erp_pessoas(nome_razao), itens:erp_orcamento_itens(*)')
+        .order('created_at', { ascending: false }).limit(200);
+      if (lojaId) query = query.eq('loja_id', lojaId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useCreateOrcamento() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ itens, ...orc }: {
+      loja_id: string; cliente_id?: string | null; validade?: string | null; observacoes?: string | null;
+      itens: { descricao: string; quantidade: number; valor_unitario: number }[];
+    }) => {
+      const total = itens.reduce((s, i) => s + i.quantidade * i.valor_unitario, 0);
+      const { data, error } = await supabase.from('erp_orcamentos').insert({ ...orc, total, status: 'aberto' }).select().single();
+      if (error) throw error;
+      if (itens.length > 0) {
+        const { error: e2 } = await supabase.from('erp_orcamento_itens')
+          .insert(itens.map((i) => ({ ...i, orcamento_id: data.id, subtotal: i.quantidade * i.valor_unitario })));
+        if (e2) throw e2;
+      }
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_orcamentos'] }),
+  });
+}
+
+export function useUpdateOrcamentoStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      const { error } = await supabase.from('erp_orcamentos').update({ status }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_orcamentos'] }),
+  });
+}
+
+export function useOrdensServico(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_ordens_servico', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase.from('erp_ordens_servico')
+        .select('*, cliente:erp_pessoas(nome_razao)')
+        .order('created_at', { ascending: false }).limit(200);
+      if (lojaId) query = query.eq('loja_id', lojaId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useCreateOrdemServico() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (os: {
+      loja_id: string; cliente_id?: string | null; descricao: string; equipamento?: string | null;
+      defeito_relatado?: string | null; valor_servicos?: number; valor_pecas?: number; previsao?: string | null;
+    }) => {
+      const { data, error } = await supabase.from('erp_ordens_servico')
+        .insert({ ...os, status: 'aberta', valor_servicos: os.valor_servicos ?? 0, valor_pecas: os.valor_pecas ?? 0 })
+        .select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_ordens_servico'] }),
+  });
+}
+
+export function useUpdateOrdemServico() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: { id: string; status?: string; valor_servicos?: number; valor_pecas?: number; laudo?: string | null }) => {
+      const { error } = await supabase.from('erp_ordens_servico').update(updates).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_ordens_servico'] }),
+  });
+}
+
+export function useConsignacoes(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_consignacoes', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase.from('erp_consignacoes')
+        .select('*, cliente:erp_pessoas(nome_razao), itens:erp_consignacao_itens(*, produto:erp_produtos(nome))')
+        .order('created_at', { ascending: false }).limit(200);
+      if (lojaId) query = query.eq('loja_id', lojaId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useCreateConsignacao() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ itens, ...cons }: {
+      loja_id: string; cliente_id: string; data_acerto_prevista?: string | null; observacoes?: string | null;
+      itens: { produto_id: string; quantidade: number; valor_unitario: number }[];
+    }) => {
+      const total = itens.reduce((s, i) => s + i.quantidade * i.valor_unitario, 0);
+      const { data, error } = await supabase.from('erp_consignacoes').insert({ ...cons, total, status: 'aberta' }).select().single();
+      if (error) throw error;
+      if (itens.length > 0) {
+        const { error: e2 } = await supabase.from('erp_consignacao_itens')
+          .insert(itens.map((i) => ({ ...i, consignacao_id: data.id, quantidade_devolvida: 0, quantidade_vendida: 0 })));
+        if (e2) throw e2;
+      }
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_consignacoes'] }),
+  });
+}
+
+export function useUpdateConsignacaoStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      const updates: any = { status };
+      if (status === 'acertada') updates.data_acerto = new Date().toISOString();
+      const { error } = await supabase.from('erp_consignacoes').update(updates).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_consignacoes'] }),
+  });
+}
+
+export function useLocacoes(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_locacoes', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase.from('erp_locacoes')
+        .select('*, cliente:erp_pessoas(nome_razao)')
+        .order('created_at', { ascending: false }).limit(200);
+      if (lojaId) query = query.eq('loja_id', lojaId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useCreateLocacao() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (loc: {
+      loja_id: string; cliente_id: string; descricao_item: string; data_inicio: string;
+      data_fim_prevista?: string | null; valor_periodo: number; caucao?: number | null; observacoes?: string | null;
+    }) => {
+      const { data, error } = await supabase.from('erp_locacoes').insert({ ...loc, status: 'ativa' }).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_locacoes'] }),
+  });
+}
+
+export function useUpdateLocacaoStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      const updates: any = { status };
+      if (status === 'devolvida') updates.data_devolucao = new Date().toISOString();
+      const { error } = await supabase.from('erp_locacoes').update(updates).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_locacoes'] }),
   });
 }

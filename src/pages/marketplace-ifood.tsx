@@ -1,6 +1,6 @@
-import { ShoppingCart } from "lucide-react";
-import { PlaceholderPage } from "@/components/placeholder-page";
+import { Navigate } from "react-router-dom";
 
+// A configuração do iFood é única — concentrada em /ifood (integracoes.tsx)
 export function MarketplaceIFoodPage() {
-  return <PlaceholderPage title="iFood Marketplace" description="Integração iFood" icon={ShoppingCart} />;
+  return <Navigate to="/ifood" replace />;
 }

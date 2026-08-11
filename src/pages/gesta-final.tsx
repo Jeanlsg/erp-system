@@ -332,6 +332,25 @@ export function DadosEmpresariaisPage() {
 // ====================================================================
 // CÓDIGO DE BARRAS
 // ====================================================================
+function imprimirEtiqueta(p: any) {
+  const codigo = p.codigo_barras ?? "7891234567890";
+  const barras = Array.from({ length: 40 })
+    .map((_, i) => `<rect x="${i * 5}" y="0" width="${i % 3 === 0 ? 3 : i % 2 === 0 ? 2 : 1}" height="60" fill="black"/>`)
+    .join("");
+  const w = window.open("", "_blank", "width=400,height=300");
+  if (!w) { alert("Habilite pop-ups para imprimir a etiqueta."); return; }
+  w.document.write(`<!doctype html><html><head><title>Etiqueta — ${p.nome}</title>
+    <style>body{font-family:sans-serif;text-align:center;padding:16px}p{margin:2px}</style></head><body>
+    <p style="font-weight:bold">${p.nome}</p>
+    <p style="font-size:11px;color:#555">${p.sku ?? ""}</p>
+    <svg width="200" height="64" xmlns="http://www.w3.org/2000/svg">${barras}</svg>
+    <p style="font-family:monospace">${codigo}</p>
+    <p style="font-weight:bold;font-size:18px">${Number(p.preco_venda ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+    <script>window.onload = () => { window.print(); window.close(); };<\/script>
+    </body></html>`);
+  w.document.close();
+}
+
 export function CodigoBarrasPage() {
   const { data: produtos = [] } = useProdutos();
   const [selected, setSelected] = useState<any | null>(null);
@@ -375,7 +394,7 @@ export function CodigoBarrasPage() {
         <Card>
           <CardHeader>
             <CardTitle>Pré-visualização</CardTitle>
-            {selected && <Button size="sm" variant="outline"><Printer className="mr-2 h-3 w-3" /> Imprimir Etiqueta</Button>}
+            {selected && <Button size="sm" variant="outline" onClick={() => imprimirEtiqueta(selected)}><Printer className="mr-2 h-3 w-3" /> Imprimir Etiqueta</Button>}
           </CardHeader>
           <CardContent>
             {selected ? (
@@ -966,12 +985,87 @@ export function GerarCrediarioPage() {
 // ====================================================================
 // PAINEL DO CONTADOR
 // ====================================================================
+function baixarTxt(nome: string, conteudo: string) {
+  const blob = new Blob([conteudo], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = nome; a.click();
+  URL.revokeObjectURL(url);
+}
+
+/** Parser simples de OFX: extrai as transações (STMTTRN). */
+function parseOfx(texto: string) {
+  const trans: { data: string; valor: number; memo: string }[] = [];
+  const blocos = texto.split(/<STMTTRN>/i).slice(1);
+  for (const b of blocos) {
+    const dt = /<DTPOSTED>(\d{8})/i.exec(b)?.[1] ?? "";
+    const valor = parseFloat(/<TRNAMT>(-?[\d.,]+)/i.exec(b)?.[1]?.replace(",", ".") ?? "0");
+    const memo = /<MEMO>([^<\r\n]+)/i.exec(b)?.[1]?.trim() ?? "";
+    if (dt) trans.push({ data: `${dt.slice(6, 8)}/${dt.slice(4, 6)}/${dt.slice(0, 4)}`, valor, memo });
+  }
+  return trans;
+}
+
 export function PainelContadorPage() {
   const { lojaId } = useAutoSelectLoja();
   const { data: vendas = [] } = useVendas({ lojaId: lojaId ?? undefined });
   const { data: contas = [] } = useContas({ lojaId: lojaId ?? undefined });
+  const [ofxTrans, setOfxTrans] = useState<{ data: string; valor: number; memo: string }[] | null>(null);
 
   if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="Painel do Contador" />;
+
+  const hoje = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+
+  const gerarSpedFiscal = () => {
+    const finalizadas = vendas.filter((v: any) => v.status === "finalizada");
+    const total = finalizadas.reduce((s: number, v: any) => s + Number(v.total), 0);
+    const linhas = [
+      `|0000|019|0|${hoje}|${hoje}|EXPORTACAO ERP|—|—|—|—|A|1|`,
+      "|0001|0|",
+      ...finalizadas.map((v: any) => `|C100|0|1|—|65|00|—|${v.numero_pedido ?? v.id.slice(0, 8)}|${(v.data_venda ?? "").slice(0, 10)}|${Number(v.total).toFixed(2)}|`),
+      `|9990|TOTAL_VENDAS:${total.toFixed(2)}|REGISTROS:${finalizadas.length}|`,
+      "|9999|FIM|",
+      "",
+      "ATENCAO: arquivo-base gerado pelo ERP a partir das vendas finalizadas.",
+      "Revisar e complementar com o contador antes de transmitir ao SPED.",
+    ];
+    baixarTxt(`SPED_FISCAL_${hoje}.txt`, linhas.join("\n"));
+  };
+
+  const gerarSpedContribuicoes = () => {
+    const pagas = contas.filter((c: any) => c.status === "paga");
+    const receitas = pagas.filter((c: any) => c.tipo === "receber").reduce((s: number, c: any) => s + Number(c.valor_pago ?? c.valor), 0);
+    const despesas = pagas.filter((c: any) => c.tipo === "pagar").reduce((s: number, c: any) => s + Number(c.valor_pago ?? c.valor), 0);
+    const linhas = [
+      `|0000|006|0|—|${hoje}|${hoje}|EXPORTACAO ERP|—|`,
+      ...pagas.map((c: any) => `|F100|${c.tipo === "receber" ? "1" : "0"}|${c.descricao}|${(c.data_pagamento ?? "").slice(0, 10)}|${Number(c.valor_pago ?? c.valor).toFixed(2)}|`),
+      `|9990|RECEITAS:${receitas.toFixed(2)}|DESPESAS:${despesas.toFixed(2)}|`,
+      "|9999|FIM|",
+      "",
+      "ATENCAO: arquivo-base gerado pelo ERP a partir das contas pagas/recebidas.",
+      "Revisar e complementar com o contador antes de transmitir.",
+    ];
+    baixarTxt(`SPED_CONTRIBUICOES_${hoje}.txt`, linhas.join("\n"));
+  };
+
+  const importarOfx = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".ofx,.OFX,.txt";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const texto = await file.text();
+      const trans = parseOfx(texto);
+      if (trans.length === 0) { alert("Nenhuma transação encontrada no arquivo OFX."); return; }
+      setOfxTrans(trans);
+    };
+    input.click();
+  };
+
+  /** Concilia transação do extrato com contas do ERP pelo valor. */
+  const conciliar = (valor: number) =>
+    contas.find((c: any) => Math.abs(Number(c.valor) - Math.abs(valor)) < 0.01);
 
   return (
     <div className="space-y-6">
@@ -988,7 +1082,7 @@ export function PainelContadorPage() {
             <FileText className="h-12 w-12 mx-auto text-red-600 mb-2" />
             <p className="font-semibold">SPED Fiscal</p>
             <p className="text-xs text-muted-foreground mt-1">Geração do arquivo SPED</p>
-            <Button variant="outline" size="sm" className="mt-3"><Download className="h-3 w-3 mr-1" /> Gerar</Button>
+            <Button variant="outline" size="sm" className="mt-3" onClick={gerarSpedFiscal}><Download className="h-3 w-3 mr-1" /> Gerar</Button>
           </CardContent>
         </Card>
         <Card>
@@ -996,7 +1090,7 @@ export function PainelContadorPage() {
             <FileText className="h-12 w-12 mx-auto text-purple-600 mb-2" />
             <p className="font-semibold">SPED Contribuições</p>
             <p className="text-xs text-muted-foreground mt-1">PIS/COFINS</p>
-            <Button variant="outline" size="sm" className="mt-3"><Download className="h-3 w-3 mr-1" /> Gerar</Button>
+            <Button variant="outline" size="sm" className="mt-3" onClick={gerarSpedContribuicoes}><Download className="h-3 w-3 mr-1" /> Gerar</Button>
           </CardContent>
         </Card>
         <Card>
@@ -1004,7 +1098,7 @@ export function PainelContadorPage() {
             <FileText className="h-12 w-12 mx-auto text-green-600 mb-2" />
             <p className="font-semibold">Conciliação Bancária</p>
             <p className="text-xs text-muted-foreground mt-1">Conciliar extrato</p>
-            <Button variant="outline" size="sm" className="mt-3"><Upload className="h-3 w-3 mr-1" /> Importar OFX</Button>
+            <Button variant="outline" size="sm" className="mt-3" onClick={importarOfx}><Upload className="h-3 w-3 mr-1" /> Importar OFX</Button>
           </CardContent>
         </Card>
       </div>
@@ -1017,6 +1111,43 @@ export function PainelContadorPage() {
           <div className="flex justify-between border-b py-2"><span>Notas fiscais emitidas</span><span className="font-semibold">—</span></div>
         </CardContent>
       </Card>
+
+      <Dialog open={!!ofxTrans} onOpenChange={(o) => !o && setOfxTrans(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader><DialogTitle>Conciliação Bancária — {ofxTrans?.length ?? 0} transação(ões)</DialogTitle><DialogClose /></DialogHeader>
+          <div className="max-h-[420px] overflow-y-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b text-xs text-muted-foreground">
+                <tr>
+                  <th className="text-left p-2">Data</th>
+                  <th className="text-left p-2">Descrição</th>
+                  <th className="text-right p-2">Valor</th>
+                  <th className="text-center p-2">Conciliação</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(ofxTrans ?? []).map((tr, i) => {
+                  const match = conciliar(tr.valor);
+                  return (
+                    <tr key={i} className="border-b">
+                      <td className="p-2">{tr.data}</td>
+                      <td className="p-2">{tr.memo || "—"}</td>
+                      <td className={`p-2 text-right tabular-nums ${tr.valor < 0 ? "text-red-600" : "text-green-600"}`}>{brl(tr.valor)}</td>
+                      <td className="p-2 text-center">
+                        {match ? (
+                          <Badge variant="default" className="text-[10px]">{match.descricao}</Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-[10px]">sem correspondência</Badge>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

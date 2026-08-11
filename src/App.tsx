@@ -1,7 +1,6 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route } from "react-router-dom";
 
 import { RootLayout } from "@/components/root-layout";
-import { PlaceholderPage } from "@/components/placeholder-page";
 
 import { LoginPage } from "@/pages/login";
 import { RedefinirSenhaPage } from "@/pages/redefinir-senha";
@@ -39,7 +38,6 @@ import { KitsPage } from "@/pages/kits";
 import { ComprasPage } from "@/pages/compras";
 import { RelatoriosPage } from "@/pages/relatorios";
 import { DevolucoesPage } from "@/pages/devolucoes";
-import { TransferenciaEstoquePage } from "@/pages/estoque.transferencia";
 import { FiscalPage } from "@/pages/fiscal";
 import { ConfiguracoesPage } from "@/pages/configuracoes";
 import { AjudaPage } from "@/pages/ajuda";
@@ -54,6 +52,10 @@ import { IFoodPage, ExAppPedidosPage, TEFPage } from "@/pages/integracoes";
 import { MarketplaceIFoodPage } from "@/pages/marketplace-ifood";
 import { GestaoHubPage } from "@/pages/gestao";
 import { TreinamentoPage } from "@/pages/treinamento";
+import { TransportadorasPage } from "@/pages/transportadoras";
+import { AgendaTelefonicaPage } from "@/pages/agenda-telefonica";
+import { ServicosPage } from "@/pages/servicos";
+import { NotFoundPage } from "@/pages/not-found";
 
 // ===== Novas páginas do MAPA_GESTAO_EMPRESARIAL.md =====
 import {
@@ -75,13 +77,6 @@ import {
   PastaPrincipalPage, CadastroProdutosPage, GerarCrediarioPage,
   PainelContadorPage, EmpresarialPage,
 } from "@/pages/gesta-final";
-
-// Helper
-import { Coffee } from "lucide-react";
-
-const P = (title: string, description?: string, icon?: any) => (
-  <PlaceholderPage title={title} description={description} icon={icon} />
-);
 
 export default function App() {
   return (
@@ -135,7 +130,9 @@ export default function App() {
         <Route path="gestao/fornecedores" element={<FornecedoresPage />} />
         <Route path="gestao/funcionarios" element={<FuncionariosPage />} />
         <Route path="gestao/cadastro-produtos" element={<CadastroProdutosPage />} />
-        <Route path="gestao/servicos" element={P("Serviços Oferecidos", "Catálogo de serviços", Coffee)} />
+        <Route path="gestao/servicos" element={<ServicosPage />} />
+        <Route path="gestao/transportadoras" element={<TransportadorasPage />} />
+        <Route path="gestao/agenda-telefonica" element={<AgendaTelefonicaPage />} />
 
         {/* Agenda / Documentos / Arquivos */}
         <Route path="gestao/documentos" element={<DocumentosPage />} />
@@ -227,7 +224,6 @@ export default function App() {
         <Route path="produtos-estoque-lotes" element={<ProdutosEstoqueLotesPage />} />
         <Route path="estoque" element={<ProdutosEstoqueLotesPage />} />
         <Route path="gestao/estoque" element={<ProdutosEstoqueLotesPage />} />
-        <Route path="estoque.transferencia" element={<TransferenciaEstoquePage />} />
         <Route path="compras" element={<ComprasPage />} />
         <Route path="compras/importar-nfe" element={<ImportarNFePage />} />
         <Route path="gestao/compras/importar-nfe" element={<ImportarNFePage />} />
@@ -246,7 +242,7 @@ export default function App() {
         <Route path="ajuda" element={<AjudaPage />} />
       </Route>
 
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );
 }

@@ -1,4 +1,6 @@
 import { useState, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -26,7 +28,9 @@ type AbaAtiva = "fluxo" | "vendas" | "graficos" | "formas" | "taxas" | "pagas" |
 
 export function FinanceiroPage() {
   const { lojaId } = useAutoSelectLoja();
-  const [aba, setAba] = useState<AbaAtiva>("fluxo");
+  const [searchParams] = useSearchParams();
+  const qc = useQueryClient();
+  const [aba, setAba] = useState<AbaAtiva>((searchParams.get("aba") as AbaAtiva) ?? "fluxo");
 
   // Filtro Período (default = mês atual)
   const hoje = new Date();
@@ -168,7 +172,7 @@ export function FinanceiroPage() {
               <Label className="text-xs">Data Final</Label>
               <Input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className="w-44" />
             </div>
-            <Button>
+            <Button onClick={() => qc.invalidateQueries()}>
               <Search className="mr-2 h-4 w-4" /> Consultar
             </Button>
             <Button variant="outline" onClick={() => window.print()}>
@@ -307,7 +311,7 @@ export function FinanceiroPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>Top 10 Produtos Mais Vendidos</CardTitle>
-                <Button variant="outline" size="sm"><Download className="mr-2 h-3 w-3" /> Imprimir</Button>
+                <Button variant="outline" size="sm" onClick={() => window.print()}><Download className="mr-2 h-3 w-3" /> Imprimir</Button>
               </div>
             </CardHeader>
             <CardContent className="p-0">

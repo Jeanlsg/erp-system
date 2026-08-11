@@ -94,7 +94,7 @@ export function FeatureGuard({ path, children }: Props) {
               </Link>
             </Button>
             <Button asChild>
-              <Link to="/dashboard">Dashboard</Link>
+              <Link to="/">Dashboard</Link>
             </Button>
           </div>
 

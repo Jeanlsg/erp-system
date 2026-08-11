@@ -8,7 +8,7 @@
 #
 # Uso:
 #   ./supabase/gen-env.sh <dominio-supabase> <dominio-crm> [dominio_resend]
-#
+# 
 # Configuração SMTP (Resend):
 #   export RESEND_API_KEY="re_xxxxx"
 #   export RESEND_DOMAIN="seudominio.com.br"

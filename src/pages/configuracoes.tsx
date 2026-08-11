@@ -1,6 +1,6 @@
-import { Settings } from "lucide-react";
-import { PlaceholderPage } from "@/components/placeholder-page";
+import { Navigate } from "react-router-dom";
 
+// Rota legado: as configurações reais vivem em /config/sistema
 export function ConfiguracoesPage() {
-  return <PlaceholderPage title="Configurações" description="Configurações gerais do sistema" icon={Settings} />;
+  return <Navigate to="/config/sistema" replace />;
 }
