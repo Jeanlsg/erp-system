@@ -6,7 +6,7 @@
 
 import { useState, useEffect } from "react";
 import {
-  Card, CardContent, CardHeader, CardTitle, CardDescription,
+  Card, CardContent,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Send, Plus, Loader2, ArrowRight, FileText, CheckCircle2,
-  X, Trash2, Package, Edit2, Truck, Filter,
+  X, Trash2, Truck, Filter,
 } from "lucide-react";
 import {
   useLojas, useProdutos, useRemessas,
@@ -25,7 +25,8 @@ import {
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { useAuth } from "@/lib/store/auth-store";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
-import { brl, date, dateTime } from "@/lib/format";
+import { brl, date } from "@/lib/format";
+import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 
 interface ItemForm {
@@ -52,7 +53,6 @@ export function RemessasPage() {
   const receberRemessa = useReceberRemessa();
 
   const [modal, setModal] = useState(false);
-  const [editId, setEditId] = useState<string | null>(null);
   const [filtroStatus, setFiltroStatus] = useState<string>("");
   const [filtroTipo, setFiltroTipo] = useState<string>("");
 
@@ -120,7 +120,6 @@ export function RemessasPage() {
       itens: [],
     });
     setItemSearch("");
-    setEditId(null);
   };
 
   // Inicializar loja origem com loja atual
@@ -184,32 +183,38 @@ export function RemessasPage() {
     const valorProdutos = form.itens.reduce((s, i) => s + Number(i.subtotal || 0), 0);
     const valorTotal = calcularValorTotal();
 
-    await createRemessa.mutateAsync({
-      loja_origem_id: form.loja_origem_id,
-      loja_destino_id: form.loja_destino_id,
-      usuario_id: user.id,
-      tipo: form.tipo,
-      data_previsao_chegada: form.data_previsao_chegada || null,
-      valor_produtos: valorProdutos,
-      valor_frete: Number(form.valor_frete),
-      valor_seguro: Number(form.valor_seguro),
-      valor_total: valorTotal,
-      itens: form.itens,
-      observacoes: form.observacoes || null,
-    });
+    try {
+      await createRemessa.mutateAsync({
+        loja_origem_id: form.loja_origem_id,
+        loja_destino_id: form.loja_destino_id,
+        usuario_id: user.id,
+        tipo: form.tipo,
+        cfop_utilizado: calcularCFOP() || null,
+        data_previsao_chegada: form.data_previsao_chegada || null,
+        valor_produtos: valorProdutos,
+        valor_frete: Number(form.valor_frete),
+        valor_seguro: Number(form.valor_seguro),
+        valor_total: valorTotal,
+        itens: form.itens,
+        observacoes: form.observacoes || null,
+      });
 
-    setModal(false);
-    resetForm();
+      setModal(false);
+      resetForm();
+      toast.success("Remessa criada com sucesso!");
+    } catch (err: any) {
+      toast.error(`Erro ao salvar remessa: ${err.message}`);
+    }
   };
 
-  const handleEmitirNFe = async (remessaId: string) => {
-    if (!lojaId) return;
+  const handleEmitirNFe = async (r: any) => {
+    // A NF-e é sempre emitida pela loja de ORIGEM da remessa
     if (!confirm("Emitir NFe de remessa? Estoque da origem será baixado.")) return;
     try {
-      await emitirNFe.mutateAsync({ remessa_id: remessaId, loja_id: lojaId });
-      alert("NFe emitida com sucesso!");
+      await emitirNFe.mutateAsync({ remessa_id: r.id, loja_id: r.loja_origem_id });
+      toast.success("NFe emitida com sucesso!");
     } catch (err: any) {
-      alert(`Erro: ${err.message}`);
+      toast.error(`Erro: ${err.message}`, { duration: 10000 });
     }
   };
 
@@ -218,28 +223,43 @@ export function RemessasPage() {
     if (!confirm("Confirmar recebimento no destino? Estoque será adicionado.")) return;
     try {
       await receberRemessa.mutateAsync({ remessa_id: remessaId, usuario_id: user.id });
-      alert("Recebimento confirmado!");
+      toast.success("Recebimento confirmado!");
     } catch (err: any) {
-      alert(`Erro: ${err.message}`);
+      toast.error(`Erro: ${err.message}`);
     }
   };
 
   const handleMarcarTransito = async (remessaId: string) => {
-    await updateRemessa.mutateAsync({ id: remessaId, status: "em_transito" });
+    try {
+      await updateRemessa.mutateAsync({ id: remessaId, status: "em_transito" });
+      toast.success("Remessa marcada como em trânsito.");
+    } catch (err: any) {
+      toast.error(`Erro ao marcar trânsito: ${err.message}`);
+    }
   };
 
   const handleCancelar = async (remessaId: string) => {
     if (!confirm("Cancelar esta remessa?")) return;
-    await updateRemessa.mutateAsync({
-      id: remessaId,
-      status: "cancelada",
-      motivo_cancelamento: "Cancelado pelo usuário",
-    });
+    try {
+      await updateRemessa.mutateAsync({
+        id: remessaId,
+        status: "cancelada",
+        motivo_cancelamento: "Cancelado pelo usuário",
+      });
+      toast.success("Remessa cancelada.");
+    } catch (err: any) {
+      toast.error(`Erro ao cancelar: ${err.message}`);
+    }
   };
 
   const handleExcluir = async (remessaId: string) => {
     if (!confirm("Excluir esta remessa (apenas rascunhos)?")) return;
-    await deleteRemessa.mutate(remessaId);
+    try {
+      await deleteRemessa.mutateAsync(remessaId);
+      toast.success("Remessa excluída.");
+    } catch (err: any) {
+      toast.error(`Erro ao excluir: ${err.message}`);
+    }
   };
 
   const produtosFiltrados = itemSearch
@@ -375,31 +395,37 @@ export function RemessasPage() {
                       <div className="flex gap-1 justify-center flex-wrap">
                         {r.status === "rascunho" && (
                           <>
-                            <Button size="sm" variant="outline" onClick={() => handleEmitirNFe(r.id)}>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={emitirNFe.isPending || lojaId !== r.loja_origem_id}
+                              title={lojaId !== r.loja_origem_id ? "Somente a loja de origem pode emitir a NFe" : undefined}
+                              onClick={() => handleEmitirNFe(r)}
+                            >
                               <FileText className="h-3 w-3 mr-1" /> NFe
                             </Button>
-                            <Button size="sm" variant="ghost" onClick={() => handleExcluir(r.id)}>
+                            <Button size="sm" variant="ghost" disabled={deleteRemessa.isPending} onClick={() => handleExcluir(r.id)}>
                               <Trash2 className="h-3 w-3 text-destructive" />
                             </Button>
                           </>
                         )}
                         {r.status === "nf_emitida" && (
                           <>
-                            <Button size="sm" variant="outline" onClick={() => handleMarcarTransito(r.id)}>
+                            <Button size="sm" variant="outline" disabled={updateRemessa.isPending} onClick={() => handleMarcarTransito(r.id)}>
                               <Truck className="h-3 w-3 mr-1" /> Trânsito
                             </Button>
-                            <Button size="sm" variant="default" onClick={() => handleReceber(r.id)}>
+                            <Button size="sm" variant="default" disabled={receberRemessa.isPending} onClick={() => handleReceber(r.id)}>
                               <CheckCircle2 className="h-3 w-3 mr-1" /> Receber
                             </Button>
                           </>
                         )}
                         {r.status === "em_transito" && (
-                          <Button size="sm" variant="default" onClick={() => handleReceber(r.id)}>
+                          <Button size="sm" variant="default" disabled={receberRemessa.isPending} onClick={() => handleReceber(r.id)}>
                             <CheckCircle2 className="h-3 w-3 mr-1" /> Receber
                           </Button>
                         )}
                         {(r.status === "rascunho" || r.status === "nf_emitida") && (
-                          <Button size="sm" variant="ghost" onClick={() => handleCancelar(r.id)}>
+                          <Button size="sm" variant="ghost" disabled={updateRemessa.isPending} onClick={() => handleCancelar(r.id)}>
                             <X className="h-3 w-3" />
                           </Button>
                         )}

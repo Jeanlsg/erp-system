@@ -9,10 +9,12 @@ import type { NFeParsed, NFeItem, NFeEmitente } from "@/types/nfe";
 const parser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: "@_",
-  parseTagValue: true,
+  // Nunca converter valores de tag para number: CNPJ/CEP/cEAN/cProd
+  // precisam permanecer string (preservando zeros à esquerda)
+  parseTagValue: false,
   parseAttributeValue: true,
   trimValues: true,
-  isArray: (name, jpath) => {
+  isArray: (_name, jpath) => {
     // Itens sempre como array
     if (jpath === "nfeProc.NFe.infNFe.det" || jpath === "NFe.infNFe.det") return true;
     return false;
@@ -83,6 +85,9 @@ export function parseNFeXML(xmlContent: string): NFeParsed {
     : undefined;
 
   // Montar itens
+  if (!infNFe.det) {
+    throw new Error("XML sem itens: tag det não encontrada");
+  }
   const detArray = Array.isArray(infNFe.det) ? infNFe.det : [infNFe.det];
   const itens: NFeItem[] = detArray.map((det: any) => {
     const prod = det.prod;
@@ -112,8 +117,11 @@ export function parseNFeXML(xmlContent: string): NFeParsed {
 
     return {
       numero_item: Number(det["@_nItem"] ?? 0),
-      codigo_produto: prod.cProd ?? "",
-      codigo_ean: prod.cEAN === "SEM GTIN" ? undefined : prod.cEAN,
+      codigo_produto: String(prod.cProd ?? ""),
+      codigo_ean:
+        prod.cEAN == null || String(prod.cEAN) === "SEM GTIN"
+          ? undefined
+          : String(prod.cEAN),
       nome: prod.xProd ?? "",
       ncm: prod.NCM,
       cfop: prod.CFOP,
@@ -159,8 +167,8 @@ export function parseNFeXML(xmlContent: string): NFeParsed {
 /**
  * Remove caracteres não numéricos
  */
-function onlyDigits(str: string): string {
-  return (str ?? "").replace(/\D/g, "");
+function onlyDigits(str: unknown): string {
+  return String(str ?? "").replace(/\D/g, "");
 }
 
 /**
@@ -179,7 +187,7 @@ export function isValidNFeXML(xmlContent: string): boolean {
 /**
  * Formata CNPJ: 00.000.000/0000-00
  */
-export function formatCNPJ(cnpj: string): string {
+export function formatCNPJ(cnpj: unknown): string {
   const digits = onlyDigits(cnpj);
   return digits.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
 }
@@ -187,7 +195,7 @@ export function formatCNPJ(cnpj: string): string {
 /**
  * Formata CEP: 00000-000
  */
-export function formatCEP(cep: string): string {
+export function formatCEP(cep: unknown): string {
   const digits = onlyDigits(cep);
   return digits.replace(/^(\d{5})(\d{3})$/, "$1-$2");
 }

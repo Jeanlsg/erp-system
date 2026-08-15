@@ -1,6 +1,6 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend, Pie, PieChart, Cell } from "recharts";
-import { Store, TrendingUp, Receipt, PackageX, AlertTriangle, Loader2 } from "lucide-react";
+import { Store, TrendingUp, Receipt, PackageX, AlertTriangle } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,9 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useLojas, useVendas, useProdutosComEstoque, isSupabaseConfigured } from "@/lib/supabase-queries";
-import { useLojaAtualStore } from "@/lib/store/loja-atual";
-import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
+import { useLojas, useVendas, useProdutosComEstoque } from "@/lib/supabase-queries";
 import { brl, num, pct } from "@/lib/format";
 
 const CORES = ["hsl(var(--primary))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))", "hsl(var(--muted-foreground))"];
@@ -104,20 +102,6 @@ export function VisaoGeralPage() {
     const map = new Map<string, number>();
     for (const v of vendasFiltradas) map.set(v.forma_pagamento, (map.get(v.forma_pagamento) ?? 0) + Number(v.total));
     return [...map.entries()].map(([nome, total]) => ({ nome, total }));
-  }, [vendasFiltradas]);
-
-  const topProdutos = useMemo(() => {
-    const map = new Map<string, { nome: string; qtd: number; total: number; custo: number }>();
-    for (const v of vendasFiltradas) {
-      for (const i of v.itens ?? []) {
-        const cur = map.get(i.nome) ?? { nome: i.nome, qtd: 0, total: 0, custo: 0 };
-        cur.qtd += Number(i.quantidade);
-        cur.total += Number(i.subtotal);
-        cur.custo += Number(i.preco_custo) * Number(i.quantidade);
-        map.set(i.nome, cur);
-      }
-    }
-    return [...map.values()].sort((a, b) => b.total - a.total).slice(0, 10);
   }, [vendasFiltradas]);
 
   const estoquePorLoja = useMemo(() => {

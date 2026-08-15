@@ -41,7 +41,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogC
 export function AvaliacoesPage() {
   const { lojaId } = useAutoSelectLoja();
   const { data: avaliacoes = [], isLoading } = useAvaliacoes(lojaId ?? undefined);
-  const { user } = useAuth();
 
   if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="Avaliações" />;
 
@@ -180,7 +179,6 @@ export function RecomendacoesPage() {
 // ====================================================================
 export function NotificacoesPage() {
   const { user } = useAuth();
-  const { lojaId } = useAutoSelectLoja();
   const { data: notificacoes = [], isLoading } = useNotificacoes(user?.id);
 
   if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="Notificações" />;

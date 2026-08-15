@@ -65,6 +65,50 @@ Deno.serve(async (req) => {
       return json(422, { erro: "informe loja_id e venda_id OU remessa_id" });
     }
 
+    // ---------------- 1b. Idempotência: bloquear emissão duplicada ----------------
+    const STATUS_VIGENTES = ["autorizada", "pendente", "processando", "pendente_transmissao"];
+    if (venda_id) {
+      const { data: notaExistente } = await admin
+        .from("erp_notas_fiscais")
+        .select("id, numero, status")
+        .eq("venda_id", venda_id)
+        .in("status", STATUS_VIGENTES)
+        .limit(1)
+        .maybeSingle();
+      if (notaExistente) {
+        return json(409, {
+          erro: `esta venda já possui NF-e nº ${notaExistente.numero} (status: ${notaExistente.status})`,
+          nfe_id: notaExistente.id,
+        });
+      }
+    }
+    if (remessa_id) {
+      const { data: remessaCheck } = await admin
+        .from("erp_remessas")
+        .select("id, status, nfe_remessa_id")
+        .eq("id", remessa_id)
+        .maybeSingle();
+      if (!remessaCheck) return json(422, { erro: "remessa não encontrada" });
+      if (["nf_emitida", "em_transito", "recebida", "cancelada"].includes(remessaCheck.status)) {
+        return json(409, {
+          erro: `remessa com status "${remessaCheck.status}" não permite nova emissão de NF-e`,
+        });
+      }
+      if (remessaCheck.nfe_remessa_id) {
+        const { data: notaRemessa } = await admin
+          .from("erp_notas_fiscais")
+          .select("id, numero, status")
+          .eq("id", remessaCheck.nfe_remessa_id)
+          .maybeSingle();
+        if (notaRemessa && STATUS_VIGENTES.includes(notaRemessa.status)) {
+          return json(409, {
+            erro: `esta remessa já possui NF-e nº ${notaRemessa.numero} (status: ${notaRemessa.status})`,
+            nfe_id: notaRemessa.id,
+          });
+        }
+      }
+    }
+
     // ---------------- 2. Pré-requisitos da loja ----------------
     const { data: loja } = await admin.from("erp_lojas").select("*").eq("id", loja_id).single();
     if (!loja) return json(422, { erro: "loja não encontrada" });
@@ -159,10 +203,23 @@ Deno.serve(async (req) => {
         return json(422, { erro: "venda sem cliente identificado com CPF/CNPJ (NF-e modelo 55 exige destinatário)" });
       }
 
+      // Endereço do destinatário é obrigatório na NF-e de venda
+      const endCliente = venda.cliente.endereco ?? {};
+      const faltasEndereco: string[] = [];
+      if (!endCliente.logradouro) faltasEndereco.push("logradouro");
+      if (!(endCliente.cidade || endCliente.municipio)) faltasEndereco.push("município");
+      if (!endCliente.uf) faltasEndereco.push("UF");
+      if (faltasEndereco.length > 0) {
+        return json(422, {
+          erro: `endereço do cliente incompleto para emissão de NF-e — cadastre: ${faltasEndereco.join(", ")}`,
+          faltas: faltasEndereco,
+        });
+      }
+
       destinatario = {
         cpf_cnpj: venda.cliente.cpf_cnpj,
         nome: venda.cliente.nome_razao,
-        endereco: venda.cliente.endereco ?? {},
+        endereco: endCliente,
       };
       const interestadual = (venda.cliente.endereco?.uf ?? loja.uf) !== loja.uf;
       itens = (venda.itens ?? []).filter((i: any) => i.produto_id).map((i: any) => ({
@@ -240,6 +297,21 @@ Deno.serve(async (req) => {
       });
       resultado = await resp.json();
       if (!resp.ok) {
+        // O número já foi consumido na numeração — registra rastro da rejeição
+        const motivoRejeicao =
+          typeof resultado?.motivo === "string"
+            ? resultado.motivo
+            : `nfe-service HTTP ${resp.status}: ${JSON.stringify(resultado ?? {})}`.slice(0, 1000);
+        const { error: rastroErr } = await admin.from("erp_notas_fiscais").insert({
+          loja_id, tipo: "nfe", numero, serie: sefaz.serie_nfe ?? 1,
+          status: "rejeitada", valor_total: totalNota,
+          data_emissao: new Date().toISOString(),
+          venda_id: venda_id ?? null, destinatario_id: null,
+          certificado_id: cert.id, configuracao_sefaz_id: sefaz.id,
+          ambiente: sefaz.ambiente, mensagem_retorno: motivoRejeicao,
+          observacoes, tentativas: 1,
+        });
+        if (rastroErr) console.error(`falha ao gravar rastro da rejeição: ${rastroErr.message}`);
         return json(422, { erro: "nfe-service recusou a emissão", detalhe: resultado });
       }
     } catch (e) {
@@ -261,22 +333,33 @@ Deno.serve(async (req) => {
     // ---------------- 7. Persistir resultado REAL ----------------
     let xmlPath: string | null = null;
     let danfePath: string | null = null;
+    let arquivosPendentes = false;
 
     if (resultado.autorizada) {
       const pasta = `${loja_id}/${new Date().getFullYear()}`;
       xmlPath = `${pasta}/${resultado.chave}.xml`;
-      await adminPublic.storage.from("fiscal").upload(
+      const { error: xmlUpErr } = await adminPublic.storage.from("fiscal").upload(
         xmlPath,
         Uint8Array.from(atob(resultado.xml_base64), (c) => c.charCodeAt(0)),
         { contentType: "application/xml", upsert: true },
       );
+      if (xmlUpErr) {
+        console.error(`falha ao subir XML da NF-e ${resultado.chave}: ${xmlUpErr.message}`);
+        arquivosPendentes = true;
+        xmlPath = null;
+      }
       if (resultado.danfe_pdf_base64) {
         danfePath = `${pasta}/${resultado.chave}.pdf`;
-        await adminPublic.storage.from("fiscal").upload(
+        const { error: danfeUpErr } = await adminPublic.storage.from("fiscal").upload(
           danfePath,
           Uint8Array.from(atob(resultado.danfe_pdf_base64), (c) => c.charCodeAt(0)),
           { contentType: "application/pdf", upsert: true },
         );
+        if (danfeUpErr) {
+          console.error(`falha ao subir DANFE da NF-e ${resultado.chave}: ${danfeUpErr.message}`);
+          arquivosPendentes = true;
+          danfePath = null;
+        }
       }
     }
 
@@ -287,13 +370,17 @@ Deno.serve(async (req) => {
       serie: sefaz.serie_nfe ?? 1,
       chave_acesso: resultado.chave || null,
       protocolo: resultado.protocolo || null,
-      status: resultado.autorizada ? "autorizada" : "rejeitada",
+      status: resultado.autorizada
+        ? (arquivosPendentes ? "pendente_arquivo" : "autorizada")
+        : "rejeitada",
       cstat: resultado.cstat,
       valor_total: totalNota,
       data_emissao: new Date().toISOString(),
       data_processamento: resultado.data_autorizacao || new Date().toISOString(),
       codigo_retorno: resultado.cstat,
-      mensagem_retorno: resultado.motivo,
+      mensagem_retorno: arquivosPendentes
+        ? `${resultado.motivo ?? ""} [XML/DANFE não gravados no storage — reprocessar arquivos]`.trim()
+        : resultado.motivo,
       venda_id: venda_id ?? null,
       certificado_id: cert.id,
       configuracao_sefaz_id: sefaz.id,

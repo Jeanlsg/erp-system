@@ -19,6 +19,7 @@ import { useAuth } from "@/lib/store/auth-store";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { brl } from "@/lib/format";
+import { toast } from "sonner";
 
 export function CaixaPage() {
   const { user } = useAuth();
@@ -27,7 +28,7 @@ export function CaixaPage() {
 
   // Buscar caixas - se lojaFiltro="todas", não filtra
   const lojaParaFiltro = lojaFiltro === "todas" ? undefined : lojaFiltro;
-  const { data: caixas = [], isLoading, refetch } = useCaixas(lojaParaFiltro);
+  const { data: caixas = [], isLoading, isError: caixasError, refetch } = useCaixas(lojaParaFiltro);
 
   const { data: sangrias = [] } = useSangrias();
   const { data: entradas = [] } = useEntradasExtras();
@@ -35,7 +36,7 @@ export function CaixaPage() {
   const createEntrada = useCreateEntradaExtra();
 
   // Buscar vendas do dia para estatísticas
-  const { data: vendasHoje } = useQuery({
+  const { data: vendasHoje, isError: vendasHojeError } = useQuery({
     queryKey: ["erp_vendas-hoje-caixa", lojaParaFiltro],
     queryFn: async () => {
       if (!isSupabaseConfigured()) return { total: 0, tickets: 0 };
@@ -47,7 +48,8 @@ export function CaixaPage() {
         .eq("status", "finalizada")
         .gte("data_venda", hoje.toISOString());
       if (lojaParaFiltro) q = q.eq("loja_id", lojaParaFiltro);
-      const { data } = await q;
+      const { data, error } = await q;
+      if (error) throw error;
       const total = (data ?? []).reduce((s, v) => s + Number(v.total), 0);
       return { total, tickets: data?.length ?? 0 };
     },
@@ -63,41 +65,55 @@ export function CaixaPage() {
 
   if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="Caixa" />;
 
-  // Encontrar caixa aberto do usuário atual
-  const caixaAberto = caixas.find((c: any) => c.status === "aberto" && c.data_fechamento == null);
+  // Encontrar caixa aberto do PRÓPRIO usuário (na loja atual, se houver)
+  const caixaAberto = caixas.find(
+    (c: any) =>
+      c.status === "aberto" &&
+      c.data_fechamento == null &&
+      c.usuario_id === user?.id &&
+      (!lojaId || c.loja_id === lojaId)
+  );
   const caixasAbertos = caixas.filter((c: any) => c.status === "aberto" && c.data_fechamento == null);
-  const caixasFechados = caixas.filter((c: any) => c.status === "fechado" || c.data_fechamento != null);
 
   // Calcular totais
-  const totalVendasGeral = caixas.reduce((s, c: any) => s + Number(c.total_vendas || 0), 0);
   const totalSangriasGeral = caixas.reduce((s, c: any) => s + Number(c.total_sangrias || 0), 0);
   const totalEntradasGeral = caixas.reduce((s, c: any) => s + Number(c.total_entradas_extras || 0), 0);
 
   const handleSangria = async () => {
     if (!caixaAberto || !valorSangria || !motivoSangria) return;
-    await createSangria.mutateAsync({
-      caixa_id: caixaAberto.id,
-      usuario_id: user?.id,
-      motivo: motivoSangria,
-      valor: parseFloat(valorSangria),
-    });
-    setSangriaModal(false);
-    setValorSangria("");
-    setMotivoSangria("");
+    try {
+      await createSangria.mutateAsync({
+        caixa_id: caixaAberto.id,
+        usuario_id: user?.id,
+        motivo: motivoSangria,
+        valor: parseFloat(valorSangria),
+      });
+      setSangriaModal(false);
+      setValorSangria("");
+      setMotivoSangria("");
+      toast.success("Sangria registrada.");
+    } catch (err: any) {
+      toast.error(`Erro ao registrar sangria: ${err.message}`);
+    }
   };
 
   const handleEntrada = async () => {
     if (!caixaAberto || !valorEntrada || !motivoEntrada) return;
-    await createEntrada.mutateAsync({
-      caixa_id: caixaAberto.id,
-      usuario_id: user?.id,
-      motivo: motivoEntrada,
-      forma_pagamento: formaEntrada,
-      valor: parseFloat(valorEntrada),
-    });
-    setEntradaModal(false);
-    setValorEntrada("");
-    setMotivoEntrada("");
+    try {
+      await createEntrada.mutateAsync({
+        caixa_id: caixaAberto.id,
+        usuario_id: user?.id,
+        motivo: motivoEntrada,
+        forma_pagamento: formaEntrada,
+        valor: parseFloat(valorEntrada),
+      });
+      setEntradaModal(false);
+      setValorEntrada("");
+      setMotivoEntrada("");
+      toast.success("Entrada extra registrada.");
+    } catch (err: any) {
+      toast.error(`Erro ao registrar entrada: ${err.message}`);
+    }
   };
 
   return (
@@ -133,18 +149,31 @@ export function CaixaPage() {
             Atualizar
           </Button>
 
-          {caixaAberto && (
-            <>
-              <Button variant="outline" onClick={() => setSangriaModal(true)}>
-                Sangria
-              </Button>
-              <Button onClick={() => setEntradaModal(true)}>
-                <Plus className="mr-2 h-4 w-4" /> Entrada Extra
-              </Button>
-            </>
-          )}
+          <Button
+            variant="outline"
+            disabled={!caixaAberto}
+            title={!caixaAberto ? "Você não tem caixa aberto — sangria só no seu próprio caixa" : undefined}
+            onClick={() => setSangriaModal(true)}
+          >
+            Sangria
+          </Button>
+          <Button
+            disabled={!caixaAberto}
+            title={!caixaAberto ? "Você não tem caixa aberto — entrada só no seu próprio caixa" : undefined}
+            onClick={() => setEntradaModal(true)}
+          >
+            <Plus className="mr-2 h-4 w-4" /> Entrada Extra
+          </Button>
         </div>
       </div>
+
+      {/* Aviso: existem caixas abertos mas nenhum é do usuário atual */}
+      {!caixaAberto && caixasAbertos.length > 0 && (
+        <p className="text-sm text-muted-foreground">
+          Há {caixasAbertos.length} caixa(s) aberto(s) de outros operadores. Para registrar
+          sangria ou entrada extra, abra o seu próprio caixa no PDV.
+        </p>
+      )}
 
       {/* Cards de Resumo */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -167,36 +196,54 @@ export function CaixaPage() {
         <Card>
           <CardContent className="p-4">
             <p className="text-xs uppercase text-muted-foreground">Vendas Hoje</p>
-            <p className="text-2xl font-semibold text-green-600">
-              {brl(vendasHoje?.total ?? 0)}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {vendasHoje?.tickets ?? 0} venda(s) finalizada(s)
-            </p>
+            {vendasHojeError ? (
+              <p className="text-sm font-medium text-destructive mt-2">Erro ao carregar</p>
+            ) : (
+              <>
+                <p className="text-2xl font-semibold text-green-600">
+                  {brl(vendasHoje?.total ?? 0)}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {vendasHoje?.tickets ?? 0} venda(s) finalizada(s)
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
 
         <Card>
           <CardContent className="p-4">
             <p className="text-xs uppercase text-muted-foreground">Sangrias (Total)</p>
-            <p className="text-2xl font-semibold text-red-600">
-              {brl(totalSangriasGeral)}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {sangrias.length} registro(s) hoje
-            </p>
+            {caixasError ? (
+              <p className="text-sm font-medium text-destructive mt-2">Erro ao carregar</p>
+            ) : (
+              <>
+                <p className="text-2xl font-semibold text-red-600">
+                  {brl(totalSangriasGeral)}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {sangrias.length} registro(s) hoje
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
 
         <Card>
           <CardContent className="p-4">
             <p className="text-xs uppercase text-muted-foreground">Entradas Extras</p>
-            <p className="text-2xl font-semibold text-green-600">
-              {brl(totalEntradasGeral)}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {entradas.length} registro(s) hoje
-            </p>
+            {caixasError ? (
+              <p className="text-sm font-medium text-destructive mt-2">Erro ao carregar</p>
+            ) : (
+              <>
+                <p className="text-2xl font-semibold text-green-600">
+                  {brl(totalEntradasGeral)}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {entradas.length} registro(s) hoje
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -372,8 +419,8 @@ export function CaixaPage() {
             <Button variant="outline" onClick={() => setSangriaModal(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleSangria} disabled={!valorSangria || !motivoSangria}>
-              Registrar
+            <Button onClick={handleSangria} disabled={!valorSangria || !motivoSangria || createSangria.isPending}>
+              {createSangria.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Registrar"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -422,8 +469,8 @@ export function CaixaPage() {
             <Button variant="outline" onClick={() => setEntradaModal(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleEntrada} disabled={!valorEntrada || !motivoEntrada}>
-              Registrar
+            <Button onClick={handleEntrada} disabled={!valorEntrada || !motivoEntrada || createEntrada.isPending}>
+              {createEntrada.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Registrar"}
             </Button>
           </DialogFooter>
         </DialogContent>

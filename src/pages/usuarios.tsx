@@ -3,7 +3,7 @@
 // CRUD completo + gerenciamento granular de permissões
 // ============================================================
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import {
   Card, CardContent, CardHeader, CardTitle,
 } from "@/components/ui/card";
@@ -19,8 +19,8 @@ import {
 } from "@/components/ui/dialog";
 import {
   Users, Plus, Edit, Shield, Lock, Unlock,
-  Search, Loader2, Save, AlertCircle, RefreshCw,
-  Mail, Phone, KeyRound, Trash2, Check, Eye, EyeOff,
+  Search, Loader2, Save, RefreshCw,
+  Mail, Phone, KeyRound, Trash2, Check, Eye, EyeOff, RotateCcw,
 } from "lucide-react";
 import {
   useUsuarios, useUpdateUsuario, useDesbloquearUsuario,
@@ -87,8 +87,6 @@ const PERMISSOES_POR_MODULO: Record<string, string[]> = {
   ],
 };
 
-const TODAS_PERMISSOES = Object.values(PERMISSOES_POR_MODULO).flat();
-
 export function UsuariosPage() {
   const { user: currentUser } = useAuth();
   const { data: usuarios = [], isLoading, refetch } = useUsuarios();
@@ -104,10 +102,8 @@ export function UsuariosPage() {
   // Modais
   const [modalUsuario, setModalUsuario] = useState(false);
   const [modalPermissoes, setModalPermissoes] = useState(false);
-  const [modalConfirmDelete, setModalConfirmDelete] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [permissoesUsuarioId, setPermissoesUsuarioId] = useState<string | null>(null);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   // Form
   const [formUsuario, setFormUsuario] = useState({
@@ -217,7 +213,7 @@ export function UsuariosPage() {
 
         // Se admin pediu para trocar a senha do usuário
         if (formUsuario.definirSenha && formUsuario.senha.length >= 6) {
-          const { data, error } = await supabase.functions.invoke<{
+          await supabase.functions.invoke<{
             success: boolean;
             error?: string;
           }>("reset-password", {
@@ -390,9 +386,6 @@ export function UsuariosPage() {
 
   const usuarioSelecionado = usuarios.find((u) => u.id === permissoesUsuarioId);
   const roleSelecionado = (usuarioSelecionado?.role ?? "caixa") as Role;
-  const permissoesEfetivas = usarPermissoesCustom
-    ? permissoesCustom
-    : Object.fromEntries(ROLE_PERMISSIONS[roleSelecionado].map((p) => [p, true]));
 
   return (
     <div className="space-y-4">

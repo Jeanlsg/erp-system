@@ -138,13 +138,21 @@ Deno.serve(async (req: Request): Promise<Response> => {
       db: { schema: "erp" },
     });
 
-    // 6. Verificar duplicação
-    const { data: existingUsers } = await adminClient.auth.admin.listUsers();
-    const emailExists = existingUsers?.users?.some(
-      (u) => u.email?.toLowerCase() === body.email.toLowerCase()
-    );
+    // 6. Verificar duplicação (consulta direta a erp_usuarios por email)
+    const { data: existingErpUser, error: dupCheckError } = await adminClient
+      .from("erp_usuarios")
+      .select("id")
+      .ilike("email", body.email)
+      .maybeSingle();
 
-    if (emailExists) {
+    if (dupCheckError) {
+      return jsonResponse(
+        { success: false, error: `Erro ao verificar duplicação: ${dupCheckError.message}` },
+        500
+      );
+    }
+
+    if (existingErpUser) {
       return jsonResponse(
         { success: false, error: "Já existe um usuário com este email" },
         409
@@ -165,10 +173,22 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const { data: newUser, error: createError } = await adminClient.auth.admin.createUser(userCreateData);
 
     if (createError || !newUser.user) {
+      // Email duplicado no Auth (usuário existe no Auth mas não em erp_usuarios)
+      const msg = createError?.message ?? "";
+      const status = (createError as any)?.status;
+      if (
+        status === 422 ||
+        /already.*(registered|exists)|duplicate/i.test(msg)
+      ) {
+        return jsonResponse(
+          { success: false, error: "Já existe um usuário com este email" },
+          409
+        );
+      }
       return jsonResponse(
         {
           success: false,
-          error: `Erro ao criar usuário no Auth: ${createError?.message || "desconhecido"}`,
+          error: `Erro ao criar usuário no Auth: ${msg || "desconhecido"}`,
         },
         500
       );
@@ -176,13 +196,23 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     // 8. Atualiza campos adicionais (loja, telefone)
     if (body.loja_default_id || body.telefone) {
-      await adminClient
+      const { error: updateError } = await adminClient
         .from("erp_usuarios")
         .update({
           loja_default_id: body.loja_default_id || null,
           telefone: body.telefone || null,
         })
         .eq("id", newUser.user.id);
+      if (updateError) {
+        return jsonResponse(
+          {
+            success: false,
+            error: `Usuário criado, mas falhou ao gravar loja/telefone: ${updateError.message}`,
+            user_id: newUser.user.id,
+          },
+          500
+        );
+      }
     }
 
     // 9. Email de convite (apenas se não tem senha)

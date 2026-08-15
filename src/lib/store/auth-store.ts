@@ -125,12 +125,11 @@ export const useAuthStore = create<AuthState>()(
   )
 );
 
-// Função de login (Supabase Auth + fallback demo)
+// Função de login (Supabase Auth)
 export async function login(
   email: string,
   password: string
 ): Promise<{ ok: true; user: User } | { ok: false; error: string }> {
-  // Tenta login via Supabase Auth primeiro
   try {
     const { supabase } = await import("@/lib/supabase");
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -138,61 +137,41 @@ export async function login(
       password,
     });
 
-    if (!error && data.user) {
-      // Busca perfil do usuario no schema erp (erp.erp_usuarios)
-      // O id do erp_usuarios == auth.users.id (FK direta)
-      const { data: perfil } = await supabase
-        .from("erp_usuarios")
-        .select("id, email, nome, role, ativo")
-        .eq("id", data.user.id)
-        .single();
-
-      if (perfil) {
-        const user: User = {
-          id: perfil.id,
-          email: perfil.email,
-          nome: perfil.nome,
-          role: perfil.role,
-          ativo: perfil.ativo,
-        };
-        useAuthStore.getState().setUser(user);
-        return { ok: true, user };
-      }
+    if (error || !data.user) {
+      return { ok: false, error: "E-mail ou senha inválidos" };
     }
+
+    // Busca perfil do usuario no schema erp (erp.erp_usuarios)
+    // O id do erp_usuarios == auth.users.id (FK direta)
+    const { data: perfil, error: perfilError } = await supabase
+      .from("erp_usuarios")
+      .select("id, email, nome, role, ativo")
+      .eq("id", data.user.id)
+      .single();
+
+    if (perfilError || !perfil) {
+      await supabase.auth.signOut();
+      return { ok: false, error: "Perfil de usuário não encontrado. Contate o administrador." };
+    }
+
+    if (perfil.ativo === false) {
+      await supabase.auth.signOut();
+      return { ok: false, error: "Usuário desativado" };
+    }
+
+    const user: User = {
+      id: perfil.id,
+      email: perfil.email,
+      nome: perfil.nome,
+      role: perfil.role,
+      ativo: perfil.ativo,
+    };
+    useAuthStore.getState().setUser(user);
+    return { ok: true, user };
   } catch (err) {
-    // Cai no fallback abaixo se Supabase não estiver configurado
-    console.warn("Login Supabase falhou, usando demo:", err);
+    console.error("Erro no login:", err);
+    return { ok: false, error: "Falha ao conectar ao servidor de autenticação. Tente novamente." };
   }
-
-  // Fallback demo (caso Supabase não esteja configurado)
-  const demoUsers: Record<string, { user: User; password: string }> = {
-    "admin@lojaxlife.com.br": {
-      password: "Admin@2026",
-      user: { id: "u1", email: "admin@lojaxlife.com.br", nome: "Administrador", role: "admin", ativo: true },
-    },
-    "gerente@lojaxlife.com.br": {
-      password: "Ger@2026",
-      user: { id: "u2", email: "gerente@lojaxlife.com.br", nome: "Gerente", role: "gerente", ativo: true },
-    },
-    "caixa@lojaxlife.com.br": {
-      password: "Caixa@2026",
-      user: { id: "u3", email: "caixa@lojaxlife.com.br", nome: "Caixa", role: "caixa", ativo: true },
-    },
-    "estoque@lojaxlife.com.br": {
-      password: "Estoque@2026",
-      user: { id: "u4", email: "estoque@lojaxlife.com.br", nome: "Estoquista", role: "estoquista", ativo: true },
-    },
-  };
-
-  await new Promise((r) => setTimeout(r, 500));
-
-  const found = demoUsers[email];
-  if (!found || found.password !== password) {
-    return { ok: false, error: "E-mail ou senha inválidos" };
-  }
-
-  useAuthStore.getState().setUser(found.user);
-  return { ok: true, user: found.user };
 }
 
 export function logout() {

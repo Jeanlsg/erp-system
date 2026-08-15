@@ -11,6 +11,9 @@ export function getSupabase(): SupabaseClient | null {
     return null;
   }
   if (!_supabase) {
+    // Cast documentado: o client usa o schema 'erp' como padrão, mas não temos
+    // types gerados por schema — o tipo público SupabaseClient (schema "public")
+    // é usado em todo o app, então normalizamos o generic aqui.
     _supabase = createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
         persistSession: true,
@@ -22,7 +25,7 @@ export function getSupabase(): SupabaseClient | null {
         // Tabelas do Overdrive ficam em 'public' (ex: public.leads).
         schema: 'erp',
       },
-    });
+    }) as unknown as SupabaseClient;
   }
   return _supabase;
 }

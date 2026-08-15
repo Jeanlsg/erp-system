@@ -6,16 +6,16 @@
 
 import { useState } from "react";
 import {
-  Card, CardContent, CardHeader, CardTitle, CardDescription,
+  Card, CardContent, CardHeader, CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  FileText, Loader2, Filter, Download, Eye, Lock,
-  CheckCircle2, AlertCircle, Clock, XCircle, Shield,
+  FileText, Loader2, Filter, Download, Eye,
+  CheckCircle2, Clock, XCircle, Shield,
 } from "lucide-react";
 import {
-  useNotasFiscais, useVendas, useEmitirNFeVenda, isSupabaseConfigured, supabase,
+  useNotasFiscais, useNotasFiscaisVendaIds, useVendas, useEmitirNFeVenda, isSupabaseConfigured, supabase,
 } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
@@ -38,11 +38,14 @@ export function NotasFiscaisPage() {
   const [vendaSelecionada, setVendaSelecionada] = useState("");
   const emitir = useEmitirNFeVenda();
   const { data: vendas = [] } = useVendas({ lojaId: lojaId ?? undefined });
+  // TODAS as notas com venda vinculada (sem filtro de status/tipo, sem limit):
+  // a lista filtrada acima não serve para saber quais vendas já têm NF-e
+  const { data: todasNotasVendaIds = [] } = useNotasFiscaisVendaIds(lojaId ?? undefined);
 
   if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="Notas Fiscais" />;
 
   // Vendas finalizadas que ainda não têm NF-e vinculada
-  const notasVendaIds = new Set(notas.map((n: any) => n.venda_id).filter(Boolean));
+  const notasVendaIds = new Set(todasNotasVendaIds);
   const vendasSemNota = vendas.filter((v: any) => v.status === "finalizada" && !notasVendaIds.has(v.id));
 
   const handleEmitir = async () => {
@@ -77,7 +80,6 @@ export function NotasFiscaisPage() {
 
   const total = notas.reduce((s, n: any) => s + Number(n.valor_total ?? 0), 0);
   const autorizadas = notas.filter((n: any) => n.status === "autorizada").length;
-  const canceladas = notas.filter((n: any) => n.status === "cancelada").length;
   const pendentes = notas.filter((n: any) => ["pendente", "processando"].includes(n.status)).length;
 
   const handleDownloadXML = async (nota: any) => {

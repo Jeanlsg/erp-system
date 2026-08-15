@@ -15,8 +15,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Lock, Upload, FileKey2, AlertTriangle, Loader2, CheckCircle2,
-  X, Eye, EyeOff, Trash2, Shield, Calendar, Building2, Hash,
-  Info, Download, RefreshCw, AlertCircle, Clock, FlaskConical,
+  Eye, EyeOff, Trash2, Calendar, Hash,
+  Info, Download, AlertCircle, Clock, FlaskConical,
 } from "lucide-react";
 import {
   useCertificados, useCreateCertificado, useDeleteCertificado,
@@ -25,7 +25,7 @@ import {
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { supabase } from "@/lib/supabase";
-import { brl, date } from "@/lib/format";
+import { date } from "@/lib/format";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 
@@ -65,7 +65,6 @@ export function NfeCertificadoPage() {
   }
 
   const ativos = certificados.filter((c: any) => c.ativo);
-  const inativos = certificados.filter((c: any) => !c.ativo);
 
   // Calcular dias até vencer
   const diasVencimento = (dataValidade: string) => {
@@ -117,64 +116,77 @@ export function NfeCertificadoPage() {
         new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
       );
 
-      // Tentar chamar Edge Function (se disponível)
-      try {
-        const { data, error } = await supabase.functions.invoke("testar-certificado", {
-          body: {
-            arquivo_base64: base64,
-            arquivo_nome: arquivoFile.name,
-            senha,
-          },
-        });
+      const { data, error } = await supabase.functions.invoke("testar-certificado", {
+        body: {
+          arquivo_base64: base64,
+          arquivo_nome: arquivoFile.name,
+          senha,
+        },
+      });
 
-        if (error) throw error;
+      if (error) {
+        // Distinguir REJEIÇÃO da função (respondeu não-2xx com corpo) de
+        // INDISPONIBILIDADE (erro de rede / função não deployada / 404)
+        const status = (error as any).context?.status;
+        const isIndisponivel =
+          (error as any).name === "FunctionsFetchError" ||
+          (error as any).name === "FunctionsRelayError" ||
+          status === 404;
 
-        if (data?.success) {
-          setResultadoTeste({ ok: true, ...data.data });
-          toast.success("Certificado validado com sucesso!");
-          // Auto-preencher dados extraídos
-          if (data.data.titular || data.data.data_validade) {
-            setCertExtraido((prev) => ({
-              ...prev!,
-              titular: data.data.titular || prev?.titular || "",
-              cnpj_cpf: data.data.cnpj_cpf || prev?.cnpj_cpf || "",
-              emissor: data.data.emissor || prev?.emissor || "",
-              numero_serie: data.data.numero_serie || prev?.numero_serie || "",
-              data_validade: data.data.data_validade || prev?.data_validade || "",
-            }));
-          }
-        } else {
-          throw new Error(data?.error || "Erro desconhecido");
+        if (!isIndisponivel) {
+          // A Edge Function respondeu recusando — NÃO cair no fallback
+          let detalhe = error.message;
+          try {
+            const ctx = await (error as any).context?.json?.();
+            if (ctx?.error) detalhe = ctx.error;
+          } catch { /* mantém a mensagem padrão */ }
+          setResultadoTeste({ ok: false, validado: false, error: detalhe });
+          toast.error(`Certificado rejeitado: ${detalhe}`);
+          return;
         }
-      } catch (fnErr: any) {
-        // Edge Function não disponível — fazer validação client-side básica
-        console.warn("Edge Function indisponível, fazendo validação client-side:", fnErr);
 
-        // Validação client-side simples
-        const texto = new TextDecoder("utf-8", { fatal: false })
-          .decode(new Uint8Array(buffer).slice(0, 100));
-
+        // Fallback client-side APENAS para indisponibilidade — nunca marca ok
+        console.warn("Edge Function indisponível, fazendo checagem client-side limitada:", error);
         const ehPKCS12 = arquivoFile.name.toLowerCase().match(/\.(pfx|p12)$/);
-        const ehBinario = texto.includes("\x00") || texto.charCodeAt(0) < 32;
-
         if (!ehPKCS12) {
-          throw new Error("Arquivo não parece ser um certificado válido (.pfx ou .p12)");
+          setResultadoTeste({ ok: false, validado: false, error: "Arquivo não parece ser um certificado válido (.pfx ou .p12)" });
+          toast.error("Arquivo não parece ser um certificado válido (.pfx ou .p12)");
+          return;
         }
-
-        // Simular validação básica (em produção, usaria biblioteca PKCS#12 real)
-        await new Promise((r) => setTimeout(r, 800));
-
         setResultadoTeste({
-          ok: true,
-          mensagem: "Validação básica (Edge Function não disponível)",
+          ok: false,
+          validado: false,
+          mensagem: "Não validado — serviço de validação indisponível. Tente novamente mais tarde.",
           arquivo_nome: arquivoFile.name,
           arquivo_tamanho: arquivoFile.size,
           data_validade: extrairValidadeLocal(buffer),
         });
-        toast.warning("Validação limitada (Edge Function não configurada)");
+        toast.warning("Não foi possível validar o certificado (serviço indisponível). O cadastro exige validação.");
+        return;
+      }
+
+      if (data?.success) {
+        setResultadoTeste({ ok: true, validado: true, ...data.data });
+        toast.success("Certificado validado com sucesso!");
+        // Auto-preencher dados extraídos
+        if (data.data?.titular || data.data?.data_validade) {
+          setCertExtraido((prev) => ({
+            ...prev!,
+            titular: data.data.titular || prev?.titular || "",
+            cnpj_cpf: data.data.cnpj_cpf || prev?.cnpj_cpf || "",
+            emissor: data.data.emissor || prev?.emissor || "",
+            numero_serie: data.data.numero_serie || prev?.numero_serie || "",
+            data_validade: data.data.data_validade || prev?.data_validade || "",
+          }));
+        }
+      } else {
+        // Rejeição explícita da Edge Function (success === false) — sem fallback
+        const motivo = data?.error || "Certificado ou senha inválidos";
+        setResultadoTeste({ ok: false, validado: false, error: motivo });
+        toast.error(`Validação falhou: ${motivo}`);
       }
     } catch (err: any) {
-      setResultadoTeste({ ok: false, error: err.message });
+      setResultadoTeste({ ok: false, validado: false, error: err.message });
       toast.error(`Erro: ${err.message}`);
     } finally {
       setTestando(false);
@@ -220,8 +232,6 @@ export function NfeCertificadoPage() {
     setArquivoFile(file);
 
     try {
-      // 1. Ler o arquivo
-      const arrayBuffer = await file.arrayBuffer();
       setProgresso(30);
 
       // 2. Enviar para Supabase Storage (privado)
@@ -272,26 +282,34 @@ export function NfeCertificadoPage() {
       toast.error("Preencha todos os campos obrigatórios (incluindo a senha)");
       return;
     }
+    if (!resultadoTeste?.ok) {
+      toast.error("Teste o certificado (botão \"Testar certificado\") antes de cadastrar.");
+      return;
+    }
 
     try {
-    // Criptografar a senha antes de salvar (via RPC do Supabase)
-    // Em produção, usar uma função edge function ou backend dedicado
-    await create.mutateAsync({
-      loja_id: lojaId,
-      tipo: "A1",
-      nome: apelido || `Certificado A1 - ${certExtraido.cnpj_cpf}`,
-      titular: certExtraido.titular,
-      cnpj_cpf: certExtraido.cnpj_cpf,
-      emissor: certExtraido.emissor || null,
-      numero_serie: certExtraido.numero_serie || null,
-      data_validade: certExtraido.data_validade,
-      arquivo_path: certExtraido.arquivo_path,
-      // Nota: a senha é criptografada via trigger ou backend.
-      // Aqui salvamos temporariamente no campo plain; migração 031
-      // recomenda usar senha_armazenada_cripto via RPC.
-      senha_armazenada: senha,
-      ativo: true,
-    });
+      // Criptografar a senha via RPC da migration 031 (erp.criptografar_senha_cert)
+      const { data: senhaCripto, error: criptoErr } = await supabase
+        .schema("erp")
+        .rpc("criptografar_senha_cert", { plaintext: senha });
+      if (criptoErr || !senhaCripto) {
+        throw new Error(`Falha ao criptografar a senha do certificado: ${criptoErr?.message ?? "retorno vazio"}`);
+      }
+
+      await create.mutateAsync({
+        loja_id: lojaId,
+        tipo: "A1",
+        nome: apelido || `Certificado A1 - ${certExtraido.cnpj_cpf}`,
+        titular: certExtraido.titular,
+        cnpj_cpf: certExtraido.cnpj_cpf,
+        emissor: certExtraido.emissor || null,
+        numero_serie: certExtraido.numero_serie || null,
+        data_validade: certExtraido.data_validade,
+        arquivo_path: certExtraido.arquivo_path,
+        // Senha SOMENTE criptografada (nunca em texto plano)
+        senha_armazenada_cripto: senhaCripto,
+        ativo: true,
+      });
 
       setStep("concluido");
       toast.success("Certificado cadastrado com sucesso!");
@@ -301,16 +319,34 @@ export function NfeCertificadoPage() {
     }
   };
 
+  // Cancelar o fluxo de cadastro: remove o arquivo já enviado ao storage
+  const handleCancelarFluxo = async () => {
+    if (step !== "concluido" && certExtraido?.arquivo_path) {
+      const { error: rmErr } = await supabase.storage
+        .from("certificados")
+        .remove([certExtraido.arquivo_path]);
+      if (rmErr) console.warn("Falha ao remover arquivo do storage no cancelamento:", rmErr.message);
+    }
+    resetar();
+  };
+
   const handleExcluir = async (cert: any) => {
     if (!confirm(`Excluir o certificado de ${cert.titular}?\nEsta ação também removerá o arquivo .pfx.`)) return;
 
     try {
-      // Remover arquivo do storage
-      if (cert.arquivo_path) {
-        await supabase.storage.from("certificados").remove([cert.arquivo_path]);
-      }
-      // Remover registro
+      // 1. Remover o registro primeiro (se falhar, o arquivo permanece intacto)
       await del.mutateAsync(cert.id);
+
+      // 2. Remover arquivo do storage, checando o retorno
+      if (cert.arquivo_path) {
+        const { error: rmErr } = await supabase.storage
+          .from("certificados")
+          .remove([cert.arquivo_path]);
+        if (rmErr) {
+          toast.warning(`Registro excluído, mas o arquivo .pfx não foi removido do storage: ${rmErr.message}`);
+          return;
+        }
+      }
       toast.success("Certificado excluído");
     } catch (err: any) {
       toast.error(`Erro: ${err.message}`);
@@ -500,7 +536,7 @@ export function NfeCertificadoPage() {
       </Card>
 
       {/* Modal de Upload */}
-      <Dialog open={modal} onOpenChange={(open) => !open && resetar()}>
+      <Dialog open={modal} onOpenChange={(open) => !open && handleCancelarFluxo()}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -660,7 +696,11 @@ export function NfeCertificadoPage() {
                     id="senha"
                     type={showSenha ? "text" : "password"}
                     value={senha}
-                    onChange={(e) => setSenha(e.target.value)}
+                    onChange={(e) => {
+                      setSenha(e.target.value);
+                      // Alterou a senha → o teste anterior deixa de valer
+                      setResultadoTeste(null);
+                    }}
                     placeholder="Senha definida quando você gerou o .pfx"
                   />
                   <button
@@ -677,9 +717,46 @@ export function NfeCertificadoPage() {
                 </p>
               </div>
 
+              {/* Resultado do teste do certificado */}
+              {resultadoTeste && (
+                <div
+                  className={`rounded border p-3 flex items-start gap-2 text-sm ${
+                    resultadoTeste.ok
+                      ? "bg-green-50 dark:bg-green-950/20 border-green-500"
+                      : "bg-red-50 dark:bg-red-950/20 border-red-500"
+                  }`}
+                >
+                  {resultadoTeste.ok ? (
+                    <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5" />
+                  ) : (
+                    <AlertCircle className="h-4 w-4 text-red-600 mt-0.5" />
+                  )}
+                  <p>
+                    {resultadoTeste.ok
+                      ? "Certificado validado com sucesso. Você já pode cadastrar."
+                      : resultadoTeste.error ?? resultadoTeste.mensagem ?? "Certificado não validado."}
+                  </p>
+                </div>
+              )}
+
               <DialogFooter>
                 <Button variant="outline" onClick={() => setStep("upload")}>
                   Voltar
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={testarCertificado}
+                  disabled={testando || !senha || !arquivoFile}
+                >
+                  {testando ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Testando...
+                    </>
+                  ) : (
+                    <>
+                      <FlaskConical className="mr-2 h-4 w-4" /> Testar certificado
+                    </>
+                  )}
                 </Button>
                 <Button
                   onClick={handleSalvar}
@@ -688,7 +765,8 @@ export function NfeCertificadoPage() {
                     !certExtraido.titular ||
                     !certExtraido.cnpj_cpf ||
                     !certExtraido.data_validade ||
-                    !senha
+                    !senha ||
+                    !resultadoTeste?.ok
                   }
                 >
                   {create.isPending ? (

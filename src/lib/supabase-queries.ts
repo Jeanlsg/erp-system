@@ -1178,9 +1178,11 @@ export function useFecharCaixa() {
 
       if (caixa) {
         const diferenca = valorFinal - (caixa.valor_inicial + caixa.total_vendas - caixa.total_sangrias + caixa.total_entradas_extras - caixa.valor_troco);
+        // Upsert por caixa_id: evita duplicidade caso um trigger do banco
+        // também registre o fechamento (UNIQUE em caixa_id no banco)
         const { error: errorFechamento } = await supabase
           .from('erp_fechamentos_caixa')
-          .insert({
+          .upsert({
             caixa_id: caixaId,
             usuario_id: caixa.usuario_id,
             data_fechamento: new Date().toISOString(),
@@ -1199,7 +1201,7 @@ export function useFecharCaixa() {
             valor_outros: valorOutros ?? 0,
             diferenca,
             observacoes,
-          });
+          }, { onConflict: 'caixa_id' });
         if (errorFechamento) throw errorFechamento;
       }
 
@@ -1244,6 +1246,28 @@ export function useCaixaConfig() {
       if (error || !data) return { quantidade_caixas: 2 };
       const num = parseInt(data.valor || '2', 10);
       return { quantidade_caixas: isNaN(num) ? 2 : num };
+    },
+  });
+}
+
+export function useUpdateCaixaConfig() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (quantidadeCaixas: number) => {
+      const { data, error } = await supabase
+        .from('erp_configuracoes_sistema')
+        .upsert(
+          { chave: 'quantidade_caixas', valor: String(quantidadeCaixas), categoria: 'caixa' },
+          { onConflict: 'chave' }
+        )
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_caixa-config'] });
+      qc.invalidateQueries({ queryKey: ['erp_configuracoes_gerais'] });
     },
   });
 }
@@ -1299,30 +1323,25 @@ export function useCreateVenda() {
   });
 }
 
-// Atualizar estoque aps venda
+// Atualizar estoque aps venda (baixa atmica via RPC no banco)
 export function useBaixarEstoqueVenda() {
   return useMutation({
     mutationFn: async ({ lojaId, itens }: { lojaId: string; itens: any[] }) => {
-      for (const item of itens) {
-        if (!item.produto_id) continue;
-        const { data: estoque } = await supabase
-          .from('erp_estoque')
-          .select('quantidade')
-          .eq('produto_id', item.produto_id)
-          .eq('loja_id', lojaId)
-          .maybeSingle();
+      const pItens = itens
+        .filter((item) => item.produto_id && Number(item.quantidade) > 0)
+        .map((item) => ({
+          produto_id: item.produto_id,
+          quantidade: Number(item.quantidade),
+        }));
+      if (pItens.length === 0) return { success: true };
 
-        if (estoque) {
-          await supabase
-            .from('erp_estoque')
-            .update({
-              quantidade: Math.max(0, estoque.quantidade - item.quantidade),
-              updated_at: new Date().toISOString(),
-            })
-            .eq('produto_id', item.produto_id)
-            .eq('loja_id', lojaId);
-        }
-      }
+      const { error } = await supabase
+        .schema('erp')
+        .rpc('baixar_estoque_atomico', {
+          p_loja_id: lojaId,
+          p_itens: pItens,
+        });
+      if (error) throw new Error(`Falha na baixa de estoque: ${error.message}`);
       return { success: true };
     },
   });
@@ -1496,9 +1515,13 @@ export function useCreateSangria() {
     mutationFn: async (sangria: any) => {
       const { data, error } = await supabase.from('erp_sangrias').insert(sangria).select().single();
       if (error) throw error;
-return data;
+      return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_feature_flags'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_sangrias'] });
+      qc.invalidateQueries({ queryKey: ['erp_caixa'] });
+      qc.invalidateQueries({ queryKey: ['erp_caixa-aberto'] });
+    },
   });
 }
 
@@ -1584,6 +1607,21 @@ export function useImportarNFe() {
     }) => {
       const { loja_id, usuario_id, nfe, itens, fornecedor_id } = params;
 
+      // 0. Bloquear reimportação da mesma NFe (por chave de acesso)
+      if (nfe.chave_acesso) {
+        const { data: jaImportada, error: dupErr } = await supabase
+          .from('erp_nfe_entrada')
+          .select('id, numero, serie')
+          .eq('chave_acesso', nfe.chave_acesso)
+          .maybeSingle();
+        if (dupErr) throw dupErr;
+        if (jaImportada) {
+          throw new Error(
+            `Esta NFe (chave ${nfe.chave_acesso}) já foi importada anteriormente (NFe ${jaImportada.numero}/${jaImportada.serie}).`
+          );
+        }
+      }
+
       // 1. Criar/buscar fornecedor
       let fId = fornecedor_id;
       if (!fId && nfe.emitente.cnpj) {
@@ -1596,7 +1634,7 @@ export function useImportarNFe() {
         if (existente) {
           fId = existente.id;
         } else {
-          const { data: novo } = await supabase
+          const { data: novo, error: novoErr } = await supabase
             .from('erp_pessoas')
             .insert({
               tipo: nfe.emitente.cnpj.length === 11 ? 'fisica' : 'juridica',
@@ -1610,6 +1648,7 @@ export function useImportarNFe() {
             })
             .select()
             .single();
+          if (novoErr) throw new Error(`Erro ao cadastrar fornecedor: ${novoErr.message}`);
           fId = novo.id;
         }
       }
@@ -1665,6 +1704,11 @@ export function useImportarNFe() {
 
       // 4. Processar cada item
       for (const item of itens) {
+        if (!item.quantidade || Number(item.quantidade) <= 0) {
+          throw new Error(
+            `Item ${item.numero_item} (${item.nome}) tem quantidade inválida (${item.quantidade}).`
+          );
+        }
         let produtoId = item.produto_id;
 
         // Criar produto se no existir
@@ -1692,34 +1736,43 @@ export function useImportarNFe() {
           produtoId = novoProduto.id;
         } else {
           // Atualizar preo de custo se necessrio
-          await supabase
+          const { error: precoErr } = await supabase
             .from('erp_produtos')
             .update({
               preco_custo: item.valor_unitario,
               updated_at: new Date().toISOString(),
             })
             .eq('id', produtoId);
+          if (precoErr) {
+            throw new Error(`Erro ao atualizar custo do produto "${item.nome}": ${precoErr.message}`);
+          }
         }
 
         // Criar item da compra
-        await supabase.from('erp_compra_itens').insert({
+        const { error: compraItemErr } = await supabase.from('erp_compra_itens').insert({
           compra_id: compra.id,
           produto_id: produtoId,
           preco_custo: item.valor_unitario,
           quantidade: item.quantidade,
           subtotal: item.valor_total,
         });
+        if (compraItemErr) {
+          throw new Error(`Erro ao registrar item da compra "${item.nome}": ${compraItemErr.message}`);
+        }
 
         // Adicionar ao estoque
-        const { data: estoqueExistente } = await supabase
+        const { data: estoqueExistente, error: estoqueSelErr } = await supabase
           .from('erp_estoque')
           .select('quantidade')
           .eq('produto_id', produtoId)
           .eq('loja_id', loja_id)
           .maybeSingle();
+        if (estoqueSelErr) {
+          throw new Error(`Erro ao consultar estoque de "${item.nome}": ${estoqueSelErr.message}`);
+        }
 
         if (estoqueExistente) {
-          await supabase
+          const { error: estoqueUpdErr } = await supabase
             .from('erp_estoque')
             .update({
               quantidade: estoqueExistente.quantidade + item.quantidade,
@@ -1727,16 +1780,22 @@ export function useImportarNFe() {
             })
             .eq('produto_id', produtoId)
             .eq('loja_id', loja_id);
+          if (estoqueUpdErr) {
+            throw new Error(`Erro ao atualizar estoque de "${item.nome}": ${estoqueUpdErr.message}`);
+          }
         } else {
-          await supabase.from('erp_estoque').insert({
+          const { error: estoqueInsErr } = await supabase.from('erp_estoque').insert({
             produto_id: produtoId,
             loja_id,
             quantidade: item.quantidade,
           });
+          if (estoqueInsErr) {
+            throw new Error(`Erro ao criar estoque de "${item.nome}": ${estoqueInsErr.message}`);
+          }
         }
 
         // Registrar item da NFe de entrada
-        await supabase.from('erp_nfe_entrada_itens').insert({
+        const { error: nfeItemErr } = await supabase.from('erp_nfe_entrada_itens').insert({
           nfe_entrada_id: nfeEntrada.id,
           produto_id: produtoId,
           numero_item: item.numero_item,
@@ -1759,6 +1818,9 @@ export function useImportarNFe() {
           estoque_atualizado: true,
           custo_unitario_final: item.valor_unitario + (item.ipi_valor || 0) / item.quantidade,
         });
+        if (nfeItemErr) {
+          throw new Error(`Erro ao registrar item da NFe "${item.nome}": ${nfeItemErr.message}`);
+        }
       }
 
       return { nfeEntrada, compra };
@@ -1832,12 +1894,16 @@ export function useCreateRemessa() {
           .insert(itensParaInserir);
         if (itensErr) throw itensErr;
 
-        // Atualizar valor total
+        // Atualizar valor total (produtos + frete + seguro)
         const total = itens.reduce((s: number, i: any) => s + Number(i.subtotal || 0), 0);
-        await supabase
+        const { error: totalErr } = await supabase
           .from('erp_remessas')
-          .update({ valor_produtos: total, valor_total: total + Number(remessa.valor_frete || 0) })
+          .update({
+            valor_produtos: total,
+            valor_total: total + Number(remessa.valor_frete || 0) + Number(remessa.valor_seguro || 0),
+          })
           .eq('id', novaRemessa.id);
+        if (totalErr) throw totalErr;
       }
 
       return novaRemessa;
@@ -1932,6 +1998,7 @@ export function useEmitirNFeVenda() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['erp_notas_fiscais'] });
+      qc.invalidateQueries({ queryKey: ['erp_notas_fiscais-venda-ids'] });
       qc.invalidateQueries({ queryKey: ['erp_vendas'] });
     },
   });
@@ -1941,86 +2008,59 @@ export function useReceberRemessa() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ remessa_id, usuario_id }: { remessa_id: string; usuario_id: string }) => {
-      const { data: remessa, error } = await supabase
-        .from('erp_remessas')
-        .select(`*, itens:erp_remessa_itens(*)`)
-        .eq('id', remessa_id)
-        .single();
-      if (error) throw error;
-      if (!remessa) throw new Error('Remessa no encontrada');
-      if (!['nf_emitida', 'em_transito'].includes(remessa.status)) {
-        throw new Error(`Status invlido para receber: ${remessa.status}`);
-      }
-
-      // Adicionar ao estoque destino
-      for (const item of remessa.itens) {
-        const { data: estoque } = await supabase
-          .from('erp_estoque')
-          .select('quantidade')
-          .eq('produto_id', item.produto_id)
-          .eq('loja_id', remessa.loja_destino_id)
-          .maybeSingle();
-
-        if (estoque) {
-          await supabase
-            .from('erp_estoque')
-            .update({
-              quantidade: estoque.quantidade + item.quantidade,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('produto_id', item.produto_id)
-            .eq('loja_id', remessa.loja_destino_id);
-        } else {
-          await supabase.from('erp_estoque').insert({
-            produto_id: item.produto_id,
-            loja_id: remessa.loja_destino_id,
-            quantidade: item.quantidade,
-          });
-        }
-
-        // Marcar item como recebido
-        await supabase
-          .from('erp_remessa_itens')
-          .update({
-            estoque_destino_adicionado: true,
-            data_entrada_destino: new Date().toISOString(),
-          })
-          .eq('id', item.id);
-      }
-
-      // Atualizar status da remessa
-      await supabase
+      // Update condicional: só transiciona se ainda estiver em status recebível.
+      // Evita recebimento duplicado por dois usuários simultâneos.
+      const { data: atualizadas, error: statusErr } = await supabase
         .from('erp_remessas')
         .update({
           status: 'recebida',
           data_recebimento: new Date().toISOString(),
           recebido_por: usuario_id,
         })
-        .eq('id', remessa_id);
+        .eq('id', remessa_id)
+        .in('status', ['nf_emitida', 'em_transito'])
+        .select();
+      if (statusErr) throw statusErr;
+      if (!atualizadas || atualizadas.length === 0) {
+        throw new Error('Remessa não está em status recebível (já foi recebida ou cancelada).');
+      }
+      const remessaAtual = atualizadas[0];
+
+      const { data: itensRemessa, error: itensErr } = await supabase
+        .from('erp_remessa_itens')
+        .select('*')
+        .eq('remessa_id', remessa_id);
+      if (itensErr) throw itensErr;
+
+      // Crédito de estoque atômico via RPC no banco
+      const pItens = (itensRemessa ?? [])
+        .filter((i: any) => i.produto_id && Number(i.quantidade) > 0)
+        .map((i: any) => ({ produto_id: i.produto_id, quantidade: Number(i.quantidade) }));
+      if (pItens.length > 0) {
+        const { error: creditoErr } = await supabase
+          .schema('erp')
+          .rpc('creditar_estoque_atomico', {
+            p_loja_id: remessaAtual.loja_destino_id,
+            p_itens: pItens,
+          });
+        if (creditoErr) throw new Error(`Falha ao creditar estoque no destino: ${creditoErr.message}`);
+      }
+
+      // Marcar itens como recebidos
+      const { error: marcaErr } = await supabase
+        .from('erp_remessa_itens')
+        .update({
+          estoque_destino_adicionado: true,
+          data_entrada_destino: new Date().toISOString(),
+        })
+        .eq('remessa_id', remessa_id);
+      if (marcaErr) throw marcaErr;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['erp_remessas'] });
       qc.invalidateQueries({ queryKey: ['erp_estoque'] });
     },
   });
-}
-
-/**
- * Gera chave de acesso mock (44 dgitos).
- * NOTA: Em produo, a chave real deve vir da SEFAZ via biblioteca de integrao.
- */
-function gerarChaveAcessoMock(uf: string): string {
-  const ufCode = String(parseInt(uf, 36) || 35).padStart(2, '0');
-  const ano = new Date().getFullYear().toString().slice(-2);
-  const mes = String(new Date().getMonth() + 1).padStart(2, '0');
-  const random = Math.floor(Math.random() * 100000000000000).toString().padStart(14, '0');
-  const cnpj = '00000000000000';
-  const modelo = '55';
-  const serie = '001';
-  const numero = String(Math.floor(Math.random() * 999999999)).padStart(9, '0');
-  const tipoEmissao = '1';
-  const codigo = Math.floor(Math.random() * 99999999).toString().padStart(8, '0');
-  return (ufCode + ano + mes + cnpj + modelo + serie + numero + tipoEmissao + codigo).padEnd(44, '0').slice(0, 44);
 }
 
 export function useEntradasExtras(caixaId?: string) {
@@ -2463,6 +2503,27 @@ export function useNotasFiscais(filters?: { lojaId?: string; tipo?: string; stat
       const { data, error } = await query;
       if (error) throw error;
       return data ?? [];
+    },
+  });
+}
+
+/**
+ * Busca apenas os venda_id de TODAS as notas da loja (sem filtro de
+ * status/tipo e sem limit) — usado para saber quais vendas já têm NF-e.
+ */
+export function useNotasFiscaisVendaIds(lojaId?: string) {
+  return useQuery<string[]>({
+    queryKey: ['erp_notas_fiscais-venda-ids', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let query = supabase
+        .from('erp_notas_fiscais')
+        .select('venda_id')
+        .not('venda_id', 'is', null);
+      if (lojaId) query = query.eq('loja_id', lojaId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data ?? []).map((n: any) => n.venda_id).filter(Boolean);
     },
   });
 }

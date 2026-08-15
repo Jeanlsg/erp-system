@@ -59,9 +59,6 @@ createRoot(document.getElementById("root")!).render(
       <BrowserRouter
         future={{
           v7_relativeSplatPath: true,
-          v7_fetcherPersist: true,
-          v7_normalizeFormMethod: true,
-          v7_partialHydration: true,
         }}
       >
         <App />

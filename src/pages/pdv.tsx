@@ -5,19 +5,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Calculator, Plus, Trash2, Loader2, ShoppingCart, Package,
-  User, CreditCard, Banknote, QrCode, Lock, Unlock, Settings,
-  ChevronLeft, Check, X, AlertCircle, Receipt, ArrowDownToLine,
+  CreditCard, Banknote, QrCode, Lock, Unlock, Settings,
+  Check, X, AlertCircle, Receipt,
 } from "lucide-react";
 import {
   useProdutos, useClientes, useCaixaAberto, useCreateCaixa, useFecharCaixa,
-  useCreateVenda, useBaixarEstoqueVenda, useCaixas, useSangrias,
-  useCreateSangria, useCreateEntradaExtra, useCaixaConfig, isSupabaseConfigured,
+  useCreateVenda, useBaixarEstoqueVenda, useCaixas,
+  useCreateSangria, useCreateEntradaExtra, useCaixaConfig, useUpdateCaixaConfig,
+  isSupabaseConfigured,
 } from "@/lib/supabase-queries";
+import { toast } from "sonner";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { useAuth } from "@/lib/store/auth-store";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
@@ -42,13 +43,16 @@ export function PDVPage() {
   const fecharCaixa = useFecharCaixa();
   const createSangria = useCreateSangria();
   const createEntrada = useCreateEntradaExtra();
+  const updateCaixaConfig = useUpdateCaixaConfig();
 
   // Queries
   const { data: produtos = [] } = useProdutos({ lojaId: lojaId ?? undefined });
   const { data: clientes = [] } = useClientes();
   const { data: caixaAberto } = useCaixaAberto(user?.id);
-  const { data: sangrias = [] } = useSangrias(caixaAberto?.id);
+  const { data: caixas = [] } = useCaixas(lojaId ?? undefined);
   const { data: configCaixa } = useCaixaConfig();
+
+  const caixasAbertos = caixas.filter((c) => c.status === "aberto");
 
   // Estados principais
   const [search, setSearch] = useState("");
@@ -63,8 +67,6 @@ export function PDVPage() {
   const [acrescimo, setAcrescimo] = useState("");
 
   // Estados de abertura de caixa
-  const [numeroCaixa, setNumeroCaixa] = useState(1);
-  const [senhaOperador, setSenhaOperador] = useState("");
   const [saldoInicial, setSaldoInicial] = useState("");
   const [caixaSelecionado, setCaixaSelecionado] = useState<number | null>(null);
 
@@ -83,7 +85,16 @@ export function PDVPage() {
   const totalDesconto = descontoPercentual ? subtotal * (desc / 100) : desc;
   const total = Math.max(0, subtotal - totalDesconto + acresc);
   const valorRec = parseFloat(valorRecebido) || 0;
-  const troco = Math.max(0, valorRec - total);
+  // Troco só existe em pagamento em dinheiro
+  const troco = forma === "dinheiro" ? Math.max(0, valorRec - total) : 0;
+
+  // Valor esperado em gaveta (para o fechamento de caixa)
+  const valorEsperadoCaixa =
+    (caixaAberto?.valor_inicial || 0) +
+    (caixaAberto?.total_vendas || 0) -
+    (caixaAberto?.total_sangrias || 0) +
+    (caixaAberto?.total_entradas_extras || 0) -
+    (caixaAberto?.valor_troco || 0);
 
   // Carregar config de caixas
   useEffect(() => {
@@ -162,26 +173,33 @@ export function PDVPage() {
     });
     setModalAbertura(false);
     setSaldoInicial("");
-    setSenhaOperador("");
   };
 
-  // Fechar caixa
+  // Fechar caixa (valor final = valor contado em gaveta pelo operador)
+  const [valorContado, setValorContado] = useState("");
+
   const handleFecharCaixa = async () => {
     if (!caixaAberto) return;
-    await fecharCaixa.mutateAsync({
-      caixaId: caixaAberto.id,
-      valorFinal: total + parseFloat(saldoInicial || "0"),
-      valorDinheiro: forma === "dinheiro" ? total : 0,
-      valorPix: forma === "pix" ? total : 0,
-      valorCartaoCredito: forma === "cartao_credito" ? total : 0,
-      valorCartaoDebito: forma === "cartao_debito" ? total : 0,
-      valorCrediario: forma === "crediario" ? total : 0,
-      valorBoleto: forma === "boleto" ? total : 0,
-      observacoes: "",
-      encerradoPor: user?.id,
-    });
-    setModalFechamento(false);
-    limparCarrinho();
+    const contado = parseFloat(valorContado);
+    if (isNaN(contado) || contado < 0) {
+      toast.error("Informe o valor contado em gaveta para fechar o caixa.");
+      return;
+    }
+    try {
+      await fecharCaixa.mutateAsync({
+        caixaId: caixaAberto.id,
+        valorFinal: contado,
+        valorDinheiro: contado,
+        observacoes: "",
+        encerradoPor: user?.id,
+      });
+      setModalFechamento(false);
+      setValorContado("");
+      limparCarrinho();
+      toast.success("Caixa fechado com sucesso.");
+    } catch (err: any) {
+      toast.error(`Erro ao fechar caixa: ${err?.message ?? "erro desconhecido"}`);
+    }
   };
 
   // Finalizar venda
@@ -228,8 +246,13 @@ export function PDVPage() {
 
       limparCarrinho();
       setModalConfirmarVenda(false);
-    } catch (err) {
+      toast.success("Venda finalizada com sucesso.");
+    } catch (err: any) {
       console.error("Erro ao finalizar venda:", err);
+      toast.error(
+        `Erro ao finalizar venda: ${err?.message ?? "erro desconhecido"}. Verifique antes de tentar novamente.`,
+        { duration: 10000 }
+      );
     }
   };
 
@@ -585,7 +608,10 @@ export function PDVPage() {
                       variant={forma === value ? "default" : "outline"}
                       size="sm"
                       className="h-auto py-2 flex-col gap-1"
-                      onClick={() => setForma(value as any)}
+                      onClick={() => {
+                        if (forma !== value) setValorRecebido("");
+                        setForma(value as any);
+                      }}
                     >
                       <Icon className="h-4 w-4" />
                       <span className="text-xs">{label}</span>
@@ -706,7 +732,7 @@ export function PDVPage() {
             <Button variant="outline" onClick={() => setModalConfirmarVenda(false)}>
               Voltar
             </Button>
-            <Button onClick={handleFinalizarVenda} disabled={createVenda.isPending} className="bg-green-600 hover:bg-green-700">
+            <Button onClick={handleFinalizarVenda} disabled={createVenda.isPending || baixarEstoque.isPending} className="bg-green-600 hover:bg-green-700">
               {createVenda.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4 mr-1" />}
               Confirmar Venda
             </Button>
@@ -723,7 +749,7 @@ export function PDVPage() {
           <div className="py-4 space-y-3">
             <div className="flex justify-between">
               <span>Caixa #{caixaAberto?.numero_caixa}:</span>
-              <span>{caixaAberto?.usuario?.nome || "Operador"}</span>
+              <span>{user?.nome || "Operador"}</span>
             </div>
             <div className="flex justify-between">
               <span>Abertura:</span>
@@ -750,23 +776,36 @@ export function PDVPage() {
               <span className="text-red-600">-{brl(caixaAberto?.valor_troco || 0)}</span>
             </div>
             <div className="flex justify-between font-bold text-lg border-t pt-2">
-              <span>Saldo Final:</span>
-              <span className="text-primary">
-                {brl(
-                  (caixaAberto?.valor_inicial || 0) +
-                  (caixaAberto?.total_vendas || 0) -
-                  (caixaAberto?.total_sangrias || 0) +
-                  (caixaAberto?.total_entradas_extras || 0) -
-                  (caixaAberto?.valor_troco || 0)
-                )}
-              </span>
+              <span>Valor Esperado em Gaveta:</span>
+              <span className="text-primary">{brl(valorEsperadoCaixa)}</span>
+            </div>
+            <div className="border-t pt-3">
+              <Label>Valor contado em gaveta</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="R$ 0,00"
+                value={valorContado}
+                onChange={(e) => setValorContado(e.target.value)}
+                className="mt-1"
+              />
+              {valorContado !== "" && !isNaN(parseFloat(valorContado)) && (
+                <p className={`text-xs mt-1 ${parseFloat(valorContado) - valorEsperadoCaixa === 0 ? "text-green-600" : "text-orange-600"}`}>
+                  Diferença: {brl(parseFloat(valorContado) - valorEsperadoCaixa)}
+                </p>
+              )}
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setModalFechamento(false)}>
               Voltar
             </Button>
-            <Button variant="destructive" onClick={handleFecharCaixa} disabled={fecharCaixa.isPending}>
+            <Button
+              variant="destructive"
+              onClick={handleFecharCaixa}
+              disabled={fecharCaixa.isPending || valorContado === ""}
+            >
               {fecharCaixa.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Fechar Caixa"}
             </Button>
           </DialogFooter>
@@ -858,7 +897,20 @@ export function PDVPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setModalConfigCaixa(false)}>Cancelar</Button>
-            <Button onClick={() => setModalConfigCaixa(false)}>Salvar</Button>
+            <Button
+              disabled={updateCaixaConfig.isPending}
+              onClick={async () => {
+                try {
+                  await updateCaixaConfig.mutateAsync(quantidadeCaixas);
+                  setModalConfigCaixa(false);
+                  toast.success("Configuração de caixas salva.");
+                } catch (err: any) {
+                  toast.error(`Erro ao salvar configuração: ${err?.message ?? "erro desconhecido"}`);
+                }
+              }}
+            >
+              {updateCaixaConfig.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -870,7 +922,7 @@ export function PDVPage() {
             <DialogTitle>Caixas em Aberto</DialogTitle>
           </DialogHeader>
           <div className="py-4">
-            {sangrias.length === 0 ? (
+            {caixasAbertos.length === 0 ? (
               <p className="text-center text-muted-foreground py-8">
                 Nenhum caixa aberto no momento.
               </p>
@@ -886,15 +938,17 @@ export function PDVPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr className="border-b">
-                    <td className="p-2">#{caixaAberto?.numero_caixa || "-"}</td>
-                    <td className="p-2">{caixaAberto?.usuario?.nome || "-"}</td>
-                    <td className="p-2">
-                      {caixaAberto?.data_abertura ? new Date(caixaAberto.data_abertura).toLocaleString("pt-BR") : "-"}
-                    </td>
-                    <td className="p-2">{brl(caixaAberto?.valor_inicial || 0)}</td>
-                    <td className="p-2 text-green-600">{brl(caixaAberto?.total_vendas || 0)}</td>
-                  </tr>
+                  {caixasAbertos.map((c) => (
+                    <tr key={c.id} className="border-b">
+                      <td className="p-2">#{c.numero_caixa || "-"}</td>
+                      <td className="p-2">{(c as any).usuario?.nome || "-"}</td>
+                      <td className="p-2">
+                        {c.data_abertura ? new Date(c.data_abertura).toLocaleString("pt-BR") : "-"}
+                      </td>
+                      <td className="p-2">{brl(c.valor_inicial || 0)}</td>
+                      <td className="p-2 text-green-600">{brl(c.total_vendas || 0)}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             )}

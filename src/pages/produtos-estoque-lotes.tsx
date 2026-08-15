@@ -24,8 +24,8 @@ import {
 import {
   Package, Search, Loader2, Save, Plus,
   Edit, Trash2, Boxes, Calendar, Barcode,
-  Tag, Filter, Tags, AlertCircle, Clock,
-  TrendingDown, TrendingUp, Check, X,
+  Tag, AlertCircle, Clock,
+  TrendingUp,
   ChevronLeft, ChevronRight, ArrowDownToLine,
 } from "lucide-react";
 import {
@@ -301,7 +301,7 @@ export function ProdutosEstoqueLotesPage() {
               return (
                 <Button
                   key={acao.id}
-                  variant={acao.primary ? "default" : "outline"}
+                  variant={"primary" in acao && acao.primary ? "default" : "outline"}
                   size="sm"
                   onClick={() => handleAcao(acao.id)}
                   className="font-medium"

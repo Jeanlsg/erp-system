@@ -8,7 +8,7 @@
 //   5. Confirmar: cria produtos novos, atualiza estoque, cria compra
 // ============================================================
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Card, CardContent, CardHeader, CardTitle, CardDescription,
 } from "@/components/ui/card";
@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Upload, FileText, Loader2, CheckCircle2, AlertTriangle,
-  Package, Building2, ArrowRight, Save, X, Edit2,
+  Package, Building2, Save, X, Edit2,
 } from "lucide-react";
 import {
   useProdutos, useClientes, useImportarNFe,
@@ -38,7 +38,6 @@ export function ImportarNFePage() {
   const { data: pessoas = [] } = useClientes();
   const importarNFe = useImportarNFe();
 
-  const [xmlContent, setXmlContent] = useState<string | null>(null);
   const [parsed, setParsed] = useState<NFeParsed | null>(null);
   const [itens, setItens] = useState<NFeItemImportacao[]>([]);
   const [fornecedorId, setFornecedorId] = useState<string | null>(null);
@@ -49,7 +48,6 @@ export function ImportarNFePage() {
 
   // Reset
   const reset = () => {
-    setXmlContent(null);
     setParsed(null);
     setItens([]);
     setFornecedorId(null);
@@ -71,7 +69,6 @@ export function ImportarNFePage() {
       }
       try {
         const parsed = parseNFeXML(xml);
-        setXmlContent(xml);
         setParsed(parsed);
       } catch (err: any) {
         setError(`Erro ao processar XML: ${err.message}`);
@@ -81,8 +78,17 @@ export function ImportarNFePage() {
   };
 
   // 2. Auto-matching ao carregar XML
+  // Só remapeia quando o XML parseado muda: refetches de produtos/pessoas
+  // não podem resetar as margens já editadas pelo usuário
+  const parsedKeyRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!parsed) return;
+    if (!parsed) {
+      parsedKeyRef.current = null;
+      return;
+    }
+    const parsedKey = parsed.chave_acesso || `${parsed.numero}-${parsed.serie}`;
+    if (parsedKeyRef.current === parsedKey) return;
+    parsedKeyRef.current = parsedKey;
 
     // Auto-match fornecedor por CNPJ
     if (parsed.emitente.cnpj) {
