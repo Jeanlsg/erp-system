@@ -234,6 +234,7 @@ export function UsuariosPage() {
           user_id?: string;
           error?: string;
           invite_sent?: boolean;
+          invite_error?: string;
         }>("erp-create-user", {
           body: {
             email: formUsuario.email,
@@ -246,6 +247,7 @@ export function UsuariosPage() {
                 ? formUsuario.senha
                 : null,
             send_invite: !formUsuario.definirSenha,
+            redirect_base: window.location.origin,
           },
         });
         if (error) throw error;
@@ -260,7 +262,13 @@ export function UsuariosPage() {
             `Usuário criado! Email de convite enviado para ${formUsuario.email}`
           );
         } else {
-          toast.success("Usuário criado com sucesso");
+          // Usuário existe no Auth, mas sem senha e sem convite: precisa saber.
+          toast.warning(
+            `Usuário criado, mas o e-mail de convite não saiu${
+              (data as any).invite_error ? `: ${(data as any).invite_error}` : ""
+            }. Use "Enviar e-mail de redefinição de senha" na lista.`,
+            { duration: 12000 }
+          );
         }
       }
       setModalUsuario(false);

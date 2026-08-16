@@ -27,6 +27,7 @@ interface CreateUserPayload {
   telefone?: string | null;
   senha?: string | null;
   send_invite?: boolean;
+  redirect_base?: string;   // origem do app que está criando o usuário
 }
 
 interface CreateUserResponse {
@@ -35,6 +36,7 @@ interface CreateUserResponse {
   email?: string;
   error?: string;
   invite_sent?: boolean;
+  invite_error?: string;
 }
 
 const corsHeaders = {
@@ -216,15 +218,30 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     // 9. Email de convite (apenas se não tem senha)
+    //
+    // O destino vem do PRÓPRIO front do ERP (window.location.origin), porque
+    // SITE_URL no container é compartilhada com o CRM: defini-la aqui faria os
+    // links do CRM apontarem para o ERP. Quem valida o destino é o GoTrue,
+    // contra a GOTRUE_URI_ALLOW_LIST — então não há risco de redirect aberto.
     let inviteSent = false;
+    let inviteError: string | null = null;
     if (!body.senha && body.send_invite !== false) {
-      const { error: inviteError } = await adminClient.auth.resetPasswordForEmail(
-        body.email,
-        {
-          redirectTo: `${Deno.env.get("SITE_URL") || "http://localhost:3000"}/auth/redefinir-senha`,
-        }
-      );
-      inviteSent = !inviteError;
+      const base = String(body.redirect_base ?? "").replace(/\/+$/, "");
+      if (!base) {
+        inviteError = "redirect_base não informado pelo aplicativo";
+      } else if (!/^https?:\/\//.test(base)) {
+        inviteError = "redirect_base inválido";
+      } else {
+        const { error: errConvite } = await adminClient.auth.resetPasswordForEmail(
+          body.email,
+          { redirectTo: `${base}/auth/redefinir-senha` },
+        );
+        if (errConvite) inviteError = errConvite.message;
+        inviteSent = !errConvite;
+      }
+      if (inviteError) {
+        console.error(`convite não enviado para ${body.email}: ${inviteError}`);
+      }
     }
 
     // 10. Resposta de sucesso
@@ -233,6 +250,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       user_id: newUser.user.id,
       email: body.email,
       invite_sent: inviteSent,
+      ...(inviteError ? { invite_error: inviteError } : {}),
     };
 
     return jsonResponse(response, 200);
