@@ -1,5 +1,5 @@
 // ============================================================================
-// Edge Function: testar-certificado
+// Edge Function: erp-testar-certificado
 //
 // Valida um certificado digital A1 (.pfx / PKCS#12) e devolve os dados do
 // titular. A validação REAL acontece no nfe-service (PHP/OpenSSL), que é quem

@@ -216,7 +216,7 @@ export function UsuariosPage() {
           await supabase.functions.invoke<{
             success: boolean;
             error?: string;
-          }>("reset-password", {
+          }>("erp-reset-password", {
             body: { user_id: editId },
           });
           // O reset-password apenas envia email; vamos chamar admin API em um próximo passo
@@ -234,7 +234,7 @@ export function UsuariosPage() {
           user_id?: string;
           error?: string;
           invite_sent?: boolean;
-        }>("create-user", {
+        }>("erp-create-user", {
           body: {
             email: formUsuario.email,
             nome: formUsuario.nome,
@@ -276,7 +276,7 @@ export function UsuariosPage() {
       const { data, error } = await supabase.functions.invoke<{
         success: boolean;
         error?: string;
-      }>("reset-password", {
+      }>("erp-reset-password", {
         body: { user_id: id },
       });
       if (error) throw error;
@@ -298,7 +298,7 @@ export function UsuariosPage() {
       const { data, error } = await supabase.functions.invoke<{
         success: boolean;
         error?: string;
-      }>("delete-user", {
+      }>("erp-delete-user", {
         body: { user_id: u.id, hard_delete: true },
       });
       if (error) throw error;

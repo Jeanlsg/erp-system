@@ -1,4 +1,4 @@
-// Edge Function: reset-password
+// Edge Function: erp-reset-password
 // Envia email de redefinição de senha para um usuário (via Resend SMTP)
 // APENAS admins podem chamar esta função
 //

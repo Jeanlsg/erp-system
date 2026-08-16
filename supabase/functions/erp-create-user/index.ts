@@ -1,4 +1,4 @@
-// Edge Function: create-user
+// Edge Function: erp-create-user
 // Cria um novo usuário no Supabase Auth + erp_usuarios
 // APENAS admins podem chamar esta função
 //

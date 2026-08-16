@@ -1,5 +1,5 @@
 // ============================================================================
-// Edge Function: eventos-fiscais
+// Edge Function: erp-eventos-fiscais
 //
 // Eventos da NF-e/NFC-e que não são emissão:
 //   acao='cancelar'   → cancela a nota na SEFAZ (prazo legal: 24h para NF-e)

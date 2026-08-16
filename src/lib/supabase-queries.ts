@@ -1944,7 +1944,7 @@ export function useEmitirNFeRemessa() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ remessa_id, loja_id }: { remessa_id: string; loja_id: string }) => {
-      const { data, error } = await supabase.functions.invoke('emitir-nfe', {
+      const { data, error } = await supabase.functions.invoke('erp-emitir-nfe', {
         body: { remessa_id, loja_id },
       });
       if (error) {
@@ -1978,7 +1978,7 @@ export function useEmitirNFeVenda() {
     mutationFn: async ({
       venda_id, loja_id, tipo = 'nfe',
     }: { venda_id: string; loja_id: string; tipo?: 'nfe' | 'nfce' }) => {
-      const { data, error } = await supabase.functions.invoke('emitir-nfe', {
+      const { data, error } = await supabase.functions.invoke('erp-emitir-nfe', {
         body: { venda_id, loja_id, tipo },
       });
       if (error) {
@@ -4292,7 +4292,7 @@ export function useCancelarNFe() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ nota_id, justificativa }: { nota_id: string; justificativa: string }) => {
-      const { data, error } = await supabase.functions.invoke('eventos-fiscais', {
+      const { data, error } = await supabase.functions.invoke('erp-eventos-fiscais', {
         body: { acao: 'cancelar', nota_id, justificativa },
       });
       if (error) throw new Error(await erroEdgeFunction(error, 'falha ao cancelar'));
@@ -4309,7 +4309,7 @@ export function useCartaCorrecao() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ nota_id, correcao }: { nota_id: string; correcao: string }) => {
-      const { data, error } = await supabase.functions.invoke('eventos-fiscais', {
+      const { data, error } = await supabase.functions.invoke('erp-eventos-fiscais', {
         body: { acao: 'cce', nota_id, correcao },
       });
       if (error) throw new Error(await erroEdgeFunction(error, 'falha na carta de correção'));
@@ -4326,7 +4326,7 @@ export function useInutilizarNumeracao() {
       loja_id: string; serie: number; numero_inicial: number;
       numero_final: number; justificativa: string; modelo?: number;
     }) => {
-      const { data, error } = await supabase.functions.invoke('eventos-fiscais', {
+      const { data, error } = await supabase.functions.invoke('erp-eventos-fiscais', {
         body: { acao: 'inutilizar', ...params },
       });
       if (error) throw new Error(await erroEdgeFunction(error, 'falha na inutilização'));
@@ -4340,7 +4340,7 @@ export function useEmitirDevolucao() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ nota_id, loja_id }: { nota_id: string; loja_id: string }) => {
-      const { data, error } = await supabase.functions.invoke('emitir-nfe', {
+      const { data, error } = await supabase.functions.invoke('erp-emitir-nfe', {
         body: { devolucao_de: nota_id, loja_id },
       });
       if (error) throw new Error(await erroEdgeFunction(error, 'falha na devolução'));

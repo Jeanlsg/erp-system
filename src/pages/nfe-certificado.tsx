@@ -116,7 +116,7 @@ export function NfeCertificadoPage() {
         new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
       );
 
-      const { data, error } = await supabase.functions.invoke("testar-certificado", {
+      const { data, error } = await supabase.functions.invoke("erp-testar-certificado", {
         body: {
           arquivo_base64: base64,
           arquivo_nome: arquivoFile.name,

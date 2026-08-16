@@ -1,5 +1,5 @@
 // ============================================================================
-// Edge Function: emitir-nfe
+// Edge Function: erp-emitir-nfe
 // Orquestra a emissão REAL de NF-e via microserviço nfe-service (sped-nfe).
 //
 // Body: { venda_id?: string, remessa_id?: string, loja_id: string, tipo?: 'nfe'|'nfce' }

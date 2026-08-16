@@ -1,4 +1,4 @@
-// Edge Function: delete-user
+// Edge Function: erp-delete-user
 // Exclui (ou desativa) um usuário do Supabase Auth
 // APENAS admins podem chamar esta função
 //
