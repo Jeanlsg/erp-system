@@ -62,10 +62,13 @@ Deno.serve(async (req) => {
       return json(403, { erro: "sem permissão para emitir NF-e (requer admin/gerente)" });
     }
 
-    const { venda_id, remessa_id, loja_id, tipo } = await req.json();
-    if (!loja_id || (!venda_id && !remessa_id)) {
-      return json(422, { erro: "informe loja_id e venda_id OU remessa_id" });
+    const { venda_id, remessa_id, loja_id, tipo, devolucao_de } = await req.json();
+    if (!loja_id || (!venda_id && !remessa_id && !devolucao_de)) {
+      return json(422, { erro: "informe loja_id e venda_id, remessa_id OU devolucao_de" });
     }
+
+    // Devolução: NF-e de ENTRADA (finNFe=4) referenciando a nota original.
+    const isDevolucao = !!devolucao_de;
 
     // NFC-e (modelo 65) é o cupom do varejo presencial: só para venda.
     const tipoDoc: "nfe" | "nfce" = tipo === "nfce" ? "nfce" : "nfe";
@@ -75,10 +78,13 @@ Deno.serve(async (req) => {
     if (isNFCe && remessa_id) {
       return json(422, { erro: "remessa não pode ser emitida como NFC-e — use NF-e modelo 55" });
     }
+    if (isNFCe && isDevolucao) {
+      return json(422, { erro: "devolução exige NF-e modelo 55 (NFC-e não comporta finalidade 4)" });
+    }
 
     // ---------------- 1b. Idempotência: bloquear emissão duplicada ----------------
     const STATUS_VIGENTES = ["autorizada", "pendente", "processando", "pendente_transmissao"];
-    if (venda_id) {
+    if (venda_id && !isDevolucao) {
       const { data: notaExistente } = await admin
         .from("erp_notas_fiscais")
         .select("id, numero, status, tipo")
@@ -173,7 +179,69 @@ Deno.serve(async (req) => {
     let observacoes = "";
     let totalNota = 0;
 
-    if (remessa_id) {
+    let chaveReferenciada: string | null = null;
+    let notaOriginalId: string | null = null;
+
+    if (isDevolucao) {
+      // Devolução de venda: mesma mercadoria volta, com CFOP de entrada.
+      const { data: original } = await admin
+        .from("erp_notas_fiscais")
+        .select("*, venda:erp_vendas(*, cliente:erp_pessoas(*), itens:erp_venda_itens(*, produto:erp_produtos(*)))")
+        .eq("id", devolucao_de).maybeSingle();
+      if (!original) return json(422, { erro: "nota original não encontrada" });
+      if (original.status !== "autorizada") {
+        return json(422, { erro: `nota original com status "${original.status}" — só nota autorizada pode ser devolvida` });
+      }
+      if (!original.chave_acesso) return json(422, { erro: "nota original sem chave de acesso" });
+
+      const { data: devolucaoExistente } = await admin
+        .from("erp_notas_fiscais").select("id, numero, status")
+        .eq("nota_referenciada_id", devolucao_de)
+        .in("status", STATUS_VIGENTES).limit(1).maybeSingle();
+      if (devolucaoExistente) {
+        return json(409, {
+          erro: `esta nota já possui devolução nº ${devolucaoExistente.numero} (status: ${devolucaoExistente.status})`,
+          nfe_id: devolucaoExistente.id,
+        });
+      }
+
+      const vendaOrig = original.venda;
+      if (!vendaOrig) return json(422, { erro: "nota original sem venda vinculada — devolução automática indisponível" });
+
+      chaveReferenciada = original.chave_acesso;
+      notaOriginalId = original.id;
+      natureza = "DEVOLUCAO DE VENDA";
+      observacoes = `Devolução da NF-e ${original.numero}/${original.serie} — chave ${original.chave_acesso}`;
+
+      const ufCliente = vendaOrig.cliente?.endereco?.uf ?? loja.uf;
+      const interestadualDev = ufCliente !== loja.uf;
+      // Entrada de devolução de venda: 1202 (interna) / 2202 (interestadual)
+      const cfopDev = interestadualDev ? "2202" : "1202";
+
+      destinatario = {
+        cpf_cnpj: vendaOrig.cliente?.cpf_cnpj,
+        nome: vendaOrig.cliente?.nome_razao,
+        endereco: vendaOrig.cliente?.endereco ?? {},
+      };
+      if (!destinatario.cpf_cnpj) {
+        return json(422, { erro: "venda original sem cliente identificado — devolução exige CPF/CNPJ" });
+      }
+
+      itens = (vendaOrig.itens ?? []).filter((i: any) => i.produto_id).map((i: any) => ({
+        codigo: i.produto?.sku ?? i.produto_id,
+        descricao: i.produto?.nome ?? i.nome,
+        ean: i.produto?.codigo_barras,
+        ncm: i.produto?.ncm,
+        cest: i.produto?.cest,
+        cfop: cfopDev,
+        csosn: i.produto?.csosn ?? "102",
+        unidade: i.produto?.unidade ?? "UN",
+        quantidade: Number(i.quantidade),
+        valor_unitario: Number(i.preco_unitario ?? i.preco ?? 0),
+      }));
+      totalNota = Number(original.valor_total ?? vendaOrig.total ?? 0);
+      pagamentos = [{ forma: "90", valor: 0 }];
+    } else if (remessa_id) {
       const { data: remessa } = await admin
         .from("erp_remessas")
         .select("*, origem:erp_lojas!loja_origem_id(*), destino:erp_lojas!loja_destino_id(*), itens:erp_remessa_itens(*, produto:erp_produtos(*))")
@@ -307,7 +375,11 @@ Deno.serve(async (req) => {
       destinatario,
       // CSC só faz sentido na NFC-e — é o que assina o QR Code do cupom
       ...(isNFCe ? { csc: sefaz.csc_token, csc_id: sefaz.csc_id } : {}),
-      nota: { modelo, serie: serieDoc, numero, natureza, observacoes },
+      nota: {
+        modelo, serie: serieDoc, numero, natureza, observacoes,
+        finalidade: isDevolucao ? 4 : 1,
+        ...(chaveReferenciada ? { chave_referenciada: chaveReferenciada } : {}),
+      },
       itens,
       pagamentos,
     };
@@ -398,6 +470,8 @@ Deno.serve(async (req) => {
       tipo: tipoDoc,
       numero,
       serie: serieDoc,
+      finalidade: isDevolucao ? 4 : 1,
+      nota_referenciada_id: notaOriginalId,
       chave_acesso: resultado.chave || null,
       protocolo: resultado.protocolo || null,
       status: resultado.autorizada

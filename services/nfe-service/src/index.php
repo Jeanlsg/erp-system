@@ -102,6 +102,16 @@ function buildXml(array $req): string {
     // Modelo 65 (NFC-e) x 55 (NF-e): mudam impressão, destinatário e QR Code.
     $modelo = (int)($nota['modelo'] ?? 55);
     $isNFCe = $modelo === 65;
+
+    // finNFe: 1=normal 2=complementar 3=ajuste 4=devolução
+    $finalidade   = (int)($nota['finalidade'] ?? 1);
+    $isDevolucao  = $finalidade === 4;
+    if ($isDevolucao && $isNFCe) {
+        out(422, ['erro' => 'devolução exige NF-e modelo 55 (NFC-e não comporta finalidade 4)']);
+    }
+    if ($isDevolucao && empty($nota['chave_referenciada'])) {
+        out(422, ['erro' => 'devolução exige nota.chave_referenciada (chave da NF-e original)']);
+    }
     if ($isNFCe && (empty($req['csc']) || empty($req['csc_id']))) {
         out(422, ['erro' => 'NFC-e exige CSC e CSC id (cadastre em Configurações SEFAZ)']);
     }
@@ -134,20 +144,31 @@ function buildXml(array $req): string {
     $std->serie    = $serie;
     $std->nNF      = $numero;
     $std->dhEmi    = $dhEmi;
-    $std->tpNF     = 1;                                   // saída
+    // Devolução (finNFe=4) é nota de ENTRADA: a mercadoria volta ao emitente
+    $std->tpNF     = $isDevolucao ? 0 : 1;                // 0=entrada 1=saída
     // NFC-e é sempre operação interna
     $std->idDest   = $isNFCe ? 1 : (($ufEmit === $ufDest) ? 1 : 2);
     $std->cMunFG   = (int)($emit['endereco']['codigo_municipio'] ?? 0);
     $std->tpImp    = $isNFCe ? 4 : 1;                     // 4=DANFE NFC-e; 1=DANFE retrato
     $std->tpEmis   = 1;                                   // normal
     $std->tpAmb    = $tpAmb;
-    $std->finNFe   = (int)($nota['finalidade'] ?? 1);     // 1=normal
+    $std->finNFe   = $finalidade;
     // NFC-e: sempre consumidor final e operação presencial
     $std->indFinal = $isNFCe ? 1 : (int)($nota['consumidor_final'] ?? 1);
     $std->indPres  = $isNFCe ? 1 : (int)($nota['presenca'] ?? 1);
     $std->procEmi  = 0;
     $std->verProc  = 'xlife-erp 1.0';
     $make->tagide($std);
+
+    // Devolução referencia a NF-e original (obrigatório para a SEFAZ vincular)
+    if ($isDevolucao) {
+        $std = new stdClass();
+        $std->refNFe = preg_replace('/\D/', '', (string)$nota['chave_referenciada']);
+        if (strlen($std->refNFe) !== 44) {
+            out(422, ['erro' => 'nota.chave_referenciada deve ter 44 dígitos']);
+        }
+        $make->tagrefNFe($std);
+    }
 
     // --- emitente ---
     $std = new stdClass();

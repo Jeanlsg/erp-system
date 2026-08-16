@@ -4234,3 +4234,121 @@ export function useAuditoria(filtros: { tabela?: string; registroId?: string; li
     },
   });
 }
+
+// ========================================
+// EVENTOS FISCAIS (migration 047)
+// cancelamento, carta de correção, inutilização e devolução
+// ========================================
+export function useNfeEventos(notaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_nfe_eventos', notaId],
+    enabled: !!notaId,
+    queryFn: async () => {
+      if (!isSupabaseConfigured() || !notaId) return [];
+      const { data, error } = await supabase
+        .from('erp_nfe_eventos')
+        .select('*')
+        .eq('nota_id', notaId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useInutilizacoes(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_inutilizacoes', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let q = supabase
+        .from('erp_inutilizacoes')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(100);
+      if (lojaId) q = q.eq('loja_id', lojaId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+/** Extrai a mensagem real da Edge Function (que responde com { erro, detalhe }). */
+async function erroEdgeFunction(error: any, fallback: string): Promise<string> {
+  let detalhe = error?.message ?? fallback;
+  try {
+    const ctx = await error?.context?.json?.();
+    if (ctx?.erro) {
+      detalhe = ctx.detalhe?.motivo ? `${ctx.erro}: ${ctx.detalhe.motivo}` : ctx.erro;
+      if (ctx.numeros?.length) detalhe += ` (números: ${ctx.numeros.join(', ')})`;
+      if (ctx.faltas?.length) detalhe += `: ${ctx.faltas.join(', ')}`;
+    }
+  } catch { /* mantém a mensagem padrão */ }
+  return detalhe;
+}
+
+export function useCancelarNFe() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ nota_id, justificativa }: { nota_id: string; justificativa: string }) => {
+      const { data, error } = await supabase.functions.invoke('eventos-fiscais', {
+        body: { acao: 'cancelar', nota_id, justificativa },
+      });
+      if (error) throw new Error(await erroEdgeFunction(error, 'falha ao cancelar'));
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_notas_fiscais'] });
+      qc.invalidateQueries({ queryKey: ['erp_nfe_eventos'] });
+    },
+  });
+}
+
+export function useCartaCorrecao() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ nota_id, correcao }: { nota_id: string; correcao: string }) => {
+      const { data, error } = await supabase.functions.invoke('eventos-fiscais', {
+        body: { acao: 'cce', nota_id, correcao },
+      });
+      if (error) throw new Error(await erroEdgeFunction(error, 'falha na carta de correção'));
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_nfe_eventos'] }),
+  });
+}
+
+export function useInutilizarNumeracao() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: {
+      loja_id: string; serie: number; numero_inicial: number;
+      numero_final: number; justificativa: string; modelo?: number;
+    }) => {
+      const { data, error } = await supabase.functions.invoke('eventos-fiscais', {
+        body: { acao: 'inutilizar', ...params },
+      });
+      if (error) throw new Error(await erroEdgeFunction(error, 'falha na inutilização'));
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_inutilizacoes'] }),
+  });
+}
+
+export function useEmitirDevolucao() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ nota_id, loja_id }: { nota_id: string; loja_id: string }) => {
+      const { data, error } = await supabase.functions.invoke('emitir-nfe', {
+        body: { devolucao_de: nota_id, loja_id },
+      });
+      if (error) throw new Error(await erroEdgeFunction(error, 'falha na devolução'));
+      if (data && data.autorizada === false) {
+        throw new Error(`SEFAZ rejeitou (cStat ${data.cstat}): ${data.motivo}`);
+      }
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_notas_fiscais'] }),
+  });
+}

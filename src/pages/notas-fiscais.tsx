@@ -12,10 +12,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   FileText, Loader2, Filter, Download, Eye,
-  CheckCircle2, Clock, XCircle, Shield,
+  CheckCircle2, Clock, XCircle, Shield, Ban, PenLine, Undo2, ScissorsLineDashed,
 } from "lucide-react";
 import {
-  useNotasFiscais, useNotasFiscaisVendaIds, useVendas, useEmitirNFeVenda, isSupabaseConfigured, supabase,
+  useNotasFiscais, useNotasFiscaisVendaIds, useVendas, useEmitirNFeVenda,
+  useCancelarNFe, useCartaCorrecao, useInutilizarNumeracao, useEmitirDevolucao,
+  useNfeEventos, useInutilizacoes, isSupabaseConfigured, supabase,
 } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
@@ -37,6 +39,18 @@ export function NotasFiscaisPage() {
   const [modalEmitir, setModalEmitir] = useState(false);
   const [vendaSelecionada, setVendaSelecionada] = useState("");
   const emitir = useEmitirNFeVenda();
+
+  // Eventos fiscais
+  const [modalEvento, setModalEvento] = useState<{ nota: any; tipo: "cancelar" | "cce" | "devolucao" } | null>(null);
+  const [textoEvento, setTextoEvento] = useState("");
+  const [modalInutilizar, setModalInutilizar] = useState(false);
+  const [inutForm, setInutForm] = useState({ serie: "1", inicial: "", final: "", modelo: "55", justificativa: "" });
+  const cancelar = useCancelarNFe();
+  const cce = useCartaCorrecao();
+  const inutilizar = useInutilizarNumeracao();
+  const devolver = useEmitirDevolucao();
+  const { data: eventosNota = [] } = useNfeEventos(modalDetalhes?.id);
+  const { data: inutilizacoes = [] } = useInutilizacoes(lojaId ?? undefined);
   const { data: vendas = [] } = useVendas({ lojaId: lojaId ?? undefined });
   // TODAS as notas com venda vinculada (sem filtro de status/tipo, sem limit):
   // a lista filtrada acima não serve para saber quais vendas já têm NF-e
@@ -60,6 +74,54 @@ export function NotasFiscaisPage() {
       toast.error(e.message, { duration: 10000 });
     }
   };
+
+  const abrirEvento = (nota: any, tipo: "cancelar" | "cce" | "devolucao") => {
+    setTextoEvento("");
+    setModalEvento({ nota, tipo });
+  };
+
+  const handleEvento = async () => {
+    if (!modalEvento) return;
+    const { nota, tipo } = modalEvento;
+    try {
+      if (tipo === "devolucao") {
+        if (!lojaId) return;
+        const r = await devolver.mutateAsync({ nota_id: nota.id, loja_id: lojaId });
+        toast.success(`NF-e de devolução nº ${r.numero} autorizada. Protocolo ${r.protocolo}`);
+      } else if (tipo === "cancelar") {
+        await cancelar.mutateAsync({ nota_id: nota.id, justificativa: textoEvento.trim() });
+        toast.success("Nota cancelada na SEFAZ.");
+      } else {
+        const r = await cce.mutateAsync({ nota_id: nota.id, correcao: textoEvento.trim() });
+        toast.success(`Carta de correção nº ${r.sequencia} registrada na SEFAZ.`);
+      }
+      setModalEvento(null);
+      setTextoEvento("");
+    } catch (e: any) {
+      toast.error(e.message, { duration: 12000 });
+    }
+  };
+
+  const handleInutilizar = async () => {
+    if (!lojaId) return;
+    try {
+      const r = await inutilizar.mutateAsync({
+        loja_id: lojaId,
+        modelo: Number(inutForm.modelo),
+        serie: Number(inutForm.serie),
+        numero_inicial: Number(inutForm.inicial),
+        numero_final: Number(inutForm.final),
+        justificativa: inutForm.justificativa.trim(),
+      });
+      toast.success(`Faixa ${r.numero_inicial}–${r.numero_final} inutilizada na SEFAZ.`);
+      setModalInutilizar(false);
+      setInutForm({ serie: "1", inicial: "", final: "", modelo: "55", justificativa: "" });
+    } catch (e: any) {
+      toast.error(e.message, { duration: 12000 });
+    }
+  };
+
+  const eventoPendente = cancelar.isPending || cce.isPending || devolver.isPending;
 
   const STATUS_VARIANT: Record<string, "default" | "destructive" | "outline" | "secondary"> = {
     autorizada: "default",
@@ -142,9 +204,14 @@ export function NotasFiscaisPage() {
             {notas.length} nota(s) emitida(s) pela loja atual
           </p>
         </div>
-        <Button onClick={() => setModalEmitir(true)}>
-          <FileText className="mr-2 h-4 w-4" /> Emitir NF-e
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setModalInutilizar(true)}>
+            <ScissorsLineDashed className="mr-2 h-4 w-4" /> Inutilizar numeração
+          </Button>
+          <Button onClick={() => setModalEmitir(true)}>
+            <FileText className="mr-2 h-4 w-4" /> Emitir NF-e
+          </Button>
+        </div>
       </div>
 
       {/* KPIs */}
@@ -404,6 +471,48 @@ export function NotasFiscaisPage() {
                   <p className="font-mono text-xs break-all bg-muted p-2 rounded">{modalDetalhes.chave_acesso}</p>
                 </div>
 
+                {/* Ações fiscais — só fazem sentido em nota autorizada */}
+                {modalDetalhes.status === "autorizada" && (
+                  <div className="flex flex-wrap gap-2 border-y py-3">
+                    <Button size="sm" variant="destructive" onClick={() => abrirEvento(modalDetalhes, "cancelar")}>
+                      <Ban className="mr-2 h-4 w-4" /> Cancelar nota
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => abrirEvento(modalDetalhes, "cce")}>
+                      <PenLine className="mr-2 h-4 w-4" /> Carta de correção
+                    </Button>
+                    {modalDetalhes.tipo === "nfe" && modalDetalhes.venda_id && (
+                      <Button size="sm" variant="outline" onClick={() => abrirEvento(modalDetalhes, "devolucao")}>
+                        <Undo2 className="mr-2 h-4 w-4" /> Emitir devolução
+                      </Button>
+                    )}
+                  </div>
+                )}
+
+                {/* Histórico de eventos da nota */}
+                {eventosNota.length > 0 && (
+                  <div>
+                    <p className="mb-1 text-xs uppercase text-muted-foreground">Eventos na SEFAZ</p>
+                    <ul className="space-y-1">
+                      {eventosNota.map((ev: any) => (
+                        <li key={ev.id} className="rounded bg-muted p-2 text-xs">
+                          <div className="flex justify-between gap-2">
+                            <span className="font-medium">
+                              {ev.tipo === "cancelamento" ? "Cancelamento" : `Carta de correção nº ${ev.sequencia}`}
+                            </span>
+                            <span className={ev.aceito ? "text-green-600" : "text-red-600"}>
+                              {ev.aceito ? "aceito" : `recusado (${ev.cstat ?? "-"})`}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-muted-foreground">{ev.justificativa}</p>
+                          <p className="mt-0.5 text-muted-foreground">
+                            {dateTime(ev.created_at)}{ev.protocolo ? ` · protocolo ${ev.protocolo}` : ""}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
                 {/* Destinatário */}
                 {modalDetalhes.consumidor_nome && (
                   <div>
@@ -472,6 +581,139 @@ export function NotasFiscaisPage() {
               </div>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Ações fiscais sobre a nota aberta */}
+      <Dialog open={!!modalEvento} onOpenChange={(o) => { if (!o) { setModalEvento(null); setTextoEvento(""); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {modalEvento?.tipo === "cancelar" && "Cancelar nota na SEFAZ"}
+              {modalEvento?.tipo === "cce" && "Carta de correção"}
+              {modalEvento?.tipo === "devolucao" && "Emitir NF-e de devolução"}
+            </DialogTitle>
+            <DialogClose />
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Nota nº {modalEvento?.nota?.numero}/{modalEvento?.nota?.serie} — {brl(modalEvento?.nota?.valor_total ?? 0)}
+            </p>
+
+            {modalEvento?.tipo === "devolucao" ? (
+              <p className="text-sm">
+                Será emitida uma <strong>NF-e de entrada</strong> (finalidade 4) com os mesmos itens da
+                venda original, CFOP de devolução e referência à chave da nota original. A nota
+                original permanece autorizada — devolução não é cancelamento.
+              </p>
+            ) : (
+              <>
+                <label className="text-sm font-medium">
+                  {modalEvento?.tipo === "cancelar" ? "Justificativa" : "Texto da correção"}
+                </label>
+                <textarea
+                  className="w-full min-h-24 rounded-md border bg-background p-2 text-sm"
+                  value={textoEvento}
+                  onChange={(e) => setTextoEvento(e.target.value)}
+                  placeholder="Mínimo de 15 caracteres (exigência da SEFAZ)"
+                />
+                <p className="text-xs text-muted-foreground">
+                  {textoEvento.trim().length}/15 caracteres mínimos.
+                  {modalEvento?.tipo === "cancelar"
+                    ? " O cancelamento tem prazo legal (24h para NF-e na maioria das UFs)."
+                    : " A carta de correção não corrige valores, impostos nem destinatário."}
+                </p>
+              </>
+            )}
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setModalEvento(null)}>Cancelar</Button>
+            <Button
+              onClick={handleEvento}
+              disabled={eventoPendente || (modalEvento?.tipo !== "devolucao" && textoEvento.trim().length < 15)}
+              variant={modalEvento?.tipo === "cancelar" ? "destructive" : "default"}
+            >
+              {eventoPendente ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Transmitindo...</> : "Confirmar"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Inutilização de faixa de numeração */}
+      <Dialog open={modalInutilizar} onOpenChange={setModalInutilizar}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Inutilizar faixa de numeração</DialogTitle><DialogClose /></DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Números consumidos sem virar nota (rejeição, falha de transmissão) precisam ser
+              inutilizados junto à SEFAZ. A faixa não pode conter notas autorizadas ou canceladas.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium">Modelo</label>
+                <select
+                  className="w-full h-9 rounded-md border bg-background px-2 text-sm"
+                  value={inutForm.modelo}
+                  onChange={(e) => setInutForm((f) => ({ ...f, modelo: e.target.value }))}
+                >
+                  <option value="55">55 — NF-e</option>
+                  <option value="65">65 — NFC-e</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Série</label>
+                <input type="number" min={0} className="w-full h-9 rounded-md border bg-background px-2 text-sm"
+                  value={inutForm.serie}
+                  onChange={(e) => setInutForm((f) => ({ ...f, serie: e.target.value }))} />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Número inicial</label>
+                <input type="number" min={1} className="w-full h-9 rounded-md border bg-background px-2 text-sm"
+                  value={inutForm.inicial}
+                  onChange={(e) => setInutForm((f) => ({ ...f, inicial: e.target.value }))} />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Número final</label>
+                <input type="number" min={1} className="w-full h-9 rounded-md border bg-background px-2 text-sm"
+                  value={inutForm.final}
+                  onChange={(e) => setInutForm((f) => ({ ...f, final: e.target.value }))} />
+              </div>
+            </div>
+            <div>
+              <label className="text-sm font-medium">Justificativa</label>
+              <textarea
+                className="w-full min-h-20 rounded-md border bg-background p-2 text-sm"
+                value={inutForm.justificativa}
+                onChange={(e) => setInutForm((f) => ({ ...f, justificativa: e.target.value }))}
+                placeholder="Mínimo de 15 caracteres"
+              />
+            </div>
+
+            {inutilizacoes.length > 0 && (
+              <div className="rounded-md border p-2">
+                <p className="mb-1 text-xs font-medium uppercase text-muted-foreground">Inutilizações anteriores</p>
+                <ul className="space-y-1 text-xs">
+                  {inutilizacoes.slice(0, 5).map((i: any) => (
+                    <li key={i.id} className="flex justify-between gap-2">
+                      <span>mod {i.modelo} · série {i.serie} · {i.numero_inicial}–{i.numero_final}</span>
+                      <span className={i.inutilizada ? "text-green-600" : "text-red-600"}>
+                        {i.inutilizada ? "inutilizada" : `recusada (${i.cstat ?? "-"})`}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setModalInutilizar(false)}>Cancelar</Button>
+            <Button
+              onClick={handleInutilizar}
+              disabled={inutilizar.isPending || !inutForm.inicial || !inutForm.final || inutForm.justificativa.trim().length < 15}
+            >
+              {inutilizar.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Transmitindo...</> : "Inutilizar"}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
