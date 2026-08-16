@@ -87,7 +87,8 @@ function makeTools(array $req): Tools {
     ]);
 
     $tools = new Tools($config, $certificate);
-    $tools->model((string)($req['nota']['modelo'] ?? '55'));
+    // sped-nfe 5.2+ exige int em model() — passar string lança TypeError
+    $tools->model((int)($req['nota']['modelo'] ?? 55));
     return $tools;
 }
 
@@ -477,6 +478,61 @@ try {
         ]);
     }
 
+    // ---------- CONSULTA CADASTRO NA SEFAZ ----------
+    // Puxa Inscrição Estadual, razão social e situação cadastral do CNPJ
+    // direto no cadastro da SEFAZ, usando o certificado da empresa.
+    // Nem toda UF oferece este serviço.
+    if ($path === '/v1/cadastro/consultar' && $method === 'POST') {
+        $req = body();
+        $uf   = strtoupper((string)($req['uf'] ?? ($req['emitente']['uf'] ?? '')));
+        $cnpj = preg_replace('/\D/', '', (string)($req['cnpj'] ?? ''));
+        if ($uf === '' || $cnpj === '') out(422, ['erro' => 'uf e cnpj são obrigatórios']);
+
+        $tools = makeTools($req);
+        try {
+            $resp = $tools->sefazCadastro($uf, $cnpj);
+        } catch (\Throwable $e) {
+            out(200, [
+                'encontrado' => false,
+                'suportado'  => false,
+                'motivo'     => 'UF não oferece consulta de cadastro ou serviço indisponível',
+                'detalhe'    => $e->getMessage(),
+            ]);
+        }
+
+        $st  = std($resp);
+        $inf = $st->infCons ?? $st;
+        $cstat = (string)($inf->cStat ?? $st->cStat ?? '');
+
+        // 111/112 = consulta com uma ou mais ocorrências
+        $achou = in_array($cstat, ['111', '112'], true);
+        $ie = null; $nome = null; $situacao = null; $cnae = null; $regime = null;
+        if ($achou) {
+            $ext = $inf->infCad ?? null;
+            if (is_array($ext)) $ext = $ext[0] ?? null;   // múltiplas inscrições: pega a primeira
+            if ($ext) {
+                $ie       = isset($ext->IE)     ? (string)$ext->IE     : null;
+                $nome     = isset($ext->xNome)  ? (string)$ext->xNome  : null;
+                $situacao = isset($ext->cSit)   ? (string)$ext->cSit   : null;  // 1=habilitado
+                $cnae     = isset($ext->CNAE)   ? (string)$ext->CNAE   : null;
+                $regime   = isset($ext->CRT)    ? (string)$ext->CRT    : null;
+            }
+        }
+
+        out(200, [
+            'encontrado'      => $achou && $ie !== null,
+            'suportado'       => true,
+            'cstat'           => $cstat,
+            'motivo'          => (string)($inf->xMotivo ?? $st->xMotivo ?? ''),
+            'ie'              => $ie,
+            'razao_social'    => $nome,
+            'situacao'        => $situacao,
+            'habilitado'      => $situacao === '1',
+            'cnae'            => $cnae,
+            'regime_tributario' => $regime,
+        ]);
+    }
+
     // ---------- VALIDAR CERTIFICADO A1 ----------
     // Confere de verdade se o .pfx abre com a senha informada e devolve os
     // dados do titular. É o que a tela de certificado usa antes de cadastrar.
@@ -531,7 +587,7 @@ try {
     out(404, ['erro' => 'rota não encontrada', 'rotas' => [
         'GET /healthz', 'POST /v1/status', 'POST /v1/nfe/emitir', 'POST /v1/nfe/cancelar',
         'POST /v1/nfe/cce', 'POST /v1/nfe/inutilizar', 'POST /v1/certificado/validar',
-        'POST /v1/danfe',
+        'POST /v1/cadastro/consultar', 'POST /v1/danfe',
     ]]);
 } catch (\Throwable $e) {
     out(500, ['erro' => 'falha interna', 'detalhe' => $e->getMessage()]);

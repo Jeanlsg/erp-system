@@ -18,7 +18,10 @@ RUN printf '\n[openssl_init]\nproviders = provider_sect\n\n[provider_sect]\ndefa
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /app
-COPY composer.json ./
+# composer.lock junto: sem ele cada rebuild sorteia versões novas da lib.
+# Foi assim que o sped-nfe pulou de 5.1 para 5.2 e quebrou model(), que
+# passou a exigir int. Versões travadas = rebuild reprodutível.
+COPY composer.json composer.lock ./
 RUN composer install --no-dev -o --no-interaction 2>&1 | tail -5
 
 COPY src/ ./src/
