@@ -567,7 +567,7 @@ export function useContas(filters?: { tipo?: "pagar" | "receber"; status?: strin
       if (!isSupabaseConfigured()) return [];
       let query = supabase
         .from("erp_contas")
-        .select("*")
+        .select("*, pessoa:erp_pessoas(id, nome_razao), plano:erp_plano_contas(codigo, nome)")
         .order("data_vencimento", { ascending: true })
         .limit(500);
 
@@ -1819,13 +1819,29 @@ export function useImportarNFe() {
         }
       }
 
-      return { nfeEntrada, compra };
+      // Contas a pagar: as duplicatas da NF-e trazem o parcelamento real.
+      // Sem elas a RPC cai numa parcela única no prazo padrão da loja.
+      const { data: parcelas, error: contasErr } = await supabase
+        .schema('erp')
+        .rpc('gerar_contas_pagar_compra', {
+          p_compra_id: compra.id,
+          p_duplicatas: nfe.duplicatas ?? [],
+        });
+      if (contasErr) {
+        throw new Error(
+          `Estoque e compra registrados, mas falhou ao gerar contas a pagar: ${contasErr.message}`
+        );
+      }
+
+      return { nfeEntrada, compra, contas_geradas: parcelas ?? 0 };
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['erp_nfe_entrada'] });
       qc.invalidateQueries({ queryKey: ['erp_produtos'] });
       qc.invalidateQueries({ queryKey: ['erp_estoque'] });
+      qc.invalidateQueries({ queryKey: ['erp_estoque_movimentacoes'] });
       qc.invalidateQueries({ queryKey: ['erp_compras'] });
+      qc.invalidateQueries({ queryKey: ['erp_contas'] });
       qc.invalidateQueries({ queryKey: ['erp_pessoas'] });
     },
   });
@@ -4350,5 +4366,31 @@ export function useEmitirDevolucao() {
       return data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_notas_fiscais'] }),
+  });
+}
+
+// ========================================
+// CONTAS A PAGAR / RECEBER (migration 049)
+// ========================================
+export function useBaixarConta() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      contaId, valor, data, forma,
+    }: { contaId: string; valor?: number; data?: string; forma?: string }) => {
+      const { error } = await supabase
+        .schema('erp')
+        .rpc('baixar_conta', {
+          p_conta_id: contaId,
+          p_valor: valor ?? null,
+          p_data: data ?? null,
+          p_forma: forma ?? null,
+        });
+      if (error) throw new Error(`Falha ao baixar conta: ${error.message}`);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_contas'] });
+      qc.invalidateQueries({ queryKey: ['erp_dre_mensal'] });
+    },
   });
 }

@@ -47,6 +47,13 @@ export interface NFeItem {
   cofins_valor?: number;
 }
 
+/** Duplicata (fatura) da cobrança da NF-e — vira conta a pagar na entrada. */
+export interface NFeDuplicata {
+  numero: string;
+  vencimento: string;   // yyyy-mm-dd
+  valor: number;
+}
+
 export interface NFeParsed {
   chave_acesso: string;
   numero: number;
@@ -65,6 +72,7 @@ export interface NFeParsed {
   valor_cofins: number;
   valor_total: number;
   itens: NFeItem[];
+  duplicatas: NFeDuplicata[];
   xml_original: string;
 }
 

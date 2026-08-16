@@ -4,7 +4,7 @@
 // ============================================================
 
 import { XMLParser } from "fast-xml-parser";
-import type { NFeParsed, NFeItem, NFeEmitente } from "@/types/nfe";
+import type { NFeParsed, NFeItem, NFeEmitente, NFeDuplicata } from "@/types/nfe";
 
 const parser = new XMLParser({
   ignoreAttributes: false,
@@ -142,6 +142,21 @@ export function parseNFeXML(xmlContent: string): NFeParsed {
     };
   });
 
+  // Cobrança: as duplicatas trazem o parcelamento real da nota (número,
+  // vencimento e valor). É o que permite gerar contas a pagar corretas em
+  // vez de chutar um prazo padrão.
+  const cobrDup = (infNFe as any)?.cobr?.dup;
+  const duplicatas: NFeDuplicata[] = (
+    cobrDup ? (Array.isArray(cobrDup) ? cobrDup : [cobrDup]) : []
+  )
+    .filter(Boolean)
+    .map((d: any) => ({
+      numero: String(d.nDup ?? ""),
+      vencimento: String(d.dVenc ?? "").slice(0, 10),
+      valor: Number(d.vDup ?? 0),
+    }))
+    .filter((d: NFeDuplicata) => d.valor > 0);
+
   return {
     chave_acesso: chaveAcesso,
     numero: Number(ide.nNF ?? 0),
@@ -160,6 +175,7 @@ export function parseNFeXML(xmlContent: string): NFeParsed {
     valor_cofins: Number(total.vCOFINS ?? 0),
     valor_total: Number(total.vNF ?? 0),
     itens,
+    duplicatas,
     xml_original: xmlContent,
   };
 }
