@@ -478,6 +478,56 @@ try {
         ]);
     }
 
+    // ---------- DISTRIBUIÇÃO DF-e ----------
+    // A SEFAZ entrega TODA NF-e emitida CONTRA o nosso CNPJ, sem depender de
+    // o fornecedor mandar o XML. Dois modos:
+    //   - por NSU: varre o que há de novo desde o último NSU processado
+    //   - por chave: baixa uma nota específica (a do DANFE em mãos)
+    if ($path === '/v1/dfe/distribuicao' && $method === 'POST') {
+        $req = body();
+        $tools = makeTools($req);
+
+        $chave  = preg_replace('/\D/', '', (string)($req['chave'] ?? ''));
+        $ultNSU = (int)($req['ult_nsu'] ?? 0);
+
+        try {
+            $resp = $chave !== ''
+                ? $tools->sefazDistDFe(0, 0, $chave)
+                : $tools->sefazDistDFe($ultNSU);
+        } catch (\Throwable $e) {
+            out(200, ['ok' => false, 'motivo' => 'falha na distribuição', 'detalhe' => $e->getMessage()]);
+        }
+
+        $st = std($resp);
+        $cstat = (string)($st->cStat ?? '');
+        // 138 = documento(s) localizado(s); 137 = nenhum documento novo
+        $docs = [];
+        $lote = $st->loteDistDFeInt->docZip ?? null;
+        if ($lote !== null) {
+            $itens = is_array($lote) ? $lote : [$lote];
+            foreach ($itens as $d) {
+                // Cada docZip vem em base64 + gzip
+                $conteudo = @gzdecode(base64_decode((string)($d->{'@value'} ?? $d), true) ?: '');
+                if ($conteudo === false) continue;
+                $docs[] = [
+                    'nsu'    => (string)($d->{'@attributes'}->NSU ?? ''),
+                    'schema' => (string)($d->{'@attributes'}->schema ?? ''),
+                    'xml_base64' => base64_encode($conteudo),
+                ];
+            }
+        }
+
+        out(200, [
+            'ok'          => in_array($cstat, ['137', '138'], true),
+            'cstat'       => $cstat,
+            'motivo'      => (string)($st->xMotivo ?? ''),
+            'ult_nsu'     => (string)($st->ultNSU ?? ''),
+            'max_nsu'     => (string)($st->maxNSU ?? ''),
+            'documentos'  => $docs,
+            'total'       => count($docs),
+        ]);
+    }
+
     // ---------- CONSULTA CADASTRO NA SEFAZ ----------
     // Puxa Inscrição Estadual, razão social e situação cadastral do CNPJ
     // direto no cadastro da SEFAZ, usando o certificado da empresa.
