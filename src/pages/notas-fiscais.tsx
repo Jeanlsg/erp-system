@@ -48,11 +48,12 @@ export function NotasFiscaisPage() {
   const notasVendaIds = new Set(todasNotasVendaIds);
   const vendasSemNota = vendas.filter((v: any) => v.status === "finalizada" && !notasVendaIds.has(v.id));
 
-  const handleEmitir = async () => {
+  const handleEmitir = async (tipo: "nfe" | "nfce" = "nfe") => {
     if (!vendaSelecionada || !lojaId) return;
+    const rotulo = tipo === "nfce" ? "NFC-e" : "NF-e";
     try {
-      const r = await emitir.mutateAsync({ venda_id: vendaSelecionada, loja_id: lojaId });
-      toast.success(`NF-e nº ${r.numero} autorizada! Protocolo ${r.protocolo}${r.ambiente !== "producao" ? " (HOMOLOGAÇÃO — sem valor fiscal)" : ""}`);
+      const r = await emitir.mutateAsync({ venda_id: vendaSelecionada, loja_id: lojaId, tipo });
+      toast.success(`${rotulo} nº ${r.numero} autorizada! Protocolo ${r.protocolo}${r.ambiente !== "producao" ? " (HOMOLOGAÇÃO — sem valor fiscal)" : ""}`);
       setModalEmitir(false);
       setVendaSelecionada("");
     } catch (e: any) {
@@ -302,7 +303,7 @@ export function NotasFiscaisPage() {
       {/* Modal de Emissão */}
       <Dialog open={modalEmitir} onOpenChange={setModalEmitir}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Emitir NF-e de Venda</DialogTitle><DialogClose /></DialogHeader>
+          <DialogHeader><DialogTitle>Emitir documento fiscal da venda</DialogTitle><DialogClose /></DialogHeader>
           <div className="space-y-3">
             <div>
               <p className="text-sm mb-1 font-medium">Venda finalizada (sem nota) *</p>
@@ -329,10 +330,22 @@ export function NotasFiscaisPage() {
               configurada e NCM em todos os produtos da venda.
             </p>
           </div>
-          <div className="flex justify-end gap-2">
+          <p className="text-xs text-muted-foreground">
+            <strong>NFC-e (modelo 65)</strong> é o cupom do varejo presencial: dispensa endereço e
+            aceita consumidor não identificado, mas exige o CSC cadastrado em Configurações SEFAZ.
+            <strong> NF-e (modelo 55)</strong> exige CPF/CNPJ e endereço completo do cliente.
+          </p>
+          <div className="flex flex-wrap justify-end gap-2">
             <Button variant="outline" onClick={() => setModalEmitir(false)}>Cancelar</Button>
-            <Button onClick={handleEmitir} disabled={emitir.isPending || !vendaSelecionada}>
-              {emitir.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Transmitindo...</> : "Emitir e Transmitir"}
+            <Button
+              variant="secondary"
+              onClick={() => handleEmitir("nfce")}
+              disabled={emitir.isPending || !vendaSelecionada}
+            >
+              {emitir.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Transmitindo...</> : "Emitir NFC-e"}
+            </Button>
+            <Button onClick={() => handleEmitir("nfe")} disabled={emitir.isPending || !vendaSelecionada}>
+              {emitir.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Transmitindo...</> : "Emitir NF-e"}
             </Button>
           </div>
         </DialogContent>

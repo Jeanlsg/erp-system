@@ -2,9 +2,11 @@
 // Edge Function: emitir-nfe
 // Orquestra a emissão REAL de NF-e via microserviço nfe-service (sped-nfe).
 //
-// Body: { venda_id?: string, remessa_id?: string, loja_id: string }
+// Body: { venda_id?: string, remessa_id?: string, loja_id: string, tipo?: 'nfe'|'nfce' }
 //   - venda_id   → NF-e de venda (destinatário = cliente da venda)
 //   - remessa_id → NF-e de remessa entre filiais (CFOP 5152/6152)
+//   - tipo:'nfce' → cupom do varejo presencial (modelo 65): consumidor
+//     opcional, sempre operação interna, QR Code assinado com o CSC.
 //
 // Fluxo: valida usuário ERP → valida pré-requisitos (cert, SEFAZ, NCM) →
 // monta payload → chama nfe-service → grava resultado real em erp_notas_fiscais
@@ -60,9 +62,18 @@ Deno.serve(async (req) => {
       return json(403, { erro: "sem permissão para emitir NF-e (requer admin/gerente)" });
     }
 
-    const { venda_id, remessa_id, loja_id } = await req.json();
+    const { venda_id, remessa_id, loja_id, tipo } = await req.json();
     if (!loja_id || (!venda_id && !remessa_id)) {
       return json(422, { erro: "informe loja_id e venda_id OU remessa_id" });
+    }
+
+    // NFC-e (modelo 65) é o cupom do varejo presencial: só para venda.
+    const tipoDoc: "nfe" | "nfce" = tipo === "nfce" ? "nfce" : "nfe";
+    const isNFCe = tipoDoc === "nfce";
+    const modelo = isNFCe ? 65 : 55;
+    const rotulo = isNFCe ? "NFC-e" : "NF-e";
+    if (isNFCe && remessa_id) {
+      return json(422, { erro: "remessa não pode ser emitida como NFC-e — use NF-e modelo 55" });
     }
 
     // ---------------- 1b. Idempotência: bloquear emissão duplicada ----------------
@@ -70,14 +81,15 @@ Deno.serve(async (req) => {
     if (venda_id) {
       const { data: notaExistente } = await admin
         .from("erp_notas_fiscais")
-        .select("id, numero, status")
+        .select("id, numero, status, tipo")
         .eq("venda_id", venda_id)
+        .eq("tipo", tipoDoc)
         .in("status", STATUS_VIGENTES)
         .limit(1)
         .maybeSingle();
       if (notaExistente) {
         return json(409, {
-          erro: `esta venda já possui NF-e nº ${notaExistente.numero} (status: ${notaExistente.status})`,
+          erro: `esta venda já possui ${rotulo} nº ${notaExistente.numero} (status: ${notaExistente.status})`,
           nfe_id: notaExistente.id,
         });
       }
@@ -129,6 +141,11 @@ Deno.serve(async (req) => {
       .order("data_validade", { ascending: false }).limit(1).maybeSingle();
     if (!cert) faltas.push("certificado digital A1 ativo");
     else if (new Date(cert.data_validade) < new Date()) faltas.push(`certificado vencido em ${cert.data_validade}`);
+
+    // NFC-e exige CSC (código de segurança do contribuinte) para o QR Code
+    if (isNFCe && sefaz && (!sefaz.csc_token || !sefaz.csc_id)) {
+      faltas.push("CSC e CSC id da NFC-e (obtidos no portal da SEFAZ e cadastrados em Configurações SEFAZ)");
+    }
 
     if (faltas.length > 0) return json(422, { erro: "pré-requisitos ausentes", faltas });
 
@@ -198,30 +215,40 @@ Deno.serve(async (req) => {
         .select("*, cliente:erp_pessoas(*), itens:erp_venda_itens(*, produto:erp_produtos(*))")
         .eq("id", venda_id).single();
       if (!venda) return json(422, { erro: "venda não encontrada" });
-      if (venda.status !== "finalizada") return json(422, { erro: `venda com status "${venda.status}" — só vendas finalizadas geram NF-e` });
-      if (!venda.cliente?.cpf_cnpj) {
-        return json(422, { erro: "venda sem cliente identificado com CPF/CNPJ (NF-e modelo 55 exige destinatário)" });
-      }
+      if (venda.status !== "finalizada") return json(422, { erro: `venda com status "${venda.status}" — só vendas finalizadas geram ${rotulo}` });
 
-      // Endereço do destinatário é obrigatório na NF-e de venda
-      const endCliente = venda.cliente.endereco ?? {};
-      const faltasEndereco: string[] = [];
-      if (!endCliente.logradouro) faltasEndereco.push("logradouro");
-      if (!(endCliente.cidade || endCliente.municipio)) faltasEndereco.push("município");
-      if (!endCliente.uf) faltasEndereco.push("UF");
-      if (faltasEndereco.length > 0) {
-        return json(422, {
-          erro: `endereço do cliente incompleto para emissão de NF-e — cadastre: ${faltasEndereco.join(", ")}`,
-          faltas: faltasEndereco,
-        });
-      }
+      if (isNFCe) {
+        // NFC-e: consumidor é opcional. Se houver CPF/CNPJ, vai identificado;
+        // sem ele, sai como consumidor não identificado — e nunca leva endereço.
+        destinatario = venda.cliente?.cpf_cnpj
+          ? { cpf_cnpj: venda.cliente.cpf_cnpj, nome: venda.cliente.nome_razao }
+          : {};
+      } else {
+        if (!venda.cliente?.cpf_cnpj) {
+          return json(422, { erro: "venda sem cliente identificado com CPF/CNPJ (NF-e modelo 55 exige destinatário)" });
+        }
 
-      destinatario = {
-        cpf_cnpj: venda.cliente.cpf_cnpj,
-        nome: venda.cliente.nome_razao,
-        endereco: endCliente,
-      };
-      const interestadual = (venda.cliente.endereco?.uf ?? loja.uf) !== loja.uf;
+        // Endereço do destinatário é obrigatório na NF-e de venda
+        const endCliente = venda.cliente.endereco ?? {};
+        const faltasEndereco: string[] = [];
+        if (!endCliente.logradouro) faltasEndereco.push("logradouro");
+        if (!(endCliente.cidade || endCliente.municipio)) faltasEndereco.push("município");
+        if (!endCliente.uf) faltasEndereco.push("UF");
+        if (faltasEndereco.length > 0) {
+          return json(422, {
+            erro: `endereço do cliente incompleto para emissão de NF-e — cadastre: ${faltasEndereco.join(", ")}`,
+            faltas: faltasEndereco,
+          });
+        }
+
+        destinatario = {
+          cpf_cnpj: venda.cliente.cpf_cnpj,
+          nome: venda.cliente.nome_razao,
+          endereco: endCliente,
+        };
+      }
+      // NFC-e é sempre operação interna (CFOP 5xxx)
+      const interestadual = !isNFCe && (venda.cliente?.endereco?.uf ?? loja.uf) !== loja.uf;
       itens = (venda.itens ?? []).filter((i: any) => i.produto_id).map((i: any) => ({
         codigo: i.produto?.sku ?? i.produto_id,
         descricao: i.produto?.nome ?? i.nome,
@@ -250,8 +277,9 @@ Deno.serve(async (req) => {
 
     // ---------------- 5. Numeração (com lock no banco) ----------------
     const { data: numero, error: numErr } = await admin
-      .rpc("incrementar_numeracao_nfe", { p_loja_id: loja_id, p_tipo: "nfe" });
+      .rpc("incrementar_numeracao_nfe", { p_loja_id: loja_id, p_tipo: tipoDoc });
     if (numErr || !numero) return json(500, { erro: `falha na numeração: ${numErr?.message}` });
+    const serieDoc = (isNFCe ? sefaz.serie_nfce : sefaz.serie_nfe) ?? 1;
 
     // ---------------- 6. Chamar o nfe-service ----------------
     const { data: integ } = await adminPublic
@@ -277,7 +305,9 @@ Deno.serve(async (req) => {
         },
       },
       destinatario,
-      nota: { modelo: 55, serie: sefaz.serie_nfe ?? 1, numero, natureza, observacoes },
+      // CSC só faz sentido na NFC-e — é o que assina o QR Code do cupom
+      ...(isNFCe ? { csc: sefaz.csc_token, csc_id: sefaz.csc_id } : {}),
+      nota: { modelo, serie: serieDoc, numero, natureza, observacoes },
       itens,
       pagamentos,
     };
@@ -303,7 +333,7 @@ Deno.serve(async (req) => {
             ? resultado.motivo
             : `nfe-service HTTP ${resp.status}: ${JSON.stringify(resultado ?? {})}`.slice(0, 1000);
         const { error: rastroErr } = await admin.from("erp_notas_fiscais").insert({
-          loja_id, tipo: "nfe", numero, serie: sefaz.serie_nfe ?? 1,
+          loja_id, tipo: tipoDoc, numero, serie: serieDoc,
           status: "rejeitada", valor_total: totalNota,
           data_emissao: new Date().toISOString(),
           venda_id: venda_id ?? null, destinatario_id: null,
@@ -317,7 +347,7 @@ Deno.serve(async (req) => {
     } catch (e) {
       // Timeout / serviço fora: registra pendência para retry
       await admin.from("erp_notas_fiscais").insert({
-        loja_id, tipo: "nfe", numero, serie: sefaz.serie_nfe ?? 1,
+        loja_id, tipo: tipoDoc, numero, serie: serieDoc,
         status: "pendente_transmissao", valor_total: totalNota,
         data_emissao: new Date().toISOString(),
         venda_id: venda_id ?? null, destinatario_id: null,
@@ -365,9 +395,9 @@ Deno.serve(async (req) => {
 
     const { data: nfe, error: nfeErr } = await admin.from("erp_notas_fiscais").insert({
       loja_id,
-      tipo: "nfe",
+      tipo: tipoDoc,
       numero,
-      serie: sefaz.serie_nfe ?? 1,
+      serie: serieDoc,
       chave_acesso: resultado.chave || null,
       protocolo: resultado.protocolo || null,
       status: resultado.autorizada

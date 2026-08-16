@@ -18,6 +18,7 @@ use NFePHP\NFe\Common\Standardize;
 use NFePHP\NFe\Complements;
 use NFePHP\Common\Certificate;
 use NFePHP\DA\NFe\Danfe;
+use NFePHP\DA\NFe\Danfce;
 
 // ---------------------------------------------------------------------------
 // Infra HTTP mínima
@@ -93,10 +94,17 @@ function makeTools(array $req): Tools {
 /** Constrói o XML da NF-e a partir do payload padronizado do ERP. */
 function buildXml(array $req): string {
     $emit  = $req['emitente'];
-    $dest  = $req['destinatario'];
+    $dest  = $req['destinatario'] ?? [];
     $nota  = $req['nota'];
     $itens = $req['itens'] ?? [];
     if (count($itens) === 0) out(422, ['erro' => 'nota sem itens']);
+
+    // Modelo 65 (NFC-e) x 55 (NF-e): mudam impressão, destinatário e QR Code.
+    $modelo = (int)($nota['modelo'] ?? 55);
+    $isNFCe = $modelo === 65;
+    if ($isNFCe && (empty($req['csc']) || empty($req['csc_id']))) {
+        out(422, ['erro' => 'NFC-e exige CSC e CSC id (cadastre em Configurações SEFAZ)']);
+    }
 
     $tpAmb  = (int)$req['ambiente'];
     $cnpj   = preg_replace('/\D/', '', $emit['cnpj']);
@@ -122,19 +130,21 @@ function buildXml(array $req): string {
     $std->cUF      = $cUFmap[$ufEmit] ?? 29;
     $std->cNF      = $cNF;
     $std->natOp    = $nota['natureza'] ?? 'VENDA DE MERCADORIA';
-    $std->mod      = (int)($nota['modelo'] ?? 55);
+    $std->mod      = $modelo;
     $std->serie    = $serie;
     $std->nNF      = $numero;
     $std->dhEmi    = $dhEmi;
     $std->tpNF     = 1;                                   // saída
-    $std->idDest   = ($ufEmit === $ufDest) ? 1 : 2;       // 1=interna 2=interestadual
+    // NFC-e é sempre operação interna
+    $std->idDest   = $isNFCe ? 1 : (($ufEmit === $ufDest) ? 1 : 2);
     $std->cMunFG   = (int)($emit['endereco']['codigo_municipio'] ?? 0);
-    $std->tpImp    = 1;                                   // DANFE retrato
+    $std->tpImp    = $isNFCe ? 4 : 1;                     // 4=DANFE NFC-e; 1=DANFE retrato
     $std->tpEmis   = 1;                                   // normal
     $std->tpAmb    = $tpAmb;
     $std->finNFe   = (int)($nota['finalidade'] ?? 1);     // 1=normal
-    $std->indFinal = (int)($nota['consumidor_final'] ?? 1);
-    $std->indPres  = (int)($nota['presenca'] ?? 1);       // 1=presencial
+    // NFC-e: sempre consumidor final e operação presencial
+    $std->indFinal = $isNFCe ? 1 : (int)($nota['consumidor_final'] ?? 1);
+    $std->indPres  = $isNFCe ? 1 : (int)($nota['presenca'] ?? 1);
     $std->procEmi  = 0;
     $std->verProc  = 'xlife-erp 1.0';
     $make->tagide($std);
@@ -163,25 +173,32 @@ function buildXml(array $req): string {
     $make->tagenderEmit($std);
 
     // --- destinatário ---
+    // Na NFC-e o destinatário é OPCIONAL: sem CPF/CNPJ a nota sai como
+    // consumidor não identificado (o cupom continua válido).
     $docDest = preg_replace('/\D/', '', $dest['cpf_cnpj'] ?? '');
-    $std = new stdClass();
-    // Em homologação a SEFAZ exige esta razão social fixa:
-    $std->xNome = $tpAmb === 2
-        ? 'NF-E EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL'
-        : ($dest['nome'] ?? 'CONSUMIDOR');
-    if (strlen($docDest) === 14) {
-        $std->CNPJ = $docDest;
-        $std->indIEDest = (int)($dest['ind_ie'] ?? 9);
-        if (!empty($dest['ie'])) { $std->IE = preg_replace('/\D/', '', $dest['ie']); $std->indIEDest = 1; }
-    } elseif (strlen($docDest) === 11) {
-        $std->CPF = $docDest;
-        $std->indIEDest = 9;
-    } else {
-        out(422, ['erro' => 'destinatario.cpf_cnpj inválido (NF-e modelo 55 exige CPF ou CNPJ)']);
-    }
-    $make->tagdest($std);
+    $semDestinatario = $isNFCe && $docDest === '';
 
-    if (!empty($dest['endereco']['logradouro'])) {
+    if (!$semDestinatario) {
+        $std = new stdClass();
+        // Em homologação a SEFAZ exige esta razão social fixa:
+        $std->xNome = $tpAmb === 2
+            ? 'NF-E EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL'
+            : ($dest['nome'] ?? 'CONSUMIDOR');
+        if (strlen($docDest) === 14) {
+            $std->CNPJ = $docDest;
+            $std->indIEDest = (int)($dest['ind_ie'] ?? 9);
+            if (!empty($dest['ie'])) { $std->IE = preg_replace('/\D/', '', $dest['ie']); $std->indIEDest = 1; }
+        } elseif (strlen($docDest) === 11) {
+            $std->CPF = $docDest;
+            $std->indIEDest = 9;
+        } else {
+            out(422, ['erro' => 'destinatario.cpf_cnpj inválido (NF-e modelo 55 exige CPF ou CNPJ)']);
+        }
+        $make->tagdest($std);
+    }
+
+    // Endereço do destinatário não vai na NFC-e (só em entrega a domicílio)
+    if (!$isNFCe && !empty($dest['endereco']['logradouro'])) {
         $d = $dest['endereco'];
         $std = new stdClass();
         $std->xLgr    = $d['logradouro'];
@@ -345,11 +362,16 @@ try {
         if ($cstat === '100') {   // autorizada
             $xmlProtocolado = Complements::toAuthorize($signed, $resp);
 
-            // DANFE
+            // DANFE (modelo 55) ou DANFE NFC-e / cupom (modelo 65)
             $danfeB64 = null;
             try {
-                $danfe = new Danfe($xmlProtocolado);
-                $danfeB64 = base64_encode($danfe->render());
+                if ((int)($req['nota']['modelo'] ?? 55) === 65) {
+                    $danfce = new Danfce($xmlProtocolado);
+                    $danfeB64 = base64_encode($danfce->render());
+                } else {
+                    $danfe = new Danfe($xmlProtocolado);
+                    $danfeB64 = base64_encode($danfe->render());
+                }
             } catch (\Throwable $e) { /* DANFE é acessório — não falha a emissão */ }
 
             out(200, [
@@ -434,6 +456,47 @@ try {
         ]);
     }
 
+    // ---------- VALIDAR CERTIFICADO A1 ----------
+    // Confere de verdade se o .pfx abre com a senha informada e devolve os
+    // dados do titular. É o que a tela de certificado usa antes de cadastrar.
+    if ($path === '/v1/certificado/validar' && $method === 'POST') {
+        $req = body();
+        if (empty($req['pfx_base64']) || !isset($req['senha'])) {
+            out(422, ['erro' => 'pfx_base64 e senha são obrigatórios']);
+        }
+        $pfx = base64_decode($req['pfx_base64'], true);
+        if ($pfx === false) out(422, ['erro' => 'pfx_base64 inválido']);
+
+        try {
+            $certificate = Certificate::readPfx($pfx, (string)$req['senha']);
+        } catch (\Throwable $e) {
+            out(200, [
+                'valido' => false,
+                'motivo' => 'certificado inválido ou senha incorreta',
+                'detalhe' => $e->getMessage(),
+            ]);
+        }
+
+        $validoAte = null; $validoDe = null; $titular = null; $cnpj = null;
+        try { $validoDe  = $certificate->getValidFrom()?->format('Y-m-d H:i:s'); } catch (\Throwable $e) {}
+        try { $validoAte = $certificate->getValidTo()?->format('Y-m-d H:i:s'); }  catch (\Throwable $e) {}
+        try { $titular   = $certificate->getCompanyName(); }                      catch (\Throwable $e) {}
+        try { $cnpj      = $certificate->getCnpj(); }                             catch (\Throwable $e) {}
+
+        $expirado = false;
+        try { $expirado = $certificate->isExpired(); } catch (\Throwable $e) {}
+
+        out(200, [
+            'valido'     => !$expirado,
+            'expirado'   => $expirado,
+            'motivo'     => $expirado ? 'certificado expirado' : 'certificado válido',
+            'titular'    => $titular,
+            'cnpj'       => $cnpj,
+            'valido_de'  => $validoDe,
+            'valido_ate' => $validoAte,
+        ]);
+    }
+
     // ---------- DANFE a partir de XML autorizado ----------
     if ($path === '/v1/danfe' && $method === 'POST') {
         $req = body();
@@ -446,7 +509,8 @@ try {
 
     out(404, ['erro' => 'rota não encontrada', 'rotas' => [
         'GET /healthz', 'POST /v1/status', 'POST /v1/nfe/emitir', 'POST /v1/nfe/cancelar',
-        'POST /v1/nfe/cce', 'POST /v1/nfe/inutilizar', 'POST /v1/danfe',
+        'POST /v1/nfe/cce', 'POST /v1/nfe/inutilizar', 'POST /v1/certificado/validar',
+        'POST /v1/danfe',
     ]]);
 } catch (\Throwable $e) {
     out(500, ['erro' => 'falha interna', 'detalhe' => $e->getMessage()]);

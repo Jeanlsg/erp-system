@@ -16,7 +16,7 @@ import {
   useProdutos, useClientes, useCaixaAberto, useCreateCaixa, useFecharCaixa,
   useCreateVenda, useBaixarEstoqueVenda, useCaixas,
   useCreateSangria, useCreateEntradaExtra, useCaixaConfig, useUpdateCaixaConfig,
-  isSupabaseConfigured,
+  useEmitirNFeVenda, isSupabaseConfigured,
 } from "@/lib/supabase-queries";
 import { toast } from "sonner";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
@@ -39,6 +39,7 @@ export function PDVPage() {
   const { lojaId } = useAutoSelectLoja();
   const createVenda = useCreateVenda();
   const baixarEstoque = useBaixarEstoqueVenda();
+  const emitirNFCe = useEmitirNFeVenda();
   const createCaixa = useCreateCaixa();
   const fecharCaixa = useFecharCaixa();
   const createSangria = useCreateSangria();
@@ -76,6 +77,7 @@ export function PDVPage() {
   const [modalConfigCaixa, setModalConfigCaixa] = useState(false);
   const [modalCaixasAbertos, setModalCaixasAbertos] = useState(false);
   const [modalConfirmarVenda, setModalConfirmarVenda] = useState(false);
+  const [emitirCupom, setEmitirCupom] = useState(false);
   const [quantidadeCaixas, setQuantidadeCaixas] = useState(2);
 
   // Calculados
@@ -249,6 +251,26 @@ export function PDVPage() {
       limparCarrinho();
       setModalConfirmarVenda(false);
       toast.success("Venda finalizada com sucesso.");
+
+      // NFC-e é acessória à venda: se a SEFAZ recusar, a venda continua
+      // registrada e o cupom pode ser reemitido em Notas Fiscais.
+      if (emitirCupom && vendaCriada?.id) {
+        try {
+          const nota = await emitirNFCe.mutateAsync({
+            venda_id: (vendaCriada as any).id,
+            loja_id: lojaId,
+            tipo: "nfce",
+          });
+          toast.success(
+            `NFC-e nº ${nota.numero} autorizada${nota.ambiente !== "producao" ? " (HOMOLOGAÇÃO — sem valor fiscal)" : ""}.`
+          );
+        } catch (errNota: any) {
+          toast.error(
+            `Venda registrada, mas a NFC-e falhou: ${errNota?.message ?? "erro desconhecido"}. Emita em Notas Fiscais.`,
+            { duration: 12000 }
+          );
+        }
+      }
     } catch (err: any) {
       console.error("Erro ao finalizar venda:", err);
       toast.error(
@@ -725,6 +747,22 @@ export function PDVPage() {
                 </div>
               </>
             )}
+            <label className="mt-2 flex cursor-pointer items-start gap-2 rounded-md border p-3 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={emitirCupom}
+                onChange={(e) => setEmitirCupom(e.target.checked)}
+              />
+              <span>
+                <span className="font-medium">Emitir NFC-e (cupom fiscal)</span>
+                <span className="block text-xs text-muted-foreground">
+                  Transmite o cupom à SEFAZ logo após a venda. Exige CSC cadastrado em
+                  Configurações SEFAZ; se falhar, a venda continua registrada e o cupom pode ser
+                  emitido depois em Notas Fiscais.
+                </span>
+              </span>
+            </label>
             <div className="flex justify-between text-sm text-muted-foreground">
               <span>Forma:</span>
               <span className="capitalize">{forma.replace("_", " ")}</span>

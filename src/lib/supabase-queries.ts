@@ -1975,9 +1975,11 @@ export function useEmitirNFeRemessa() {
 export function useEmitirNFeVenda() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ venda_id, loja_id }: { venda_id: string; loja_id: string }) => {
+    mutationFn: async ({
+      venda_id, loja_id, tipo = 'nfe',
+    }: { venda_id: string; loja_id: string; tipo?: 'nfe' | 'nfce' }) => {
       const { data, error } = await supabase.functions.invoke('emitir-nfe', {
-        body: { venda_id, loja_id },
+        body: { venda_id, loja_id, tipo },
       });
       if (error) {
         let detalhe = error.message;

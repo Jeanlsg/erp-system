@@ -165,23 +165,33 @@ export function NfeCertificadoPage() {
         return;
       }
 
-      if (data?.success) {
-        setResultadoTeste({ ok: true, validado: true, ...data.data });
+      // `success` diz que a validação RODOU; `valido` é o veredito sobre o
+      // certificado. Senha errada volta como success:true + valido:false.
+      if (data?.success && data?.valido) {
+        const validade = (data.valido_ate ?? "").slice(0, 10);
+        setResultadoTeste({
+          ok: true,
+          validado: true,
+          titular: data.titular,
+          cnpj_cpf: data.cnpj,
+          data_validade: validade,
+          mensagem: data.motivo ?? "Certificado válido",
+        });
         toast.success("Certificado validado com sucesso!");
-        // Auto-preencher dados extraídos
-        if (data.data?.titular || data.data?.data_validade) {
+        if (data.titular || validade) {
           setCertExtraido((prev) => ({
             ...prev!,
-            titular: data.data.titular || prev?.titular || "",
-            cnpj_cpf: data.data.cnpj_cpf || prev?.cnpj_cpf || "",
-            emissor: data.data.emissor || prev?.emissor || "",
-            numero_serie: data.data.numero_serie || prev?.numero_serie || "",
-            data_validade: data.data.data_validade || prev?.data_validade || "",
+            titular: data.titular || prev?.titular || "",
+            cnpj_cpf: data.cnpj || prev?.cnpj_cpf || "",
+            emissor: prev?.emissor || "",
+            numero_serie: prev?.numero_serie || "",
+            data_validade: validade || prev?.data_validade || "",
           }));
         }
       } else {
-        // Rejeição explícita da Edge Function (success === false) — sem fallback
-        const motivo = data?.error || "Certificado ou senha inválidos";
+        // Certificado recusado (senha errada/expirado) ou falha na validação
+        const motivo =
+          data?.detalhe || data?.motivo || data?.error || "Certificado ou senha inválidos";
         setResultadoTeste({ ok: false, validado: false, error: motivo });
         toast.error(`Validação falhou: ${motivo}`);
       }
