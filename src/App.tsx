@@ -16,6 +16,8 @@ import { AgendaPage } from "@/pages/agenda";
 // Páginas principais implementadas
 import { FuncionariosPage } from "@/pages/funcionarios";
 import { ProdutosEstoqueLotesPage } from "@/pages/produtos-estoque-lotes";
+import { EstoqueMovimentacoesPage } from "@/pages/estoque-movimentacoes";
+import { InventarioPage } from "@/pages/inventario";
 import { DocumentosPage } from "@/pages/documentos";
 import { EmailInteligentePage } from "@/pages/email-inteligente";
 import { RegioesEntregaPage } from "@/pages/regioes-entrega";
@@ -223,6 +225,8 @@ export default function App() {
         <Route path="produtos" element={<ProdutosEstoqueLotesPage />} />
         <Route path="produtos-estoque-lotes" element={<ProdutosEstoqueLotesPage />} />
         <Route path="estoque" element={<ProdutosEstoqueLotesPage />} />
+        <Route path="estoque/movimentacoes" element={<EstoqueMovimentacoesPage />} />
+        <Route path="estoque/inventario" element={<InventarioPage />} />
         <Route path="gestao/estoque" element={<ProdutosEstoqueLotesPage />} />
         <Route path="compras" element={<ComprasPage />} />
         <Route path="compras/importar-nfe" element={<ImportarNFePage />} />

@@ -209,7 +209,7 @@ export function PDVPage() {
     const custoTotal = cart.reduce((s, i) => s + i.preco_custo * i.quantidade, 0);
 
     try {
-      await createVenda.mutateAsync({
+      const vendaCriada = await createVenda.mutateAsync({
         loja_id: lojaId,
         cliente_id: clienteId || null,
         usuario_id: user.id,
@@ -238,10 +238,12 @@ export function PDVPage() {
         caixa_id: caixaAberto?.id,
       });
 
-      // Baixar estoque
+      // Baixar estoque (o kardex fica amarrado à venda que originou a saída)
       await baixarEstoque.mutateAsync({
         lojaId,
         itens: cart,
+        origem: "venda",
+        documentoId: (vendaCriada as any)?.id,
       });
 
       limparCarrinho();

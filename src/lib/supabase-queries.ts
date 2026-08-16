@@ -1325,8 +1325,14 @@ export function useCreateVenda() {
 
 // Atualizar estoque aps venda (baixa atmica via RPC no banco)
 export function useBaixarEstoqueVenda() {
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ lojaId, itens }: { lojaId: string; itens: any[] }) => {
+    mutationFn: async ({
+      lojaId,
+      itens,
+      origem = 'venda',
+      documentoId,
+    }: { lojaId: string; itens: any[]; origem?: string; documentoId?: string }) => {
       const pItens = itens
         .filter((item) => item.produto_id && Number(item.quantidade) > 0)
         .map((item) => ({
@@ -1340,9 +1346,15 @@ export function useBaixarEstoqueVenda() {
         .rpc('baixar_estoque_atomico', {
           p_loja_id: lojaId,
           p_itens: pItens,
+          p_origem: origem,
+          p_documento_id: documentoId ?? null,
         });
       if (error) throw new Error(`Falha na baixa de estoque: ${error.message}`);
       return { success: true };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_estoque'] });
+      qc.invalidateQueries({ queryKey: ['erp_estoque_movimentacoes'] });
     },
   });
 }
@@ -1760,38 +1772,22 @@ export function useImportarNFe() {
           throw new Error(`Erro ao registrar item da compra "${item.nome}": ${compraItemErr.message}`);
         }
 
-        // Adicionar ao estoque
-        const { data: estoqueExistente, error: estoqueSelErr } = await supabase
-          .from('erp_estoque')
-          .select('quantidade')
-          .eq('produto_id', produtoId)
-          .eq('loja_id', loja_id)
-          .maybeSingle();
-        if (estoqueSelErr) {
-          throw new Error(`Erro ao consultar estoque de "${item.nome}": ${estoqueSelErr.message}`);
-        }
-
-        if (estoqueExistente) {
-          const { error: estoqueUpdErr } = await supabase
-            .from('erp_estoque')
-            .update({
-              quantidade: estoqueExistente.quantidade + item.quantidade,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('produto_id', produtoId)
-            .eq('loja_id', loja_id);
-          if (estoqueUpdErr) {
-            throw new Error(`Erro ao atualizar estoque de "${item.nome}": ${estoqueUpdErr.message}`);
-          }
-        } else {
-          const { error: estoqueInsErr } = await supabase.from('erp_estoque').insert({
-            produto_id: produtoId,
-            loja_id,
-            quantidade: item.quantidade,
+        // Entrada de estoque pela RPC: escritura o kardex e recalcula o
+        // custo médio móvel com o custo real da nota (nunca no cliente).
+        const { error: creditoErr } = await supabase
+          .schema('erp')
+          .rpc('creditar_estoque_atomico', {
+            p_loja_id: loja_id,
+            p_itens: [{
+              produto_id: produtoId,
+              quantidade: item.quantidade,
+              custo_unitario: item.custo_unitario_final ?? item.valor_unitario ?? null,
+            }],
+            p_origem: 'nfe_entrada',
+            p_documento_id: compra.id,
           });
-          if (estoqueInsErr) {
-            throw new Error(`Erro ao criar estoque de "${item.nome}": ${estoqueInsErr.message}`);
-          }
+        if (creditoErr) {
+          throw new Error(`Erro ao dar entrada no estoque de "${item.nome}": ${creditoErr.message}`);
         }
 
         // Registrar item da NFe de entrada
@@ -2042,6 +2038,8 @@ export function useReceberRemessa() {
           .rpc('creditar_estoque_atomico', {
             p_loja_id: remessaAtual.loja_destino_id,
             p_itens: pItens,
+            p_origem: 'remessa',
+            p_documento_id: remessa_id,
           });
         if (creditoErr) throw new Error(`Falha ao creditar estoque no destino: ${creditoErr.message}`);
       }
@@ -4016,5 +4014,221 @@ export function useUpdateLocacaoStatus() {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_locacoes'] }),
+  });
+}
+
+// ========================================
+// KARDEX / MOVIMENTAÇÕES DE ESTOQUE
+// (migration 045 — o livro de estoque; nunca editável)
+// ========================================
+export interface EstoqueMovimentacaoFiltro {
+  lojaId?: string;
+  produtoId?: string;
+  tipo?: string;
+  origem?: string;
+  dataInicio?: string;
+  dataFim?: string;
+  limite?: number;
+}
+
+export function useEstoqueMovimentacoes(filtros: EstoqueMovimentacaoFiltro = {}) {
+  return useQuery<any[]>({
+    queryKey: ['erp_estoque_movimentacoes', filtros],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let q = supabase
+        .from('erp_estoque_movimentacoes')
+        .select('*, produto:erp_produtos(id, nome, sku, unidade), loja:erp_lojas(id, nome)')
+        .order('created_at', { ascending: false })
+        .limit(filtros.limite ?? 300);
+
+      if (filtros.lojaId) q = q.eq('loja_id', filtros.lojaId);
+      if (filtros.produtoId) q = q.eq('produto_id', filtros.produtoId);
+      if (filtros.tipo) q = q.eq('tipo', filtros.tipo);
+      if (filtros.origem) q = q.eq('origem', filtros.origem);
+      if (filtros.dataInicio) q = q.gte('created_at', filtros.dataInicio);
+      if (filtros.dataFim) q = q.lte('created_at', filtros.dataFim);
+
+      const { data, error } = await q;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useAjustarEstoque() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      lojaId, produtoId, novaQuantidade, observacao,
+    }: { lojaId: string; produtoId: string; novaQuantidade: number; observacao?: string }) => {
+      const { error } = await supabase
+        .schema('erp')
+        .rpc('ajustar_estoque_atomico', {
+          p_loja_id: lojaId,
+          p_produto_id: produtoId,
+          p_nova_quantidade: novaQuantidade,
+          p_observacao: observacao ?? null,
+        });
+      if (error) throw new Error(`Falha ao ajustar estoque: ${error.message}`);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_estoque'] });
+      qc.invalidateQueries({ queryKey: ['erp_estoque_movimentacoes'] });
+    },
+  });
+}
+
+// ========================================
+// INVENTÁRIO / BALANÇO
+// ========================================
+export function useInventarios(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_inventarios', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let q = supabase
+        .from('erp_inventarios')
+        .select('*, loja:erp_lojas(id, nome)')
+        .order('created_at', { ascending: false });
+      if (lojaId) q = q.eq('loja_id', lojaId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useInventarioItens(inventarioId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_inventario_itens', inventarioId],
+    enabled: !!inventarioId,
+    queryFn: async () => {
+      if (!isSupabaseConfigured() || !inventarioId) return [];
+      const { data, error } = await supabase
+        .from('erp_inventario_itens')
+        .select('*, produto:erp_produtos(id, nome, sku, unidade)')
+        .eq('inventario_id', inventarioId);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useAbrirInventario() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ lojaId, observacoes }: { lojaId: string; observacoes?: string }) => {
+      const { data, error } = await supabase
+        .schema('erp')
+        .rpc('abrir_inventario', { p_loja_id: lojaId, p_observacoes: observacoes ?? null });
+      if (error) throw new Error(`Falha ao abrir inventário: ${error.message}`);
+      return data as string;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_inventarios'] }),
+  });
+}
+
+export function useSalvarContagem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ itemId, quantidadeContada }: { itemId: string; quantidadeContada: number | null }) => {
+      const { error } = await supabase
+        .from('erp_inventario_itens')
+        .update({ quantidade_contada: quantidadeContada })
+        .eq('id', itemId);
+      if (error) throw new Error(`Falha ao salvar contagem: ${error.message}`);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_inventario_itens'] }),
+  });
+}
+
+export function useAplicarInventario() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (inventarioId: string) => {
+      const { data, error } = await supabase
+        .schema('erp')
+        .rpc('aplicar_inventario', { p_inventario_id: inventarioId });
+      if (error) throw new Error(`Falha ao aplicar inventário: ${error.message}`);
+      return data as { inventario_id: string; itens_ajustados: number };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_inventarios'] });
+      qc.invalidateQueries({ queryKey: ['erp_inventario_itens'] });
+      qc.invalidateQueries({ queryKey: ['erp_estoque'] });
+      qc.invalidateQueries({ queryKey: ['erp_estoque_movimentacoes'] });
+    },
+  });
+}
+
+// ========================================
+// PLANO DE CONTAS / CENTROS DE CUSTO / DRE
+// ========================================
+export function usePlanoContas() {
+  return useQuery<any[]>({
+    queryKey: ['erp_plano_contas'],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      const { data, error } = await supabase
+        .from('erp_plano_contas')
+        .select('*')
+        .eq('ativo', true)
+        .order('codigo');
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useCentrosCusto() {
+  return useQuery<any[]>({
+    queryKey: ['erp_centros_custo'],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      const { data, error } = await supabase
+        .from('erp_centros_custo')
+        .select('*, loja:erp_lojas(id, nome)')
+        .eq('ativo', true)
+        .order('codigo');
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useDreMensal(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_dre_mensal', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let q = supabase.from('vw_dre_mensal').select('*').order('competencia', { ascending: false });
+      if (lojaId) q = q.eq('loja_id', lojaId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+// ========================================
+// AUDITORIA (somente admin — RLS garante)
+// ========================================
+export function useAuditoria(filtros: { tabela?: string; registroId?: string; limite?: number } = {}) {
+  return useQuery<any[]>({
+    queryKey: ['erp_auditoria', filtros],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let q = supabase
+        .from('erp_auditoria')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(filtros.limite ?? 200);
+      if (filtros.tabela) q = q.eq('tabela', filtros.tabela);
+      if (filtros.registroId) q = q.eq('registro_id', filtros.registroId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 }
