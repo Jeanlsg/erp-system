@@ -4738,3 +4738,26 @@ export async function baixarSped(arquivoId: string): Promise<string> {
   if (error) throw new Error(`Falha ao ler o arquivo: ${error.message}`);
   return data.conteudo as string;
 }
+
+/**
+ * Lê no cadastro da SEFAZ os dados do próprio CNPJ da loja. O endereço daqui
+ * é o do EMITENTE em toda NF-e e NFC-e — digitado à mão ele diverge em
+ * silêncio, e a divergência só aparece quando a nota é recusada.
+ *
+ * Sem `aplicar` a chamada só compara e devolve as divergências.
+ */
+export function useConsultarCadastroSefaz() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ loja_id, aplicar }: { loja_id: string; aplicar?: boolean }) => {
+      const { data, error } = await supabase.functions.invoke('erp-consultar-cadastro', {
+        body: { loja_id, aplicar },
+      });
+      if (error) throw new Error(await erroEdgeFunction(error, 'falha ao consultar a SEFAZ'));
+      return data;
+    },
+    onSuccess: (d: any) => {
+      if (d?.aplicado) qc.invalidateQueries({ queryKey: ['erp_lojas'] });
+    },
+  });
+}

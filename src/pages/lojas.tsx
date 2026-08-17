@@ -4,9 +4,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Store, Loader2, Plus, Pencil } from "lucide-react";
+import { Store, Loader2, Plus, Pencil, BadgeCheck } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
-import { useLojas, useCreateLoja, useUpdateLoja, isSupabaseConfigured } from "@/lib/supabase-queries";
+import { useLojas, useCreateLoja, useUpdateLoja, useConsultarCadastroSefaz, isSupabaseConfigured } from "@/lib/supabase-queries";
+import { toast } from "sonner";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import type { Loja } from "@/types/database";
 
@@ -16,6 +17,38 @@ export function LojasPage() {
   const { data: lojas = [], isLoading } = useLojas();
   const create = useCreateLoja();
   const update = useUpdateLoja();
+  const consultarSefaz = useConsultarCadastroSefaz();
+  const [conferindo, setConferindo] = useState<string | null>(null);
+
+  // Confere o cadastro contra a SEFAZ e corrige o que divergir. O endereço da
+  // loja é o do emitente em toda nota fiscal, então errar aqui erra o documento.
+  async function conferirNaSefaz(lojaId: string) {
+    setConferindo(lojaId);
+    try {
+      const r: any = await consultarSefaz.mutateAsync({ loja_id: lojaId });
+      if (!r?.ok) {
+        toast.error(r?.motivo ?? "cadastro não localizado na SEFAZ");
+        return;
+      }
+      const campos = Object.keys(r.divergencias ?? {}).filter((c) => c !== "nome");
+      if (campos.length === 0) {
+        toast.success("cadastro confere com a SEFAZ", {
+          description: `IE ${r.ie} · ${r.habilitado ? "habilitado" : "situação irregular"}`,
+        });
+        return;
+      }
+      const resumo = campos
+        .map((c) => `${c}: "${r.divergencias[c].erp ?? "—"}" → "${r.divergencias[c].sefaz}"`)
+        .join("\n");
+      if (!window.confirm(`A SEFAZ diverge do cadastro em ${campos.length} campo(s):\n\n${resumo}\n\nAplicar os dados da SEFAZ?`)) return;
+      await consultarSefaz.mutateAsync({ loja_id: lojaId, aplicar: true });
+      toast.success("cadastro atualizado com os dados da SEFAZ");
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setConferindo(null);
+    }
+  }
   const [modalAberto, setModalAberto] = useState(false);
   const [editando, setEditando] = useState<Loja | null>(null);
   const [form, setForm] = useState(FORM_VAZIO);
@@ -86,6 +119,13 @@ export function LojasPage() {
                     <td className="p-3 text-center"><Badge variant={l.ativo ? "default" : "outline"}>{l.ativo ? "Ativa" : "Inativa"}</Badge></td>
                     <td className="p-3 text-center">
                       <Button variant="ghost" size="icon" onClick={() => abrirEdicao(l)} title="Editar"><Pencil className="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="icon" disabled={conferindo === l.id}
+                        onClick={() => conferirNaSefaz(l.id)}
+                        title="Conferir cadastro na SEFAZ (IE e endereço do emitente)">
+                        {conferindo === l.id
+                          ? <Loader2 className="h-4 w-4 animate-spin" />
+                          : <BadgeCheck className="h-4 w-4" />}
+                      </Button>
                     </td>
                   </tr>
                 ))}

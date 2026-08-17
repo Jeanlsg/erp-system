@@ -617,6 +617,7 @@ try {
         // 111/112 = consulta com uma ou mais ocorrências
         $achou = in_array($cstat, ['111', '112'], true);
         $ie = null; $nome = null; $situacao = null; $cnae = null; $regime = null;
+        $endereco = null;
         if ($achou) {
             $ext = $inf->infCad ?? null;
             if (is_array($ext)) $ext = $ext[0] ?? null;   // múltiplas inscrições: pega a primeira
@@ -626,6 +627,23 @@ try {
                 $situacao = isset($ext->cSit)   ? (string)$ext->cSit   : null;  // 1=habilitado
                 $cnae     = isset($ext->CNAE)   ? (string)$ext->CNAE   : null;
                 $regime   = isset($ext->CRT)    ? (string)$ext->CRT    : null;
+
+                // O endereço do cadastro da SEFAZ é a fonte autoritativa do
+                // endereço do EMITENTE — o mesmo que vai no XML de toda NF-e.
+                // Digitado à mão ele diverge em silêncio; aqui não.
+                $end = $ext->ender ?? null;
+                if ($end) {
+                    $endereco = [
+                        'logradouro'  => isset($end->xLgr)     ? (string)$end->xLgr     : null,
+                        'numero'      => isset($end->nro)      ? (string)$end->nro      : null,
+                        'complemento' => isset($end->xCpl)     ? (string)$end->xCpl     : null,
+                        'bairro'      => isset($end->xBairro)  ? (string)$end->xBairro  : null,
+                        'municipio'   => isset($end->xMun)     ? (string)$end->xMun     : null,
+                        'codigo_municipio' => isset($end->cMun) ? (string)$end->cMun    : null,
+                        'cep'         => isset($end->CEP)      ? (string)$end->CEP      : null,
+                        'uf'          => $uf,
+                    ];
+                }
             }
         }
 
@@ -640,6 +658,7 @@ try {
             'habilitado'      => $situacao === '1',
             'cnae'            => $cnae,
             'regime_tributario' => $regime,
+            'endereco'        => $endereco,
         ]);
     }
 
