@@ -2800,7 +2800,10 @@ export function useCartoesFidelidade(lojaId?: string) {
     queryKey: ['erp_cartao_fidelidade', lojaId],
     queryFn: async () => {
       if (!isSupabaseConfigured()) return [];
-      let query = supabase.from('erp_cartao_fidelidade').select('*').order('created_at', { ascending: false });
+      let query = supabase
+        .from('erp_cartao_fidelidade')
+        .select('*, cliente:erp_pessoas(id, nome_razao, cpf_cnpj, telefone)')
+        .order('total_pontos_acumulados', { ascending: false });
       if (lojaId) query = query.eq('loja_id', lojaId);
       const { data, error } = await query;
       if (error) throw error;
@@ -4758,6 +4761,139 @@ export function useConsultarCadastroSefaz() {
     },
     onSuccess: (d: any) => {
       if (d?.aplicado) qc.invalidateQueries({ queryKey: ['erp_lojas'] });
+    },
+  });
+}
+
+// ========================================
+// FASE 8 — crediário próprio e fidelidade (migration 055)
+// ========================================
+export function useCrediarioContratos(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_crediario_contratos', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let q = supabase
+        .from('erp_crediario_parcelas')
+        .select('*, cliente:erp_pessoas(id, nome_razao, cpf_cnpj, telefone), parcelas:erp_crediario_parcela_itens(*)')
+        .order('created_at', { ascending: false });
+      if (lojaId) q = q.eq('loja_id', lojaId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+/** Quem deve, quanto, e quanto ainda cabe no limite. */
+export function useCrediarioClientes() {
+  return useQuery<any[]>({
+    queryKey: ['erp_crediario_clientes'],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      const { data, error } = await supabase
+        .from('vw_crediario_clientes')
+        .select('*')
+        .order('em_atraso', { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useAbrirCrediario() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (p: {
+      vendaId: string; parcelas: number; jurosMensal?: number;
+      tipoJuros?: 'simples' | 'composto'; primeiraData?: string; entrada?: number;
+    }) => {
+      const { data, error } = await supabase.schema('erp').rpc('abrir_crediario', {
+        p_venda_id: p.vendaId,
+        p_parcelas: p.parcelas,
+        p_juros_mensal: p.jurosMensal ?? null,
+        p_tipo_juros: p.tipoJuros ?? 'composto',
+        p_primeira_data: p.primeiraData ?? null,
+        p_entrada: p.entrada ?? 0,
+      });
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: () => {
+      // O contrato substitui a conta a receber da venda, então o financeiro muda junto.
+      qc.invalidateQueries({ queryKey: ['erp_crediario_contratos'] });
+      qc.invalidateQueries({ queryKey: ['erp_crediario_clientes'] });
+      qc.invalidateQueries({ queryKey: ['erp_contas'] });
+    },
+  });
+}
+
+export function useBaixarParcelaCrediario() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (p: { itemId: string; valor?: number; data?: string; forma?: string }) => {
+      const { data, error } = await supabase.schema('erp').rpc('baixar_parcela_crediario', {
+        p_item_id: p.itemId,
+        p_valor: p.valor ?? null,
+        p_data: p.data ?? null,
+        p_forma: p.forma ?? null,
+      });
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_crediario_contratos'] });
+      qc.invalidateQueries({ queryKey: ['erp_crediario_clientes'] });
+      qc.invalidateQueries({ queryKey: ['erp_contas'] });
+    },
+  });
+}
+
+export function useEmitirCartaoFidelidade() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (p: { clienteId: string; lojaId: string }) => {
+      const { data, error } = await supabase.schema('erp').rpc('emitir_cartao_fidelidade', {
+        p_cliente_id: p.clienteId,
+        p_loja_id: p.lojaId,
+      });
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_cartao_fidelidade'] }),
+  });
+}
+
+export function useResgatarPontos() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (p: { cartaoId: string; pontos: number; vendaId?: string }) => {
+      const { data, error } = await supabase.schema('erp').rpc('resgatar_pontos', {
+        p_cartao_id: p.cartaoId,
+        p_pontos: p.pontos,
+        p_venda_id: p.vendaId ?? null,
+      });
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_cartao_fidelidade'] }),
+  });
+}
+
+export function useMovimentacoesFidelidade(cartaoId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_fidelidade_movimentacoes', cartaoId],
+    enabled: !!cartaoId,
+    queryFn: async () => {
+      if (!isSupabaseConfigured() || !cartaoId) return [];
+      const { data, error } = await supabase
+        .from('erp_cartao_fidelidade_movimentacoes')
+        .select('*')
+        .eq('cartao_id', cartaoId)
+        .order('data_movimentacao', { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      return data ?? [];
     },
   });
 }
