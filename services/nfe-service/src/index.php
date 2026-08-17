@@ -528,6 +528,54 @@ try {
         ]);
     }
 
+    // ---------- MANIFESTAÇÃO DO DESTINATÁRIO ----------
+    // Sem manifestar, a distribuição só entrega o RESUMO da nota (cabeçalho e
+    // valor) — os itens nunca chegam. A "ciência da operação" é o mínimo que
+    // libera o XML completo; confirmação/desconhecimento/não realizada são
+    // definitivos e alteram a relação comercial, então exigem decisão humana.
+    //
+    // O evento vai para o Ambiente Nacional (AN), não para a UF do emitente.
+    if ($path === '/v1/dfe/manifestar' && $method === 'POST') {
+        $req = body();
+        $chave = preg_replace('/\D/', '', (string)($req['chave'] ?? ''));
+        if (strlen($chave) !== 44) out(422, ['erro' => 'chave deve ter 44 dígitos']);
+
+        $TIPOS = [
+            'ciencia'        => 210210,
+            'confirmacao'    => 210200,
+            'desconhecimento'=> 210220,
+            'nao_realizada'  => 210240,
+        ];
+        $tipo = (string)($req['tipo'] ?? 'ciencia');
+        if (!isset($TIPOS[$tipo])) {
+            out(422, ['erro' => 'tipo deve ser: ' . implode(', ', array_keys($TIPOS))]);
+        }
+        // Só "não realizada" carrega justificativa, e a SEFAZ a exige.
+        $just = trim((string)($req['justificativa'] ?? ''));
+        if ($tipo === 'nao_realizada' && mb_strlen($just) < 15) {
+            out(422, ['erro' => 'justificativa de no mínimo 15 caracteres para "não realizada"']);
+        }
+
+        $tools = makeTools($req);
+        try {
+            $resp = $tools->sefazManifesta($chave, $TIPOS[$tipo], $just, (int)($req['sequencia'] ?? 1));
+        } catch (\Throwable $e) {
+            out(200, ['registrada' => false, 'motivo' => 'falha ao manifestar', 'detalhe' => $e->getMessage()]);
+        }
+
+        $st = std($resp);
+        $ev = $st->retEvento->infEvento ?? $st;
+        $cstat = (string)($ev->cStat ?? $st->cStat ?? '');
+        // 135 = evento registrado; 573 = evento já registrado antes (idempotente)
+        out(200, [
+            'registrada' => in_array($cstat, ['135', '136'], true),
+            'ja_existia' => $cstat === '573',
+            'cstat'      => $cstat,
+            'motivo'     => (string)($ev->xMotivo ?? $st->xMotivo ?? ''),
+            'protocolo'  => (string)($ev->nProt ?? ''),
+        ]);
+    }
+
     // ---------- CONSULTA CADASTRO NA SEFAZ ----------
     // Puxa Inscrição Estadual, razão social e situação cadastral do CNPJ
     // direto no cadastro da SEFAZ, usando o certificado da empresa.

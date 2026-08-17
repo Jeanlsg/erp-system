@@ -9,6 +9,7 @@
 // ============================================================
 
 import { useState, useEffect, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import {
   Card, CardContent, CardHeader, CardTitle, CardDescription,
 } from "@/components/ui/card";
@@ -76,6 +77,27 @@ export function ImportarNFePage() {
     };
     reader.readAsText(file);
   };
+
+  // 1b. XML vindo da distribuição DF-e
+  // A tela de notas recebidas manda o XML que a SEFAZ entregou, para o
+  // fornecedor não precisar enviar arquivo nenhum. Daqui para frente o
+  // fluxo é idêntico ao do upload — inclusive a conferência item a item.
+  const location = useLocation();
+  const xmlDfeRef = useRef<string | null>(null);
+  useEffect(() => {
+    const xml = (location.state as any)?.xmlDfe as string | undefined;
+    if (!xml || xmlDfeRef.current === xml) return;
+    xmlDfeRef.current = xml;
+    if (!isValidNFeXML(xml)) {
+      setError("O XML recebido da SEFAZ não pôde ser lido como NF-e.");
+      return;
+    }
+    try {
+      setParsed(parseNFeXML(xml));
+    } catch (err: any) {
+      setError(`Erro ao processar o XML da SEFAZ: ${err.message}`);
+    }
+  }, [location.state]);
 
   // 2. Auto-matching ao carregar XML
   // Só remapeia quando o XML parseado muda: refetches de produtos/pessoas

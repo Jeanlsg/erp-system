@@ -4500,3 +4500,114 @@ export function usePrecoEfetivo(params: {
     },
   });
 }
+
+// ========================================
+// FASE 6 — distribuição DF-e (migration 051)
+//
+// A SEFAZ entrega toda NF-e emitida contra o nosso CNPJ. Enquanto a nota
+// estiver como `resumo`, só temos cabeçalho e valor: os itens (e portanto o
+// custo real) só chegam depois da manifestação.
+// ========================================
+export function useDfePendentes(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_dfe_pendentes', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let q = supabase
+        .schema('erp')
+        .from('vw_dfe_pendentes')
+        .select('*')
+        .order('data_emissao', { ascending: false });
+      if (lojaId) q = q.eq('loja_id', lojaId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useDfeStatus() {
+  return useQuery<any[]>({
+    queryKey: ['erp_dfe_nsu'],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      const { data, error } = await supabase
+        .schema('erp')
+        .from('erp_dfe_nsu')
+        .select('*, loja:erp_lojas(id, nome, uf)');
+      if (error) throw error;
+      return data ?? [];
+    },
+    // O NSU muda quando a varredura roda; 60s evita a tela mentir por muito tempo.
+    refetchInterval: 60_000,
+  });
+}
+
+export function useDfeConsultas(lojaId?: string, limite = 20) {
+  return useQuery<any[]>({
+    queryKey: ['erp_dfe_consultas', lojaId, limite],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let q = supabase
+        .schema('erp')
+        .from('erp_dfe_consultas')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(limite);
+      if (lojaId) q = q.eq('loja_id', lojaId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+function invalidarDfe(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: ['erp_dfe_pendentes'] });
+  qc.invalidateQueries({ queryKey: ['erp_dfe_nsu'] });
+  qc.invalidateQueries({ queryKey: ['erp_dfe_consultas'] });
+}
+
+export function useSincronizarDfe() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ loja_id, forcar }: { loja_id: string; forcar?: boolean }) => {
+      const { data, error } = await supabase.functions.invoke('erp-dfe', {
+        body: { acao: 'sincronizar', loja_id, forcar },
+      });
+      if (error) throw new Error(await erroEdgeFunction(error, 'falha ao consultar a SEFAZ'));
+      return data;
+    },
+    onSuccess: () => invalidarDfe(qc),
+  });
+}
+
+export function useManifestarDfe() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      nfe_entrada_id, tipo, justificativa,
+    }: { nfe_entrada_id: string; tipo: string; justificativa?: string }) => {
+      const { data, error } = await supabase.functions.invoke('erp-dfe', {
+        body: { acao: 'manifestar', nfe_entrada_id, tipo, justificativa },
+      });
+      if (error) throw new Error(await erroEdgeFunction(error, 'falha ao manifestar'));
+      return data;
+    },
+    onSuccess: () => invalidarDfe(qc),
+  });
+}
+
+export function useBaixarNfePorChave() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ loja_id, chave }: { loja_id: string; chave: string }) => {
+      const { data, error } = await supabase.functions.invoke('erp-dfe', {
+        body: { acao: 'baixar_chave', loja_id, chave },
+      });
+      if (error) throw new Error(await erroEdgeFunction(error, 'falha ao baixar a nota'));
+      return data;
+    },
+    onSuccess: () => invalidarDfe(qc),
+  });
+}

@@ -41,6 +41,7 @@ import { ComprasPage } from "@/pages/compras";
 import { RelatoriosPage } from "@/pages/relatorios";
 import { DevolucoesPage } from "@/pages/devolucoes";
 import { FiscalPage } from "@/pages/fiscal";
+import { FiscalDfePage } from "@/pages/fiscal.dfe";
 import { ConfiguracoesPage } from "@/pages/configuracoes";
 import { AjudaPage } from "@/pages/ajuda";
 import { ConfigSistemaPage } from "@/pages/config.sistema";
@@ -240,6 +241,7 @@ export default function App() {
         <Route path="fornecedores" element={<FornecedoresPage />} />
         <Route path="funcionarios" element={<FuncionariosPage />} />
         <Route path="fiscal" element={<FiscalPage />} />
+        <Route path="fiscal/notas-recebidas" element={<FiscalDfePage />} />
         <Route path="relatorios" element={<RelatoriosPage />} />
         <Route path="lojas" element={<LojasPage />} />
         <Route path="configuracoes" element={<ConfiguracoesPage />} />
