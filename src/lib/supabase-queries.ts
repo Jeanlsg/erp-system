@@ -4394,3 +4394,109 @@ export function useBaixarConta() {
     },
   });
 }
+
+// ========================================
+// FASE 3 — ciclo comercial (migration 050)
+// ========================================
+export function useConverterOrcamento() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      orcamentoId, formaPagamento = 'dinheiro', caixaId,
+    }: { orcamentoId: string; formaPagamento?: string; caixaId?: string }) => {
+      const { data, error } = await supabase
+        .schema('erp')
+        .rpc('converter_orcamento_em_venda', {
+          p_orcamento_id: orcamentoId,
+          p_forma_pagamento: formaPagamento,
+          p_caixa_id: caixaId ?? null,
+        });
+      if (error) throw new Error(`Falha ao converter orçamento: ${error.message}`);
+      return data as string;  // id da venda criada
+    },
+    onSuccess: () => {
+      // A conversão baixa estoque e gera a conta a receber, então invalida tudo isso
+      qc.invalidateQueries({ queryKey: ['erp_orcamentos'] });
+      qc.invalidateQueries({ queryKey: ['erp_vendas'] });
+      qc.invalidateQueries({ queryKey: ['erp_estoque'] });
+      qc.invalidateQueries({ queryKey: ['erp_estoque_movimentacoes'] });
+      qc.invalidateQueries({ queryKey: ['erp_contas'] });
+    },
+  });
+}
+
+export function useTabelasPreco(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_tabelas_preco', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let q = supabase
+        .from('erp_tabelas_preco')
+        .select('*, itens:erp_tabela_preco_itens(id, produto_id, preco, quantidade_minima)')
+        .order('prioridade', { ascending: false });
+      if (lojaId) q = q.or(`loja_id.eq.${lojaId},loja_id.is.null`);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useSalvarTabelaPreco() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (tabela: any) => {
+      const { itens, ...cabecalho } = tabela;
+      const { data, error } = await supabase
+        .from('erp_tabelas_preco')
+        .upsert(cabecalho)
+        .select()
+        .single();
+      if (error) throw new Error(`Falha ao salvar tabela de preços: ${error.message}`);
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_tabelas_preco'] }),
+  });
+}
+
+export function useSalvarPrecoItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (item: {
+      id?: string; tabela_id: string; produto_id: string;
+      preco: number; quantidade_minima?: number;
+    }) => {
+      const { error } = await supabase
+        .from('erp_tabela_preco_itens')
+        .upsert({ quantidade_minima: 1, ...item }, { onConflict: 'tabela_id,produto_id,quantidade_minima' });
+      if (error) throw new Error(`Falha ao salvar preço: ${error.message}`);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_tabelas_preco'] }),
+  });
+}
+
+/**
+ * Preço efetivo de um produto: item específico > ajuste da tabela > preço do
+ * produto. Resolvido no banco para o PDV e o front usarem a MESMA regra.
+ */
+export function usePrecoEfetivo(params: {
+  produtoId?: string; lojaId?: string; clienteId?: string; quantidade?: number;
+}) {
+  return useQuery<number | null>({
+    queryKey: ['erp_preco_efetivo', params],
+    enabled: !!params.produtoId,
+    queryFn: async () => {
+      if (!isSupabaseConfigured() || !params.produtoId) return null;
+      const { data, error } = await supabase
+        .schema('erp')
+        .rpc('preco_efetivo', {
+          p_produto_id: params.produtoId,
+          p_loja_id: params.lojaId ?? null,
+          p_cliente_id: params.clienteId ?? null,
+          p_quantidade: params.quantidade ?? 1,
+        });
+      if (error) throw error;
+      return data === null ? null : Number(data);
+    },
+  });
+}
