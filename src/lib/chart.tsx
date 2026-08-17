@@ -26,12 +26,11 @@ function ChartCanvas({ config }: { config: ChartConfig }) {
 
     // Carrega Chart.js dinamicamente
     const init = async () => {
-      // @ts-ignore
+      // @ts-expect-error — Chart.js entra por CDN, sem tipos no window
       const Chart = window.Chart;
       if (!Chart) {
         // Carrega via CDN se não estiver disponível
         await loadChartJs();
-        // @ts-ignore
         return init();
       }
 

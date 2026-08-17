@@ -120,8 +120,6 @@ export function UsuariosPage() {
   const [permissoesCustom, setPermissoesCustom] = useState<Record<string, boolean>>({});
   const [usarPermissoesCustom, setUsarPermissoesCustom] = useState(false);
 
-  if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="Gestão de Usuários" />;
-
   const isAdmin = currentUser?.role === "admin";
 
   const lojaMap = Object.fromEntries(lojas.map((l) => [l.id, l.apelido || l.nome]));
@@ -144,6 +142,9 @@ export function UsuariosPage() {
     if (statusFilter === "bloqueados") lista = lista.filter((u) => u.bloqueado);
     return lista;
   }, [usuarios, search, roleFilter, statusFilter]);
+
+  // Depois de TODOS os hooks — ver comentário equivalente em produtos.
+  if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="Gestão de Usuários" />;
 
   // ===== KPIs =====
   const totalUsuarios = usuarios.length;

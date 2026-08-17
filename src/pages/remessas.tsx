@@ -69,6 +69,12 @@ export function RemessasPage() {
 
   const [itemSearch, setItemSearch] = useState("");
 
+  // Inicializar loja origem com a loja atual. Fica junto dos demais hooks:
+  // depois de um early return, a ordem das chamadas mudaria entre renders.
+  useEffect(() => {
+    setForm((f) => (f.loja_origem_id || !lojaId ? f : { ...f, loja_origem_id: lojaId }));
+  }, [lojaId]);
+
   if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="Remessas" />;
 
   const lojasAtivas = lojas.filter((l) => l.ativo);
@@ -121,13 +127,6 @@ export function RemessasPage() {
     });
     setItemSearch("");
   };
-
-  // Inicializar loja origem com loja atual
-  useEffect(() => {
-    if (lojaId && !form.loja_origem_id) {
-      setForm((f) => ({ ...f, loja_origem_id: lojaId }));
-    }
-  }, [lojaId]);
 
   const adicionarItem = (produto: any) => {
     const novoItem: ItemForm = {

@@ -120,7 +120,6 @@ export function RecomendacoesPage() {
   if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="Recomendações" />;
 
   const recomendo = recomendacoes.filter((r: any) => r.tipo === "recomendo").length;
-  naoRecomendo: { /* */ }
 
   return (
     <div className="space-y-6">
@@ -180,11 +179,11 @@ export function RecomendacoesPage() {
 export function NotificacoesPage() {
   const { user } = useAuth();
   const { data: notificacoes = [], isLoading } = useNotificacoes(user?.id);
+  const marcar = useMarcarNotificacaoLida();
 
   if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="Notificações" />;
 
   const naoLidas = notificacoes.filter((n: any) => !n.lida).length;
-  const marcar = useMarcarNotificacaoLida();
 
   return (
     <div className="space-y-6">

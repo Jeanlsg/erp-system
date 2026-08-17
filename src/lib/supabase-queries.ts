@@ -3046,7 +3046,7 @@ export function useTopProdutosVendidos(
 
       // Buscar SKU + imagem_url dos produtos relacionados
       const produtoIds = Array.from(new Set(Object.values(mapa).map((m) => m.produto_id).filter(Boolean)));
-      let produtoMap: Record<string, { sku: string | null; imagem_url: string | null }> = {};
+      const produtoMap: Record<string, { sku: string | null; imagem_url: string | null }> = {};
       if (produtoIds.length > 0) {
         const { data: produtos } = await supabase
           .from('erp_produtos')
@@ -4220,7 +4220,7 @@ export function useDreMensal(lojaId?: string) {
     queryKey: ['erp_dre_mensal', lojaId],
     queryFn: async () => {
       if (!isSupabaseConfigured()) return [];
-      let q = supabase.from('vw_dre_mensal').select('*').order('competencia', { ascending: false });
+      let q = supabase.from('vw_dre_resumo').select('*').order('competencia', { ascending: false });
       if (lojaId) q = q.eq('loja_id', lojaId);
       const { data, error } = await q;
       if (error) throw error;
@@ -4446,7 +4446,8 @@ export function useSalvarTabelaPreco() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (tabela: any) => {
-      const { itens, ...cabecalho } = tabela;
+      // itens vai numa chamada à parte (erp_tabela_preco_itens)
+      const { itens: _itens, ...cabecalho } = tabela;
       const { data, error } = await supabase
         .from('erp_tabelas_preco')
         .upsert(cabecalho)
@@ -4629,6 +4630,59 @@ export function useEstoqueNegativo(lojaId?: string) {
         .from('vw_estoque_negativo')
         .select('*')
         .order('quantidade', { ascending: true });
+      if (lojaId) q = q.eq('loja_id', lojaId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+// ========================================
+// FASE 4 — BI sobre a fundação da fase 1 (migration 053)
+// ========================================
+/**
+ * Curva ABC sobre venda REALIZADA. Calculada a partir de preço de tabela
+ * seria uma opinião; a partir do que saiu do caixa é um fato.
+ */
+export function useCurvaAbc(params: { lojaId?: string; desde?: string; ate?: string } = {}) {
+  return useQuery<any[]>({
+    queryKey: ['erp_curva_abc', params],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      const { data, error } = await supabase
+        .schema('erp')
+        .rpc('curva_abc', {
+          p_loja_id: params.lojaId ?? null,
+          p_desde: params.desde ?? null,
+          p_ate: params.ate ?? null,
+        });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useSugestaoCompra(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_sugestao_compra', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let q = supabase.from('vw_sugestao_compra').select('*').order('dias_de_cobertura', { ascending: true, nullsFirst: false });
+      if (lojaId) q = q.eq('loja_id', lojaId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useEstoqueParado(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_estoque_parado', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let q = supabase.from('vw_estoque_parado').select('*').order('capital_parado', { ascending: false });
       if (lojaId) q = q.eq('loja_id', lojaId);
       const { data, error } = await q;
       if (error) throw error;

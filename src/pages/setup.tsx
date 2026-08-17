@@ -60,10 +60,6 @@ export function SetupPage() {
     tipo_loja: "matriz" as "matriz" | "filial" | "deposito",
   });
 
-  if (!isSupabaseConfigured()) {
-    return <SupabaseNotConfigured title="Configuração Inicial" />;
-  }
-
   // Verificar permissão de admin via Supabase Auth + erp_usuarios
   useEffect(() => {
     async function checkAdmin() {
@@ -95,6 +91,12 @@ export function SetupPage() {
     }
     checkAdmin();
   }, []);
+
+  // Early returns só depois de TODOS os hooks: retornar antes muda a ordem
+  // das chamadas entre renders, que é o que a regra dos hooks proíbe.
+  if (!isSupabaseConfigured()) {
+    return <SupabaseNotConfigured title="Configuração Inicial" />;
+  }
 
   // Tela de carregamento
   if (verificandoAuth) {

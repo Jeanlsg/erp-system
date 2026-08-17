@@ -154,6 +154,10 @@ export function ImportarNFePage() {
     });
 
     setItens(itensMapeados);
+    // margemGlobal fica de fora de propósito: ela é o valor INICIAL de cada
+    // item e o usuário edita depois. Incluí-la refaria o mapeamento e
+    // descartaria as margens já ajustadas à mão.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [parsed, produtos, pessoas]);
 
   // Aplicar margem global nos itens

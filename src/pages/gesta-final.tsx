@@ -25,6 +25,14 @@ import { brl, date } from "@/lib/format";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
+// Estas páginas são apelidos de telas que já existem. Antes usavam
+// require(), que não existe no bundle do navegador — abrir qualquer uma
+// delas quebrava a tela. O lint pegou isso assim que voltou a rodar.
+import { ConfigEmpresarialPage } from "@/pages/config.empresarial";
+import { DocumentosPage } from "@/pages/documentos";
+import { CrediarioProprioPage } from "@/pages/crediario-proprio";
+import { GestaoHubPage } from "@/pages/gestao";
+
 // ====================================================================
 // CONSULTA PESSOA FÍSICA
 // ====================================================================
@@ -325,7 +333,6 @@ export function ConsultaPessoaJuridicaPage() {
 // ====================================================================
 export function DadosEmpresariaisPage() {
   // Reaproveita ConfigEmpresarial
-  const { ConfigEmpresarialPage } = require("@/pages/config.empresarial");
   return <ConfigEmpresarialPage />;
 }
 
@@ -346,7 +353,7 @@ function imprimirEtiqueta(p: any) {
     <svg width="200" height="64" xmlns="http://www.w3.org/2000/svg">${barras}</svg>
     <p style="font-family:monospace">${codigo}</p>
     <p style="font-weight:bold;font-size:18px">${Number(p.preco_venda ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
-    <script>window.onload = () => { window.print(); window.close(); };<\/script>
+    <script>window.onload = () => { window.print(); window.close(); };<\u002Fscript>
     </body></html>`);
   w.document.close();
 }
@@ -853,7 +860,6 @@ export function DocumentosDemonstrativosPage() {
 // ====================================================================
 export function PastaPrincipalPage() {
   // Reaproveita Documentos
-  const { DocumentosPage } = require("@/pages/documentos");
   return <DocumentosPage />;
 }
 
@@ -978,7 +984,6 @@ export function CadastroProdutosPage() {
 // ====================================================================
 export function GerarCrediarioPage() {
   // Reaproveita CrediarioProprioPage (mesma estrutura, valores diferentes)
-  const { CrediarioProprioPage } = require("@/pages/crediario-proprio");
   return <CrediarioProprioPage />;
 }
 
@@ -1156,6 +1161,5 @@ export function PainelContadorPage() {
 // GESTÃO EMPRESARIAL (Hub - alias)
 // ====================================================================
 export function EmpresarialPage() {
-  const { GestaoHubPage } = require("@/pages/gestao");
   return <GestaoHubPage />;
 }

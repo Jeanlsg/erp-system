@@ -99,8 +99,6 @@ export function ProdutosEstoqueLotesPage() {
   const updateCategoria = useUpdateCategoria();
   const deleteCategoria = useDeleteCategoria();
 
-  if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="Cadastro e Estoque de Produtos" />;
-
   // ===== Filtros e paginação =====
   const filtered = useMemo(() => {
     let lista = produtosCompletos;
@@ -113,6 +111,10 @@ export function ProdutosEstoqueLotesPage() {
     }
     return lista;
   }, [produtosCompletos, categoriaFiltro, categorias]);
+
+  // Depois de TODOS os hooks: retornar antes muda a ordem das chamadas entre
+  // renders, que é o que a regra dos hooks proíbe.
+  if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="Cadastro e Estoque de Produtos" />;
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const pageItems = filtered.slice((page - 1) * pageSize, page * pageSize);
