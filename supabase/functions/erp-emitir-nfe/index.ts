@@ -178,6 +178,9 @@ Deno.serve(async (req) => {
     let pagamentos: any[] = [];
     let observacoes = "";
     let totalNota = 0;
+    // Preenchido quando a venda veio da fila offline: a emissão é posterior
+    // ao fato e a SEFAZ exige o momento em que a contingência começou.
+    let contingenciaDesde: string | null = null;
 
     let chaveReferenciada: string | null = null;
     let notaOriginalId: string | null = null;
@@ -284,6 +287,9 @@ Deno.serve(async (req) => {
         .eq("id", venda_id).single();
       if (!venda) return json(422, { erro: "venda não encontrada" });
       if (venda.status !== "finalizada") return json(422, { erro: `venda com status "${venda.status}" — só vendas finalizadas geram ${rotulo}` });
+      if (venda.origem_offline) {
+        contingenciaDesde = venda.criada_em_local ?? venda.data_venda ?? null;
+      }
 
       if (isNFCe) {
         // NFC-e: consumidor é opcional. Se houver CPF/CNPJ, vai identificado;
@@ -379,6 +385,17 @@ Deno.serve(async (req) => {
         modelo, serie: serieDoc, numero, natureza, observacoes,
         finalidade: isDevolucao ? 4 : 1,
         ...(chaveReferenciada ? { chave_referenciada: chaveReferenciada } : {}),
+        // Venda que subiu da fila offline: a emissão é posterior ao fato, e a
+        // SEFAZ trata isso como contingência (tpEmis=9), com o momento da
+        // queda declarado em dhCont. Emitir como normal seria informar uma
+        // data de emissão que não é a da operação.
+        ...(isNFCe && contingenciaDesde
+          ? {
+              contingencia_offline: true,
+              contingencia_desde: contingenciaDesde,
+              contingencia_motivo: "Venda realizada sem conexao com a internet no ponto de venda",
+            }
+          : {}),
       },
       itens,
       pagamentos,

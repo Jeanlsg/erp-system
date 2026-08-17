@@ -15,6 +15,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
+  useEstoqueNegativo,
   useInventarios, useInventarioItens, useAbrirInventario,
   useSalvarContagem, useAplicarInventario, useLojas,
 } from "@/lib/supabase-queries";
@@ -40,6 +41,9 @@ export function InventarioPage() {
     lojaFiltro === "todas" ? undefined : lojaFiltro
   );
   const { data: itens = [], isLoading: carregandoItens } = useInventarioItens(selecionado);
+  const { data: negativos = [] } = useEstoqueNegativo(
+    lojaFiltro === "todas" ? undefined : lojaFiltro
+  );
 
   const abrir = useAbrirInventario();
   const salvarContagem = useSalvarContagem();
@@ -109,6 +113,37 @@ export function InventarioPage() {
           <Play className="mr-2 h-4 w-4" /> Abrir inventário
         </Button>
       </div>
+
+      {/* Saldo negativo é sintoma, não erro de digitação: a venda offline
+          registrou a saída de mercadoria que o sistema achava não existir.
+          A correção certa é contar, e é justamente esta tela. */}
+      {negativos.length > 0 && (
+        <Card className="border-amber-300 bg-amber-50 dark:bg-amber-950/20">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <AlertTriangle className="h-4 w-4 text-amber-600" />
+              {negativos.length} produto(s) com saldo negativo
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1 text-sm">
+            <p className="text-muted-foreground">
+              Vendas registradas sem conexão baixaram estoque que o sistema não tinha. Conte
+              estes produtos para reconciliar.
+            </p>
+            <ul className="mt-2 space-y-0.5">
+              {negativos.slice(0, 8).map((n: any) => (
+                <li key={`${n.loja_id}-${n.produto_id}`} className="flex justify-between gap-4">
+                  <span className="truncate">{n.produto_nome} <span className="text-muted-foreground">({n.loja_nome})</span></span>
+                  <span className="font-medium text-red-600">{n.quantidade}</span>
+                </li>
+              ))}
+            </ul>
+            {negativos.length > 8 && (
+              <p className="text-xs text-muted-foreground">e mais {negativos.length - 8}…</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader className="pb-3">

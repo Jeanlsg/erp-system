@@ -10,11 +10,11 @@ import {
 import {
   Calculator, Plus, Trash2, Loader2, ShoppingCart, Package,
   CreditCard, Banknote, QrCode, Lock, Unlock, Settings,
-  Check, X, AlertCircle, Receipt,
+  Check, X, AlertCircle, Receipt, CloudOff, RefreshCw, Cloud,
 } from "lucide-react";
 import {
   useProdutos, useClientes, useCaixaAberto, useCreateCaixa, useFecharCaixa,
-  useCreateVenda, useBaixarEstoqueVenda, useCaixas,
+  useCaixas,
   useCreateSangria, useCreateEntradaExtra, useCaixaConfig, useUpdateCaixaConfig,
   useEmitirNFeVenda, isSupabaseConfigured,
 } from "@/lib/supabase-queries";
@@ -23,6 +23,9 @@ import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { useAuth } from "@/lib/store/auth-store";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { brl } from "@/lib/format";
+import { useConexao } from "@/lib/offline/conexao";
+import { registrarVenda, useFilaVendas } from "@/lib/offline/fila-vendas";
+import { useCatalogoOffline } from "@/lib/offline/catalogo";
 
 interface CartItem {
   produto_id: string;
@@ -37,8 +40,6 @@ interface CartItem {
 export function PDVPage() {
   const { user } = useAuth();
   const { lojaId } = useAutoSelectLoja();
-  const createVenda = useCreateVenda();
-  const baixarEstoque = useBaixarEstoqueVenda();
   const emitirNFCe = useEmitirNFeVenda();
   const createCaixa = useCreateCaixa();
   const fecharCaixa = useFecharCaixa();
@@ -46,8 +47,15 @@ export function PDVPage() {
   const createEntrada = useCreateEntradaExtra();
   const updateCaixaConfig = useUpdateCaixaConfig();
 
+  // Conexão e fila offline: o caixa não pode parar quando a internet cai.
+  const online = useConexao();
+  const fila = useFilaVendas(online);
+
   // Queries
-  const { data: produtos = [] } = useProdutos({ lojaId: lojaId ?? undefined });
+  const { data: produtosServidor = [] } = useProdutos({ lojaId: lojaId ?? undefined });
+  // Offline, a lista vem do espelho local salvo enquanto havia rede.
+  const catalogo = useCatalogoOffline(lojaId, produtosServidor, online);
+  const produtos = catalogo.produtos;
   const { data: clientes = [] } = useClientes();
   const { data: caixaAberto } = useCaixaAberto(user?.id);
   const { data: caixas = [] } = useCaixas(lojaId ?? undefined);
@@ -205,16 +213,20 @@ export function PDVPage() {
   };
 
   // Finalizar venda
+  const [finalizando, setFinalizando] = useState(false);
   const handleFinalizarVenda = async () => {
-    if (!lojaId || !user || cart.length === 0) return;
+    if (!lojaId || !user || cart.length === 0 || finalizando) return;
+    setFinalizando(true);
 
     const custoTotal = cart.reduce((s, i) => s + i.preco_custo * i.quantidade, 0);
 
     try {
-      const vendaCriada = await createVenda.mutateAsync({
+      // Venda, itens e baixa de estoque numa transação só. Antes eram duas
+      // chamadas, e a rede caindo entre elas deixava venda sem baixa — o que
+      // offline seria a regra, não a exceção.
+      const envio = await registrarVenda({
         loja_id: lojaId,
         cliente_id: clienteId || null,
-        usuario_id: user.id,
         subtotal,
         desconto: totalDesconto,
         desconto_percentual: descontoPercentual ? desc : 0,
@@ -228,7 +240,6 @@ export function PDVPage() {
         status: "finalizada",
         tipo_venda: "pdv",
         observacoes: "",
-        numero_pedido: 0,
         itens: cart.map((i) => ({
           produto_id: i.produto_id,
           nome: i.nome,
@@ -240,24 +251,30 @@ export function PDVPage() {
         caixa_id: caixaAberto?.id,
       });
 
-      // Baixar estoque (o kardex fica amarrado à venda que originou a saída)
-      await baixarEstoque.mutateAsync({
-        lojaId,
-        itens: cart,
-        origem: "venda",
-        documentoId: (vendaCriada as any)?.id,
-      });
-
       limparCarrinho();
       setModalConfirmarVenda(false);
+      void fila.recarregar();
+
+      if (!envio.enviada) {
+        // Sem rede a venda está guardada localmente e sobe sozinha depois.
+        // Dizer isso é diferente de dizer "deu certo": o operador precisa
+        // saber que o cupom fiscal ainda não existe.
+        toast.warning(
+          "Venda registrada no caixa, mas sem internet: ela sobe sozinha quando a conexão voltar.",
+          { duration: 8000 },
+        );
+        return;
+      }
+
       toast.success("Venda finalizada com sucesso.");
+      const vendaCriada = envio.resultado;
 
       // NFC-e é acessória à venda: se a SEFAZ recusar, a venda continua
       // registrada e o cupom pode ser reemitido em Notas Fiscais.
-      if (emitirCupom && vendaCriada?.id) {
+      if (emitirCupom && vendaCriada?.venda_id) {
         try {
           const nota = await emitirNFCe.mutateAsync({
-            venda_id: (vendaCriada as any).id,
+            venda_id: vendaCriada.venda_id,
             loja_id: lojaId,
             tipo: "nfce",
           });
@@ -273,10 +290,15 @@ export function PDVPage() {
       }
     } catch (err: any) {
       console.error("Erro ao finalizar venda:", err);
+      // Erro de regra (estoque, permissão) — a venda ficou na fila marcada
+      // como bloqueada, então não some, mas também não sobe sozinha.
       toast.error(
         `Erro ao finalizar venda: ${err?.message ?? "erro desconhecido"}. Verifique antes de tentar novamente.`,
         { duration: 10000 }
       );
+      void fila.recarregar();
+    } finally {
+      setFinalizando(false);
     }
   };
 
@@ -438,6 +460,52 @@ export function PDVPage() {
         <div className="flex-1 flex overflow-hidden">
           {/* Painel Esquerdo: Produtos */}
           <div className="flex-1 flex flex-col overflow-hidden border-r">
+            {/* Estado da conexão e da fila. Fica no topo do painel de venda
+                porque é a informação que muda o que o operador deve prometer
+                ao cliente — sem internet ainda não existe cupom fiscal. */}
+            {(!online || fila.pendentes > 0 || fila.bloqueadas > 0) && (
+              <div
+                className={`flex flex-wrap items-center gap-3 border-b px-4 py-2 text-sm ${
+                  online ? "bg-blue-50 dark:bg-blue-950/20" : "bg-amber-50 dark:bg-amber-950/20"
+                }`}
+              >
+                {online ? <Cloud className="h-4 w-4 text-blue-600" /> : <CloudOff className="h-4 w-4 text-amber-600" />}
+                <span className="font-medium">
+                  {online ? "Conectado" : "Sem internet — as vendas continuam"}
+                </span>
+                {fila.pendentes > 0 && (
+                  <span className="text-muted-foreground">
+                    {fila.pendentes} venda(s) aguardando envio
+                  </span>
+                )}
+                {fila.bloqueadas > 0 && (
+                  <span className="text-red-600">
+                    {fila.bloqueadas} venda(s) recusada(s) pelo servidor — verifique em Vendas
+                  </span>
+                )}
+                {catalogo.usandoEspelho && catalogo.copiadoEm && (
+                  <span className="text-muted-foreground">
+                    catálogo de {new Date(catalogo.copiadoEm).toLocaleString("pt-BR")}
+                  </span>
+                )}
+                {online && fila.pendentes > 0 && (
+                  <Button size="sm" variant="outline" onClick={() => void fila.drenar()} disabled={fila.drenando}>
+                    {fila.drenando
+                      ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                      : <RefreshCw className="mr-1 h-3.5 w-3.5" />}
+                    Enviar agora
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {catalogo.semCatalogo && (
+              <div className="border-b bg-red-50 px-4 py-2 text-sm text-red-700 dark:bg-red-950/20">
+                Sem internet e sem catálogo salvo neste computador. Abra o PDV uma vez com
+                conexão para que os produtos fiquem disponíveis offline.
+              </div>
+            )}
+
             {/* Busca */}
             <div className="p-4 border-b">
               <Input
@@ -772,8 +840,8 @@ export function PDVPage() {
             <Button variant="outline" onClick={() => setModalConfirmarVenda(false)}>
               Voltar
             </Button>
-            <Button onClick={handleFinalizarVenda} disabled={createVenda.isPending || baixarEstoque.isPending} className="bg-green-600 hover:bg-green-700">
-              {createVenda.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4 mr-1" />}
+            <Button onClick={handleFinalizarVenda} disabled={finalizando} className="bg-green-600 hover:bg-green-700">
+              {finalizando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4 mr-1" />}
               Confirmar Venda
             </Button>
           </DialogFooter>

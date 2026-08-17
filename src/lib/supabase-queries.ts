@@ -4611,3 +4611,28 @@ export function useBaixarNfePorChave() {
     onSuccess: () => invalidarDfe(qc),
   });
 }
+
+// ========================================
+// FASE 5 — PDV offline (migration 052)
+// ========================================
+/**
+ * Saldos negativos: o passivo que a venda offline deixa. Não é erro a
+ * corrigir na mão — é a lista do que precisa de contagem no inventário.
+ */
+export function useEstoqueNegativo(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_estoque_negativo', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let q = supabase
+        .schema('erp')
+        .from('vw_estoque_negativo')
+        .select('*')
+        .order('quantidade', { ascending: true });
+      if (lojaId) q = q.eq('loja_id', lojaId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}

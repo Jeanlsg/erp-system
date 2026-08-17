@@ -151,7 +151,19 @@ function buildXml(array $req): string {
     $std->idDest   = $isNFCe ? 1 : (($ufEmit === $ufDest) ? 1 : 2);
     $std->cMunFG   = (int)($emit['endereco']['codigo_municipio'] ?? 0);
     $std->tpImp    = $isNFCe ? 4 : 1;                     // 4=DANFE NFC-e; 1=DANFE retrato
-    $std->tpEmis   = 1;                                   // normal
+    // Contingência offline da NFC-e (tpEmis=9): é o mecanismo que a própria
+    // SEFAZ prevê para o caixa continuar vendendo sem internet. O cupom é
+    // impresso na hora e transmitido em até 24h. Só vale para modelo 65 —
+    // a NF-e 55 usa outros modos (SVC/EPEC), que não se aplicam ao varejo.
+    $contingencia  = $isNFCe && !empty($nota['contingencia_offline']);
+    $std->tpEmis   = $contingencia ? 9 : 1;
+    if ($contingencia) {
+        // dhCont é o momento em que a contingência começou e xJust o motivo;
+        // sem os dois a SEFAZ rejeita o cupom na transmissão posterior.
+        $std->dhCont = $nota['contingencia_desde'] ?? $dhEmi;
+        $std->xJust  = mb_substr((string)($nota['contingencia_motivo']
+            ?? 'Falha de conexao com a internet no ponto de venda'), 0, 256);
+    }
     $std->tpAmb    = $tpAmb;
     $std->finNFe   = $finalidade;
     // NFC-e: sempre consumidor final e operação presencial
