@@ -4690,3 +4690,51 @@ export function useEstoqueParado(lojaId?: string) {
     },
   });
 }
+
+// ========================================
+// FASE 7 — escrituração fiscal (migration 054)
+// ========================================
+export function useSpedArquivos(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_sped_arquivos', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      // `conteudo` fica de fora da listagem de propósito: o arquivo pode ter
+      // megabytes e só o que vai ser baixado precisa dele.
+      let q = supabase
+        .from('erp_sped_arquivos')
+        .select('id, loja_id, tipo, competencia, data_inicial, data_final, finalidade, perfil, linhas, bytes, avisos, created_at')
+        .order('created_at', { ascending: false })
+        .limit(30);
+      if (lojaId) q = q.eq('loja_id', lojaId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useGerarSped() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: {
+      loja_id: string; competencia: string; tipo?: 'efd' | 'sintegra'; finalidade?: '0' | '1';
+    }) => {
+      const { data, error } = await supabase.functions.invoke('erp-sped', { body: params });
+      if (error) throw new Error(await erroEdgeFunction(error, 'falha ao gerar a escrituração'));
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_sped_arquivos'] }),
+  });
+}
+
+/** Busca o conteúdo só na hora de baixar. */
+export async function baixarSped(arquivoId: string): Promise<string> {
+  const { data, error } = await supabase
+    .from('erp_sped_arquivos')
+    .select('conteudo')
+    .eq('id', arquivoId)
+    .single();
+  if (error) throw new Error(`Falha ao ler o arquivo: ${error.message}`);
+  return data.conteudo as string;
+}
