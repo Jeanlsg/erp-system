@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Star, Loader2, Plus, ThumbsUp, MessageSquare,
-  Bell, Trash2, CheckCircle, Lock, Settings, Briefcase,
+  Bell, CheckCircle, Settings, Briefcase,
 } from "lucide-react";
 
 // Componente local para ThumbsDown (não vem do lucide-react direto)
@@ -23,7 +23,6 @@ const ThumbsDown = (props: any) => (
 import {
   useAvaliacoes, useRecomendacoes, useCreateParceria,
   useNotificacoes, useMarcarNotificacaoLida,
-  useCertificados, useCreateCertificado, useDeleteCertificado,
   useConfiguracoesSefaz, useUpsertConfiguracaoSefaz,
   useConfiguracoesGerais, useUpsertConfiguracao,
   useOcorrencias, useCreateOcorrencia, useUpdateOcorrencia,
@@ -565,130 +564,3 @@ export function ConfiguracoesSefazPage() {
   );
 }
 
-// ====================================================================
-// CERTIFICADO DIGITAL (NF-e)
-// ====================================================================
-export function NfeCertificadoPage() {
-  const { lojaId } = useAutoSelectLoja();
-  const { data: certificados = [], isLoading } = useCertificados(lojaId ?? undefined);
-  const create = useCreateCertificado();
-  const del = useDeleteCertificado();
-
-  const [modal, setModal] = useState(false);
-  const [form, setForm] = useState({
-    tipo: "A1", nome: "", titular: "", cnpj_cpf: "",
-    data_validade: "", emissor: "", numero_serie: "",
-  });
-
-  if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="Certificado Digital" />;
-
-  const ativos = certificados.filter((c: any) => c.ativo).length;
-  const vencendo = certificados.filter((c: any) => {
-    if (!c.data_validade) return false;
-    const dias = Math.floor((new Date(c.data_validade).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-    return dias >= 0 && dias <= 30;
-  });
-
-  const handleCriar = async () => {
-    if (!lojaId || !form.titular || !form.cnpj_cpf || !form.data_validade) return;
-    await create.mutateAsync({
-      loja_id: lojaId,
-      ...form,
-      ativo: true,
-    });
-    setModal(false);
-    setForm({ tipo: "A1", nome: "", titular: "", cnpj_cpf: "", data_validade: "", emissor: "", numero_serie: "" });
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
-            <Lock className="h-6 w-6" /> Certificado Digital
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">Gestão de certificados A1/A3</p>
-        </div>
-        <Button onClick={() => setModal(true)}><Plus className="mr-2 h-4 w-4" /> Novo Certificado</Button>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Card><CardContent className="p-4"><p className="text-xs uppercase text-muted-foreground">Ativos</p><p className="text-2xl font-semibold">{ativos}</p></CardContent></Card>
-        <Card className={vencendo.length > 0 ? "border-orange-500" : ""}>
-          <CardContent className="p-4">
-            <p className="text-xs uppercase text-muted-foreground">Vencendo (30 dias)</p>
-            <p className={`text-2xl font-semibold ${vencendo.length > 0 ? "text-orange-600" : ""}`}>{vencendo.length}</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardContent className="p-0">
-          {isLoading ? <div className="p-8 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></div> : certificados.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground">Nenhum certificado cadastrado</div>
-          ) : (
-            <table className="w-full">
-              <thead className="border-b text-xs text-muted-foreground">
-                <tr>
-                  <th className="text-center p-3">Tipo</th>
-                  <th className="text-left p-3">Titular</th>
-                  <th className="text-left p-3">CNPJ/CPF</th>
-                  <th className="text-left p-3">Emissor</th>
-                  <th className="text-left p-3">Validade</th>
-                  <th className="text-center p-3">Status</th>
-                  <th className="text-center p-3">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {certificados.map((c: any) => (
-                  <tr key={c.id} className="border-b hover:bg-accent">
-                    <td className="p-3 text-center"><Badge variant="outline">{c.tipo}</Badge></td>
-                    <td className="p-3 font-medium">{c.titular}</td>
-                    <td className="p-3 font-mono text-xs">{c.cnpj_cpf}</td>
-                    <td className="p-3 text-sm">{c.emissor ?? "—"}</td>
-                    <td className="p-3 text-sm">{date(c.data_validade)}</td>
-                    <td className="p-3 text-center"><Badge variant={c.ativo ? "default" : "outline"}>{c.ativo ? "Ativo" : "Inativo"}</Badge></td>
-                    <td className="p-3 text-center">
-                      <Button size="sm" variant="ghost" onClick={() => { if (confirm("Excluir?")) del.mutate(c.id); }}>
-                        <Trash2 className="h-3 w-3 text-destructive" />
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </CardContent>
-      </Card>
-
-      <Dialog open={modal} onOpenChange={setModal}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Novo Certificado</DialogTitle><DialogClose /></DialogHeader>
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Tipo</Label>
-                <select className="flex h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm" value={form.tipo} onChange={(e) => setForm({ ...form, tipo: e.target.value })}>
-                  <option value="A1">A1 (Arquivo)</option>
-                  <option value="A3">A3 (Token/Cartão)</option>
-                </select>
-              </div>
-              <div><Label>Nome (Apelido)</Label><Input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} /></div>
-            </div>
-            <div><Label>Titular *</Label><Input value={form.titular} onChange={(e) => setForm({ ...form, titular: e.target.value })} /></div>
-            <div><Label>CNPJ/CPF *</Label><Input value={form.cnpj_cpf} onChange={(e) => setForm({ ...form, cnpj_cpf: e.target.value })} /></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Emissor</Label><Input value={form.emissor} onChange={(e) => setForm({ ...form, emissor: e.target.value })} /></div>
-              <div><Label>Nº Série</Label><Input value={form.numero_serie} onChange={(e) => setForm({ ...form, numero_serie: e.target.value })} /></div>
-            </div>
-            <div><Label>Data Validade *</Label><Input type="date" value={form.data_validade} onChange={(e) => setForm({ ...form, data_validade: e.target.value })} /></div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setModal(false)}>Cancelar</Button>
-            <Button onClick={handleCriar} disabled={create.isPending || !form.titular || !form.cnpj_cpf || !form.data_validade}>{create.isPending ? "Salvando..." : "Cadastrar"}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}

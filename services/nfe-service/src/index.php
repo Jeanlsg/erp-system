@@ -709,8 +709,16 @@ try {
         if (empty($req['xml_base64'])) out(422, ['erro' => 'xml_base64 obrigatório']);
         $xml = base64_decode($req['xml_base64'], true);
         if ($xml === false) out(422, ['erro' => 'xml_base64 inválido']);
-        $danfe = new Danfe($xml);
-        out(200, ['danfe_pdf_base64' => base64_encode($danfe->render())]);
+        // NFC-e (65) usa o cupom (Danfce); NF-e (55) usa o DANFE retrato.
+        // Renderizar cupom com o layout de folha A4 sai "válido" e ilegível
+        // no leitor de bobina — o modelo decide o renderizador.
+        $modelo = (int)($req['modelo'] ?? 55);
+        try {
+            $da = $modelo === 65 ? new Danfce($xml) : new Danfe($xml);
+            out(200, ['danfe_pdf_base64' => base64_encode($da->render())]);
+        } catch (\Throwable $e) {
+            out(422, ['erro' => 'falha ao renderizar', 'detalhe' => $e->getMessage()]);
+        }
     }
 
     out(404, ['erro' => 'rota não encontrada', 'rotas' => [

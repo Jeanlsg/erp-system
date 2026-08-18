@@ -2,6 +2,7 @@
 // Páginas extras de Gestão Empresarial (parte 3) — final
 // ============================================================
 
+import { Link } from "react-router-dom";
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -838,7 +839,14 @@ export function DocumentosDemonstrativosPage() {
           <Card>
             <CardContent className="p-6 text-center text-muted-foreground">
               <Database className="h-12 w-12 mx-auto mb-3" />
-              Balancete consolidado — em desenvolvimento. Use o módulo Financeiro para ver detalhes.
+              <p className="mb-3">
+                O balancete por conta contábil vive na Análise Gerencial, que consolida o
+                DRE sobre o plano de contas — receita e despesa por competência, com o
+                realizado contra o previsto.
+              </p>
+              <Button asChild variant="outline">
+                <Link to="/relatorios/analise">Abrir Análise Gerencial</Link>
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>

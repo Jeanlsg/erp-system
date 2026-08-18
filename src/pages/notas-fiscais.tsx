@@ -180,15 +180,36 @@ export function NotasFiscaisPage() {
       window.open(url, "_blank");
       return;
     }
-    if (!nota.pdf_url) {
-      toast.error("PDF não disponível");
+    if (nota.pdf_url?.startsWith("http")) {
+      window.open(nota.pdf_url, "_blank");
       return;
     }
-    // Se for URL do storage, baixar; senão, abrir em nova aba
-    if (nota.pdf_url.startsWith("http")) {
-      window.open(nota.pdf_url, "_blank");
-    } else {
-      toast.info("DANFE em desenvolvimento");
+    // Nota antiga sem DANFE arquivado: gera sob demanda a partir do XML
+    // assinado (o serviço fiscal renderiza sem precisar do certificado) e o
+    // resultado fica gravado no bucket para as próximas vezes.
+    toast.info("Gerando DANFE a partir do XML…");
+    const { data, error } = await supabase.functions.invoke("erp-danfe", {
+      body: { nota_id: nota.id },
+    });
+    if (error || !data?.ok) {
+      let detalhe = error?.message ?? data?.erro ?? "falha ao gerar";
+      try {
+        const ctx = await (error as any)?.context?.json?.();
+        if (ctx?.erro) detalhe = ctx.erro;
+      } catch { /* corpo não-JSON: mantém a mensagem padrão */ }
+      toast.error(`DANFE indisponível: ${detalhe}`);
+      return;
+    }
+    if (data.pdf_base64) {
+      const pdf = Uint8Array.from(atob(data.pdf_base64), (c) => c.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([pdf], { type: "application/pdf" }));
+      window.open(url, "_blank");
+      return;
+    }
+    if (data.danfe_path) {
+      const { data: arq, error: dlErr } = await supabase.storage.from("fiscal").download(data.danfe_path);
+      if (dlErr || !arq) { toast.error("Falha ao baixar o DANFE arquivado"); return; }
+      window.open(URL.createObjectURL(arq), "_blank");
     }
   };
 

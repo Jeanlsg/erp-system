@@ -11,6 +11,7 @@
 // ============================================================
 
 import { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Card, CardContent, CardHeader, CardTitle,
 } from "@/components/ui/card";
@@ -37,6 +38,9 @@ import {
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { brl } from "@/lib/format";
+import { imprimirEtiquetas } from "@/lib/etiquetas";
+import { supabase } from "@/lib/supabase";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose,
@@ -114,6 +118,68 @@ export function ProdutosEstoqueLotesPage() {
 
   // Depois de TODOS os hooks: retornar antes muda a ordem das chamadas entre
   // renders, que é o que a regra dos hooks proíbe.
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+
+  // ---- Reajuste de preços em massa ----
+  const [modalReajuste, setModalReajuste] = useState(false);
+  const [percReajuste, setPercReajuste] = useState("");
+  const [aplicandoReajuste, setAplicandoReajuste] = useState(false);
+
+  // ---- Produtos excluídos (ativo = false) ----
+  // Todas as listagens filtram ativo=true, então um produto desativado some
+  // do sistema inteiro. Esta é a única porta de volta.
+  const [modalExcluidos, setModalExcluidos] = useState(false);
+  const { data: excluidos = [] } = useQuery<any[]>({
+    queryKey: ["erp_produtos_excluidos"],
+    enabled: modalExcluidos,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("erp_produtos").select("id, sku, nome, preco_venda")
+        .eq("ativo", false).order("nome");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const reativarProduto = async (id: string) => {
+    const { error } = await supabase.from("erp_produtos").update({ ativo: true }).eq("id", id);
+    if (error) { toast.error(`Falha ao reativar: ${error.message}`); return; }
+    toast.success("Produto reativado — volta a aparecer no catálogo e no PDV.");
+    qc.invalidateQueries({ queryKey: ["erp_produtos_excluidos"] });
+    qc.invalidateQueries({ queryKey: ["erp_produtos"] });
+  };
+
+  // Aplica o percentual sobre o preço de venda dos produtos FILTRADOS na
+  // tela — o filtro de categoria vira o escopo do reajuste, o que permite
+  // "aumenta 10% só nos suplementos" sem tela nova.
+  const aplicarReajuste = async () => {
+    const perc = Number(percReajuste.replace(",", "."));
+    if (!Number.isFinite(perc) || perc === 0) {
+      toast.error("Informe um percentual diferente de zero (negativo reduz).");
+      return;
+    }
+    setAplicandoReajuste(true);
+    try {
+      let ok = 0;
+      for (const p of filtered) {
+        const novo = Math.round(Number(p.preco_venda) * (1 + perc / 100) * 100) / 100;
+        if (novo <= 0) continue;
+        const { error } = await supabase.from("erp_produtos")
+          .update({ preco_venda: novo }).eq("id", p.produto_id);
+        if (!error) ok++;
+      }
+      toast.success(`${ok} produto(s) reajustado(s) em ${perc > 0 ? "+" : ""}${perc}%.`);
+      qc.invalidateQueries({ queryKey: ["erp_produtos"] });
+      qc.invalidateQueries({ queryKey: ["erp_produtos_completo"] });
+      setModalReajuste(false);
+      setPercReajuste("");
+    } finally {
+      setAplicandoReajuste(false);
+    }
+  };
+
+
   if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="Cadastro e Estoque de Produtos" />;
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -142,10 +208,10 @@ export function ProdutosEstoqueLotesPage() {
         abrirNovaCategoria();
         break;
       case "movimentacao-estoque":
-        toast.info("Use a página Estoque para ajustes rápidos");
+        navigate("/estoque/movimentacoes");
         break;
       case "reajuste-precos":
-        toast.info("Reajuste de preços em desenvolvimento");
+        setModalReajuste(true);
         break;
       case "lote":
         toast.info("Use a tabela abaixo para gerenciar lotes");
@@ -153,20 +219,27 @@ export function ProdutosEstoqueLotesPage() {
       case "catalogo":
         window.print();
         break;
-      case "gerar-etiquetas":
-        toast.info("Geração de etiquetas em desenvolvimento");
+      case "gerar-etiquetas": {
+        if (filtered.length === 0) { toast.error("Nenhum produto no filtro atual."); break; }
+        const r = imprimirEtiquetas(filtered.map((p: any) => ({
+          nome: p.nome, sku: p.sku, codigo_barras: p.codigo_barras, preco_venda: p.preco_venda,
+        })));
+        if (r.semBarras > 0) {
+          toast.warning(`${r.semBarras} etiqueta(s) saíram sem código de barras: EAN ausente ou com dígito verificador inválido.`);
+        }
         break;
+      }
       case "kit-combo":
-        window.location.href = "/kits";
+        navigate("/kits");
         break;
       case "inventario":
-        toast.info("Inventário em desenvolvimento");
+        navigate("/estoque/inventario");
         break;
       case "relatorios":
-        window.location.href = "/relatorios";
+        navigate("/relatorios");
         break;
       case "produtos-excluidos":
-        toast.info("Produtos excluídos em desenvolvimento");
+        setModalExcluidos(true);
         break;
     }
   };
@@ -823,6 +896,78 @@ export function ProdutosEstoqueLotesPage() {
               Fechar
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== Reajuste de preços em massa ===== */}
+      <Dialog open={modalReajuste} onOpenChange={setModalReajuste}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5" /> Reajuste de preços
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Aplica o percentual sobre o preço de venda dos{" "}
+              <b>{filtered.length} produto(s) do filtro atual</b>. Use o filtro de
+              categoria acima para restringir o escopo antes de aplicar.
+            </p>
+            <div>
+              <Label>Percentual (%)</Label>
+              <Input
+                type="number" step="0.1" placeholder="Ex.: 10 aumenta · -5 reduz"
+                value={percReajuste} onChange={(e) => setPercReajuste(e.target.value)}
+              />
+            </div>
+            {percReajuste && Number(percReajuste.replace(",", ".")) !== 0 && filtered[0] && (
+              <p className="text-xs text-muted-foreground">
+                Exemplo: {filtered[0].nome} — {brl(Number(filtered[0].preco_venda))} →{" "}
+                {brl(Math.round(Number(filtered[0].preco_venda) * (1 + Number(percReajuste.replace(",", ".")) / 100) * 100) / 100)}
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
+            <Button onClick={aplicarReajuste} disabled={aplicandoReajuste || !percReajuste}>
+              {aplicandoReajuste && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Aplicar em {filtered.length} produto(s)
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== Produtos excluídos (desativados) ===== */}
+      <Dialog open={modalExcluidos} onOpenChange={setModalExcluidos}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5" /> Produtos excluídos
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Produto desativado some de todas as listagens e do PDV. Reativar o
+            traz de volta com cadastro e histórico intactos.
+          </p>
+          {excluidos.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              Nenhum produto desativado.
+            </p>
+          ) : (
+            <div className="max-h-80 space-y-1 overflow-y-auto">
+              {excluidos.map((p: any) => (
+                <div key={p.id} className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{p.nome}</p>
+                    <p className="font-mono text-xs text-muted-foreground">{p.sku} · {brl(Number(p.preco_venda))}</p>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => reativarProduto(p.id)}>
+                    Reativar
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

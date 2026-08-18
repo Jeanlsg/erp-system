@@ -1,6 +1,6 @@
 import { Outlet, Link, useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { LogOut, Store, User as UserIcon } from "lucide-react";
+import { HelpCircle, LogOut, Store, User as UserIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppSidebar } from "@/components/app-sidebar";
@@ -26,6 +26,7 @@ import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useAuth, roleLabels, logout } from "@/lib/store/auth-store";
+import { ajudaDaRota } from "@/lib/ajuda-paginas";
 import { useLojaAtualStore } from "@/lib/store/loja-atual";
 import { useLojas, isSupabaseConfigured } from "@/lib/supabase-queries";
 
@@ -116,6 +117,34 @@ export function RootLayout() {
 
           <div className="flex items-center gap-2">
             <TooltipProvider delayDuration={150}>
+              {/* "O que esta página faz" — a descrição acompanha a rota atual,
+                  então toda tela ganha ajuda sem precisar de código próprio. */}
+              {(() => {
+                const ajuda = ajudaDaRota(location.pathname);
+                if (!ajuda) return null;
+                return (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground"
+                        title="O que esta página faz"
+                        aria-label="O que esta página faz"
+                      >
+                        <HelpCircle className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-80 p-3">
+                      <p className="mb-1 text-sm font-semibold">{ajuda.titulo}</p>
+                      <p className="text-sm leading-relaxed text-muted-foreground">
+                        {ajuda.descricao}
+                      </p>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                );
+              })()}
+
               {/* Ícones de notificação no header */}
               {isSupabaseConfigured() && <NotificationIcons />}
 
