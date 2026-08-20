@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   FileText, Loader2, Filter, Download, Eye,
   CheckCircle2, Clock, XCircle, Shield, Ban, PenLine, Undo2, ScissorsLineDashed,
+  Send,
 } from "lucide-react";
 import {
   useNotasFiscais, useNotasFiscaisVendaIds, useVendas, useEmitirNFeVenda,
@@ -169,6 +170,35 @@ export function NotasFiscaisPage() {
     a.download = `NFe_${nota.numero}_${nota.serie}.xml`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  // Reenvio manual da nota ao cliente. O automático acontece na emissão;
+  // este botão cobre "o cliente pediu de novo" e nota antiga.
+  const [enviandoNota, setEnviandoNota] = useState<string | null>(null);
+  const handleEnviarEmail = async (nota: any) => {
+    const sugestao = nota.consumidor_email ?? "";
+    const destino = window.prompt("Enviar XML + DANFE para qual e-mail?", sugestao);
+    if (destino === null) return;
+    setEnviandoNota(nota.id);
+    try {
+      const { data, error } = await supabase.functions.invoke("erp-enviar-nota", {
+        body: { nota_id: nota.id, canal: "email", destino: destino.trim() || undefined },
+      });
+      if (error || !data?.ok) {
+        let det = error?.message ?? data?.erro ?? "falha no envio";
+        try {
+          const ctx = await (error as any)?.context?.json?.();
+          if (ctx?.erro) det = ctx.erro;
+        } catch { /* mantém a mensagem padrão */ }
+        toast.error(`Nota não enviada: ${det}`);
+        return;
+      }
+      toast.success(`Nota enviada para ${data.destino}`, {
+        description: data.com_danfe ? "XML + DANFE anexados" : "Só o XML (DANFE indisponível)",
+      });
+    } finally {
+      setEnviandoNota(null);
+    }
   };
 
   const handleDownloadPDF = async (nota: any) => {
@@ -376,6 +406,14 @@ export function NotasFiscaisPage() {
                         {(n.pdf_url || n.danfe_path) && (
                           <Button size="sm" variant="ghost" onClick={() => handleDownloadPDF(n)} title="Ver DANFE">
                             <FileText className="h-3 w-3" />
+                          </Button>
+                        )}
+                        {n.status === "autorizada" && (
+                          <Button size="sm" variant="ghost" disabled={enviandoNota === n.id}
+                            onClick={() => handleEnviarEmail(n)} title="Enviar por e-mail ao cliente">
+                            {enviandoNota === n.id
+                              ? <Loader2 className="h-3 w-3 animate-spin" />
+                              : <Send className="h-3 w-3" />}
                           </Button>
                         )}
                       </div>

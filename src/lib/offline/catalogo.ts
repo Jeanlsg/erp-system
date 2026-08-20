@@ -23,6 +23,8 @@ export interface ProdutoOffline {
   preco_custo: number;
   estoque: number;
   imagem_url?: string | null;
+  /** true quando o item é um kit (o servidor desmembra na venda) */
+  ehKit?: boolean;
 }
 
 const chave = (lojaId: string) => `catalogo:${lojaId}`;
@@ -40,6 +42,7 @@ function enxugar(produtos: any[]): ProdutoOffline[] {
     // real é conciliada no reenvio.
     estoque: Number(p.estoque ?? p.quantidade ?? 0),
     imagem_url: p.imagem_url ?? null,
+    ...(p.ehKit ? { ehKit: true } : {}),
   }));
 }
 

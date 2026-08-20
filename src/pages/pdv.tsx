@@ -13,7 +13,7 @@ import {
   Check, X, AlertCircle, Receipt, CloudOff, RefreshCw, Cloud,
 } from "lucide-react";
 import {
-  useProdutos, useClientes, useCaixaAberto, useCreateCaixa, useFecharCaixa,
+  useProdutos, useClientes, useCaixaAberto, useCreateCaixa, useFecharCaixa, useKits,
   useCaixas,
   useCreateSangria, useCreateEntradaExtra, useCaixaConfig, useUpdateCaixaConfig,
   useEmitirNFeVenda, isSupabaseConfigured,
@@ -28,7 +28,8 @@ import { registrarVenda, useFilaVendas } from "@/lib/offline/fila-vendas";
 import { useCatalogoOffline } from "@/lib/offline/catalogo";
 
 interface CartItem {
-  produto_id: string;
+  produto_id: string;          // para kit: o id do kit (kit_id === produto_id)
+  kit_id?: string;             // presente quando a linha é um kit
   nome: string;
   sku: string;
   preco_unitario: number;
@@ -53,8 +54,20 @@ export function PDVPage() {
 
   // Queries
   const { data: produtosServidor = [] } = useProdutos({ lojaId: lojaId ?? undefined });
+  const { data: kits = [] } = useKits();
+  // Kits entram no catálogo como itens vendáveis (o servidor desmembra os
+  // componentes na hora da venda). Entram ANTES do espelho offline, então
+  // também ficam disponíveis sem internet.
+  const vendaveis = useMemo(() => [
+    ...produtosServidor,
+    ...kits.filter((k: any) => k.ativo && (k.itens?.length ?? 0) > 0).map((k: any) => ({
+      id: k.id, nome: k.nome, sku: "KIT",
+      preco_venda: k.preco_kit, preco_custo: 0,
+      codigo_barras: null, imagem_url: null, ehKit: true,
+    })),
+  ], [produtosServidor, kits]);
   // Offline, a lista vem do espelho local salvo enquanto havia rede.
-  const catalogo = useCatalogoOffline(lojaId, produtosServidor, online);
+  const catalogo = useCatalogoOffline(lojaId, vendaveis, online);
   const produtos = catalogo.produtos;
   const { data: clientes = [] } = useClientes();
   const { data: caixaAberto } = useCaixaAberto(user?.id);
@@ -135,6 +148,7 @@ export function PDVPage() {
       }
       return [...prev, {
         produto_id: p.id,
+        ...(p.ehKit ? { kit_id: p.id } : {}),
         nome: p.nome,
         sku: p.sku,
         preco_unitario: Number(p.preco_venda),
@@ -241,7 +255,7 @@ export function PDVPage() {
         tipo_venda: "pdv",
         observacoes: "",
         itens: cart.map((i) => ({
-          produto_id: i.produto_id,
+          ...(i.kit_id ? { kit_id: i.kit_id } : { produto_id: i.produto_id }),
           nome: i.nome,
           preco_unitario: i.preco_unitario,
           preco_custo: i.preco_custo,

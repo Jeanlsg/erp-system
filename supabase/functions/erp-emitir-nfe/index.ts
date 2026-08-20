@@ -538,6 +538,32 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Envio automático da nota ao cliente (contrato: "envio automático via
+    // mensageria"). Best-effort com timeout curto: falha de e-mail não pode
+    // derrubar uma emissão que a SEFAZ já autorizou — o reenvio manual existe
+    // na tela de Notas Fiscais, e cada tentativa fica em erp_nota_envios.
+    let envio_cliente: string | null = null;
+    if (resultado.autorizada && venda_id) {
+      try {
+        const ctl = new AbortController();
+        const t = setTimeout(() => ctl.abort(), 10_000);
+        const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/erp-enviar-nota`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          },
+          body: JSON.stringify({ nota_id: nfe.id, canal: "email", automatico: true }),
+          signal: ctl.signal,
+        });
+        clearTimeout(t);
+        const d = await r.json().catch(() => ({}));
+        envio_cliente = r.ok ? `email enviado para ${d?.destino}` : (d?.erro ?? "envio não realizado");
+      } catch {
+        envio_cliente = "envio não realizado (tempo esgotado)";
+      }
+    }
+
     return json(200, {
       autorizada: resultado.autorizada,
       cstat: resultado.cstat,
@@ -549,6 +575,7 @@ Deno.serve(async (req) => {
       xml_path: xmlPath,
       danfe_path: danfePath,
       ambiente: sefaz.ambiente,
+      envio_cliente,
     });
   } catch (e) {
     return json(500, { erro: `falha interna: ${e.message}` });
