@@ -57,6 +57,8 @@ export function NotasFiscaisPage() {
   // a lista filtrada acima não serve para saber quais vendas já têm NF-e
   const { data: todasNotasVendaIds = [] } = useNotasFiscaisVendaIds(lojaId ?? undefined);
 
+  const [enviandoNota, setEnviandoNota] = useState<string | null>(null);
+
   if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="Notas Fiscais" />;
 
   // Vendas finalizadas que ainda não têm NF-e vinculada
@@ -174,7 +176,6 @@ export function NotasFiscaisPage() {
 
   // Reenvio manual da nota ao cliente. O automático acontece na emissão;
   // este botão cobre "o cliente pediu de novo" e nota antiga.
-  const [enviandoNota, setEnviandoNota] = useState<string | null>(null);
   const handleEnviarEmail = async (nota: any) => {
     const sugestao = nota.consumidor_email ?? "";
     const destino = window.prompt("Enviar XML + DANFE para qual e-mail?", sugestao);
