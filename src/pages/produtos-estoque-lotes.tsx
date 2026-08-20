@@ -82,7 +82,7 @@ export function ProdutosEstoqueLotesPage() {
   // Form
   const [formProduto, setFormProduto] = useState({
     sku: "", nome: "", preco_custo: "0", preco_venda: "0",
-    unidade: "UN", estoque_minimo: "0", marca: "", codigo_barras: "",
+    unidade: "UN", estoque_minimo: "0", duracao_dias: "", marca: "", codigo_barras: "",
     categoria_id: "", ncm: "", cest: "", cfop_padrao: "5102", csosn: "102",
   });
   const [formCategoria, setFormCategoria] = useState({ nome: "", descricao: "" });
@@ -249,7 +249,7 @@ export function ProdutosEstoqueLotesPage() {
     setEditId(null);
     setFormProduto({
       sku: "", nome: "", preco_custo: "0", preco_venda: "0",
-      unidade: "UN", estoque_minimo: "0", marca: "", codigo_barras: "",
+      unidade: "UN", estoque_minimo: "0", duracao_dias: "", marca: "", codigo_barras: "",
       ncm: "", cest: "", cfop_padrao: "5102", csosn: "102",
       categoria_id: "",
     });
@@ -267,6 +267,7 @@ export function ProdutosEstoqueLotesPage() {
       preco_venda: String(p.preco_venda ?? 0),
       unidade: p.unidade ?? "UN",
       estoque_minimo: String(p.estoque_minimo ?? 0),
+      duracao_dias: p.duracao_dias != null ? String(p.duracao_dias) : "",
       marca: p.marca ?? "",
       codigo_barras: p.codigo_barras ?? "",
       categoria_id: cat?.id ?? "",
@@ -288,6 +289,7 @@ export function ProdutosEstoqueLotesPage() {
       preco_venda: parseFloat(formProduto.preco_venda) || 0,
       unidade: formProduto.unidade,
       estoque_minimo: parseInt(formProduto.estoque_minimo) || 0,
+      duracao_dias: formProduto.duracao_dias === "" ? null : (parseInt(formProduto.duracao_dias) || null),
       marca: formProduto.marca || null,
       codigo_barras: formProduto.codigo_barras || null,
       categoria_id: formProduto.categoria_id || null,
@@ -725,6 +727,19 @@ export function ProdutosEstoqueLotesPage() {
                   value={formProduto.estoque_minimo}
                   onChange={(e) => setFormProduto({ ...formProduto, estoque_minimo: e.target.value })}
                 />
+              </div>
+              <div>
+                <Label>Duração típica (dias)</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  placeholder="Ex.: 30"
+                  value={formProduto.duracao_dias}
+                  onChange={(e) => setFormProduto({ ...formProduto, duracao_dias: e.target.value })}
+                />
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Quanto tempo o produto dura em uso típico. Alimenta a previsão de recompra no CRM.
+                </p>
               </div>
             </div>
             <div className="grid grid-cols-3 gap-3">
