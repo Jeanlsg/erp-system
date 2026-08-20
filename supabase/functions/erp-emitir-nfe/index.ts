@@ -6,7 +6,8 @@
 //   - venda_id   → NF-e de venda (destinatário = cliente da venda)
 //   - remessa_id → NF-e de remessa entre filiais (CFOP 5152/6152)
 //   - tipo:'nfce' → cupom do varejo presencial (modelo 65): consumidor
-//     opcional, sempre operação interna, QR Code assinado com o CSC.
+//     opcional, sempre operação interna. O QR Code é injetado pela lib na
+//     versão vigente da UF (v3 em homologação, sem CSC; v2 em produção).
 //
 // Fluxo: valida usuário ERP → valida pré-requisitos (cert, SEFAZ, NCM) →
 // monta payload → chama nfe-service → grava resultado real em erp_notas_fiscais
@@ -148,8 +149,11 @@ Deno.serve(async (req) => {
     if (!cert) faltas.push("certificado digital A1 ativo");
     else if (new Date(cert.data_validade) < new Date()) faltas.push(`certificado vencido em ${cert.data_validade}`);
 
-    // NFC-e exige CSC (código de segurança do contribuinte) para o QR Code
-    if (isNFCe && sefaz && (!sefaz.csc_token || !sefaz.csc_id)) {
+    // CSC: exigido onde o QR Code ainda é v2 — hoje, produção. Em
+    // homologação BA/PE o QR v3 assina com o certificado e dispensa CSC,
+    // então dá para exercitar a emissão ANTES de ter o CSC cadastrado.
+    // (Quando produção migrar para o v3, esta exigência cai também.)
+    if (isNFCe && sefaz && sefaz.ambiente === "producao" && (!sefaz.csc_token || !sefaz.csc_id)) {
       faltas.push("CSC e CSC id da NFC-e (obtidos no portal da SEFAZ e cadastrados em Configurações SEFAZ)");
     }
 

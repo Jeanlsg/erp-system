@@ -92,6 +92,19 @@ function makeTools(array $req): Tools {
     return $tools;
 }
 
+/** Versão do QR Code NFC-e vigente para a UF/ambiente, do storage da lib. */
+function qrVersaoNfce(string $uf, int $tpAmb): int {
+    $x = @simplexml_load_file(__DIR__ . '/../vendor/nfephp-org/sped-nfe/storage/wsnfe_4.00_mod65.xml');
+    if ($x === false) return 200;   // na dúvida, exige CSC — o erro conservador
+    $amb = $tpAmb === 1 ? 'producao' : 'homologacao';
+    foreach ($x->UF as $u) {
+        if ((string)$u->sigla !== strtoupper($uf)) continue;
+        $q = $u->$amb->NfeConsultaQR ?? null;
+        if ($q) return (int)$q['version'];
+    }
+    return 200;
+}
+
 /** Constrói o XML da NF-e a partir do payload padronizado do ERP. */
 function buildXml(array $req): string {
     $emit  = $req['emitente'];
@@ -113,8 +126,12 @@ function buildXml(array $req): string {
     if ($isDevolucao && empty($nota['chave_referenciada'])) {
         out(422, ['erro' => 'devolução exige nota.chave_referenciada (chave da NF-e original)']);
     }
-    if ($isNFCe && (empty($req['csc']) || empty($req['csc_id']))) {
-        out(422, ['erro' => 'NFC-e exige CSC e CSC id (cadastre em Configurações SEFAZ)']);
+    // CSC: obrigatório onde o QR Code ainda é v2 (hoje, produção BA/PE).
+    // Em homologação o QR v3 assina com o certificado e dispensa CSC —
+    // exigir aqui impediria exercitar a emissão antes de ter o CSC.
+    if ($isNFCe && qrVersaoNfce((string)$emit['uf'], (int)$req['ambiente']) < 300
+        && (empty($req['csc']) || empty($req['csc_id']))) {
+        out(422, ['erro' => 'NFC-e exige CSC e CSC id nesta UF/ambiente (cadastre em Configurações SEFAZ)']);
     }
 
     $tpAmb  = (int)$req['ambiente'];
@@ -300,17 +317,19 @@ function buildXml(array $req): string {
             $make->tagICMSSN($std);
         }
 
-        // PIS/COFINS — Simples Nacional: CST 49/99 (outras operações, sem destaque)
+        // PIS/COFINS — Simples Nacional: CST 49 (outras operações, sem
+        // destaque). O schema exige base e alíquota mesmo zeradas: grupo com
+        // campos nulos é rejeitado pelo XSD na assinatura — pego no dry_run.
         $std = new stdClass();
         $std->item = $nItem;
         $std->CST  = '49';
-        $std->qBCProd = null; $std->vAliqProd = null; $std->vPIS = null;
+        $std->vBC  = 0.00; $std->pPIS = 0.00; $std->vPIS = 0.00;
         $make->tagPIS($std);
 
         $std = new stdClass();
         $std->item = $nItem;
         $std->CST  = '49';
-        $std->qBCProd = null; $std->vAliqProd = null; $std->vCOFINS = null;
+        $std->vBC  = 0.00; $std->pCOFINS = 0.00; $std->vCOFINS = 0.00;
         $make->tagCOFINS($std);
     }
 
@@ -329,6 +348,11 @@ function buildXml(array $req): string {
         $std = new stdClass();
         $std->tPag = str_pad((string)($pag['forma'] ?? '99'), 2, '0', STR_PAD_LEFT);
         $std->vPag = number_format((float)($pag['valor'] ?? 0), 2, '.', '');
+        // Cartão sem TEF integrado leva o grupo card com tpIntegra=2 — sem
+        // ele, parte das SEFAZ rejeita o detPag de cartão.
+        if (in_array($std->tPag, ['03', '04'], true)) {
+            $std->tpIntegra = 2;
+        }
         $make->tagdetPag($std);
     }
 
@@ -376,7 +400,18 @@ try {
         $tools = makeTools($req);
 
         $xml = buildXml($req);
+        // Para modelo 65, o signNFe injeta o infNFeSupl (QR Code + urlChave)
+        // SOZINHO, na versão vigente da UF/ambiente segundo o storage da lib
+        // (v3 em homologação — dispensa CSC —, v2 em produção, com CSC).
+        // Não gerar QR à mão: versão/URL erradas dão cupom que não consulta.
+        // O signNFe também valida o XML contra o XSD.
         $signed = $tools->signNFe($xml);
+
+        // dry_run: monta, assina e ganha o QR sem transmitir — valida o
+        // pipeline inteiro sem depender da SEFAZ nem de CSC real.
+        if (!empty($req['dry_run'])) {
+            out(200, ['dry_run' => true, 'xml_base64' => base64_encode($signed)]);
+        }
 
         // Envio síncrono (indSinc=1) — resposta já traz o protocolo
         $resp = $tools->sefazEnviaLote([$signed], (string)time(), 1);
