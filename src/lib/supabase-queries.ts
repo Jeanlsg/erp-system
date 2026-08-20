@@ -2482,7 +2482,11 @@ export function usePedidos(filters?: { lojaId?: string; status?: string }) {
     queryKey: ['erp_pedidos', filters],
     queryFn: async () => {
       if (!isSupabaseConfigured()) return [];
-      let query = supabase.from('erp_pedidos').select('*').order('created_at', { ascending: false }).limit(200);
+      let query = supabase
+        .from('erp_pedidos')
+        .select('*, cliente:erp_pessoas(nome_razao, telefone, celular), venda:erp_vendas(numero_pedido, total)')
+        .order('created_at', { ascending: false })
+        .limit(200);
       if (filters?.lojaId) query = query.eq('loja_id', filters.lojaId);
       if (filters?.status) query = query.eq('status', filters.status);
       const { data, error } = await query;

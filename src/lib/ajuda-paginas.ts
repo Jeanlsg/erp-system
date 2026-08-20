@@ -35,8 +35,8 @@ const A: Record<string, AjudaPagina> = {
     descricao: "Histórico de vendas com filtros por loja, período e forma de pagamento. Cancelamento de venda passa por aqui.",
   },
   "pedidos-delivery": {
-    titulo: "Pedidos Delivery",
-    descricao: "Pedidos de entrega: recebimento, preparo e despacho, com regiões e taxas cadastradas em Regiões de Entrega.",
+    titulo: "Ciclo de Pedidos",
+    descricao: "Kanban de logística: Pagamento → Separação → Despacho → Entregue. Arraste o pedido (ou use o botão do cartão); pedido parado além do normal fica marcado em vermelho. Taxas e regiões vêm de Regiões de Entrega.",
   },
   ifood: { titulo: "Pedidos iFood", descricao: "Integração de pedidos vindos do iFood." },
   "exapp-pedidos": { titulo: "ExApp Pedidos", descricao: "Pedidos recebidos pelo aplicativo próprio da loja." },

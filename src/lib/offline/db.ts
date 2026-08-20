@@ -7,11 +7,14 @@
 // do navegador — que é justamente o cenário em que ela existe.
 // ============================================================
 
+import { cifrar, decifrar, ehCifrado } from "./cifra";
+
 const DB_NOME = "xlife-pdv";
-const DB_VERSAO = 1;
+const DB_VERSAO = 2;
 
 export const LOJA_FILA = "fila_vendas";
 export const LOJA_CACHE = "cache";
+const LOJA_CHAVES = "chaves";   // CryptoKeys não-extraíveis (cifra da fila)
 
 export interface VendaEnfileirada {
   uuid_local: string;
@@ -44,6 +47,9 @@ function abrir(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(LOJA_CACHE)) {
         db.createObjectStore(LOJA_CACHE, { keyPath: "chave" });
       }
+      if (!db.objectStoreNames.contains(LOJA_CHAVES)) {
+        db.createObjectStore(LOJA_CHAVES);
+      }
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error ?? new Error("falha ao abrir o banco local"));
@@ -67,18 +73,46 @@ function executar<T>(
   );
 }
 
-// ---------- fila de vendas ----------
-export const enfileirar = (v: VendaEnfileirada) =>
-  executar(LOJA_FILA, "readwrite", (s) => s.put(v));
+const pegarChaveCripto = (k: string) =>
+  executar<CryptoKey | undefined>(LOJA_CHAVES, "readonly", (s) => s.get(k) as any);
+const guardarChaveCripto = (k: string, v: CryptoKey) =>
+  executar(LOJA_CHAVES, "readwrite", (s) => s.put(v, k));
 
-export const lerFila = () =>
-  executar<VendaEnfileirada[]>(LOJA_FILA, "readonly", (s) => s.getAll() as any);
+// ---------- fila de vendas ----------
+// O payload (cliente, itens, valores) vai CIFRADO para o disco; os campos de
+// controle (chave, status, tentativas) ficam claros porque a fila precisa
+// deles para funcionar. Registros antigos em claro continuam legíveis.
+export const enfileirar = async (v: VendaEnfileirada) => {
+  const payload = ehCifrado(v.payload)
+    ? v.payload
+    : await cifrar(v.payload, pegarChaveCripto, guardarChaveCripto);
+  return executar(LOJA_FILA, "readwrite", (s) => s.put({ ...v, payload }));
+};
+
+async function abrirPayload(item: VendaEnfileirada): Promise<VendaEnfileirada> {
+  if (!ehCifrado(item.payload)) return item;
+  try {
+    const payload = await decifrar(item.payload, pegarChaveCripto, guardarChaveCripto);
+    return { ...item, payload };
+  } catch {
+    // Chave perdida (perfil limpo parcialmente): o item é ilegível — melhor
+    // aparecer como bloqueado com motivo do que sumir em silêncio.
+    return { ...item, status: "bloqueada", ultimo_erro: "registro cifrado ilegível neste dispositivo" };
+  }
+}
+
+export const lerFila = async () => {
+  const brutos = await executar<VendaEnfileirada[]>(LOJA_FILA, "readonly", (s) => s.getAll() as any);
+  return Promise.all(brutos.map(abrirPayload));
+};
 
 export const removerDaFila = (uuid: string) =>
   executar(LOJA_FILA, "readwrite", (s) => s.delete(uuid));
 
-export const lerDaFila = (uuid: string) =>
-  executar<VendaEnfileirada | undefined>(LOJA_FILA, "readonly", (s) => s.get(uuid) as any);
+export const lerDaFila = async (uuid: string) => {
+  const bruto = await executar<VendaEnfileirada | undefined>(LOJA_FILA, "readonly", (s) => s.get(uuid) as any);
+  return bruto ? abrirPayload(bruto) : undefined;
+};
 
 // ---------- cache genérico (catálogo, config do caixa) ----------
 export async function salvarCache(chave: string, dados: unknown) {

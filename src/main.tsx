@@ -53,6 +53,27 @@ try {
   }
 }
 
+// PWA: registra o service worker que mantém o app abrindo sem internet.
+// Só em produção — em dev o SW cacheando o vite atrapalha mais que ajuda.
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").then(async () => {
+      // Na PRIMEIRA visita os assets são baixados antes de o SW assumir a
+      // página — sem isto, o cache só teria o shell e um F5 offline abriria
+      // um HTML sem JavaScript. Refazer o fetch dos assets referenciados,
+      // agora COM o SW ativo, grava cada um no cache imutável.
+      const reg = await navigator.serviceWorker.ready;
+      const assets = [
+        ...document.querySelectorAll<HTMLScriptElement>('script[src^="/assets/"]'),
+        ...document.querySelectorAll<HTMLLinkElement>('link[href^="/assets/"]'),
+      ].map((el) => ("src" in el ? el.src : el.href));
+      reg.active?.postMessage({ tipo: "precache", urls: assets });
+    }).catch((err) => {
+      console.warn("service worker não registrado:", err);
+    });
+  });
+}
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
