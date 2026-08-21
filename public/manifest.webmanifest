@@ -8,6 +8,7 @@
   "theme_color": "#1F6B49",
   "lang": "pt-BR",
   "icons": [
-    { "src": "/icone.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+    { "src": "/logo-xlife.png", "sizes": "64x64", "type": "image/png", "purpose": "any" },
+    { "src": "/icone.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
   ]
 }

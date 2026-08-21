@@ -10,13 +10,13 @@
 //     negócio cacheado por SW viraria tela mentirosa
 // ============================================================
 
-const VERSAO = "v1";
+const VERSAO = "v2";
 const SHELL = `shell-${VERSAO}`;
 const ASSETS = `assets-${VERSAO}`;
 
 self.addEventListener("install", (e) => {
   e.waitUntil(
-    caches.open(SHELL).then((c) => c.addAll(["/", "/manifest.webmanifest", "/icone.svg"]))
+    caches.open(SHELL).then((c) => c.addAll(["/", "/manifest.webmanifest", "/icone.svg", "/logo-xlife.png"]))
       .then(() => self.skipWaiting()),
   );
 });
@@ -50,7 +50,7 @@ self.addEventListener("fetch", (e) => {
   }
 
   // Assets com hash: imutáveis — cache-first
-  if (url.pathname.startsWith("/assets/") || url.pathname === "/manifest.webmanifest" || url.pathname === "/icone.svg") {
+  if (url.pathname.startsWith("/assets/") || url.pathname === "/manifest.webmanifest" || url.pathname === "/icone.svg" || url.pathname === "/logo-xlife.png") {
     e.respondWith(
       caches.match(req).then((hit) =>
         hit ??

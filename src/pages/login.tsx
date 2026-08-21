@@ -58,11 +58,9 @@ export function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
       <div className="grid w-full max-w-4xl gap-6 md:grid-cols-2">
         <div className="hidden flex-col justify-between rounded-xl border bg-sidebar p-8 text-sidebar-foreground md:flex">
-          <div className="flex h-16 w-16 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <span className="text-2xl font-bold">ERP</span>
-          </div>
+          <img src="/logo-xlife.png" alt="X-Life Suplementos" className="h-16 w-16 rounded-full" />
           <div>
-            <h2 className="text-2xl font-bold tracking-tight">Power ERP</h2>
+            <h2 className="text-2xl font-bold tracking-tight">ERP X-Life</h2>
             <p className="mt-2 text-sm text-sidebar-foreground/70">
               Acesse o sistema para operar o PDV, gerir estoque, emitir notas fiscais e acompanhar os resultados da loja.
             </p>

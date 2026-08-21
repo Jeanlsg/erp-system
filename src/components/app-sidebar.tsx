@@ -490,9 +490,12 @@ export function AppSidebar() {
             className="flex min-w-0 flex-1 items-center gap-3 rounded-md transition hover:bg-white/10"
             aria-label={collapsed ? "Expandir sidebar" : "Recolher sidebar"}
           >
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow ring-2 ring-white/20">
-              <Store className="h-5 w-5" />
-            </div>
+            {/* Logo oficial da X-Life — a mesma usada no CRM */}
+            <img
+              src="/logo-xlife.png"
+              alt="X-Life Suplementos"
+              className="h-10 w-10 shrink-0 rounded-full shadow ring-2 ring-white/20"
+            />
             {!collapsed && (
               <div className="flex min-w-0 flex-col leading-tight">
                 <span className="truncate text-sm font-black tracking-wide text-white">
