@@ -27,6 +27,7 @@ import { useConexao } from "@/lib/offline/conexao";
 import { registrarVenda, useFilaVendas } from "@/lib/offline/fila-vendas";
 import { useCatalogoOffline } from "@/lib/offline/catalogo";
 import { LeitorCodigoBarras } from "@/components/leitor-codigo-barras";
+import { documentoValido, mascaraDocumento } from "@/lib/documento";
 import { ComboboxBusca } from "@/components/ui/combobox-busca";
 
 interface CartItem {
@@ -101,6 +102,9 @@ export function PDVPage() {
   const [modalCaixasAbertos, setModalCaixasAbertos] = useState(false);
   const [modalConfirmarVenda, setModalConfirmarVenda] = useState(false);
   const [emitirCupom, setEmitirCupom] = useState(false);
+  // "É CPF na nota?" — consumidor identificado sem precisar de cadastro
+  const [cpfNota, setCpfNota] = useState("");
+  const [nomeNota, setNomeNota] = useState("");
   const [quantidadeCaixas, setQuantidadeCaixas] = useState(2);
 
   // Calculados
@@ -193,6 +197,8 @@ export function PDVPage() {
   // Limpar carrinho
   const limparCarrinho = useCallback(() => {
     setCart([]);
+    setCpfNota("");
+    setNomeNota("");
     setDesconto("");
     setAcrescimo("");
     setValorRecebido("");
@@ -245,6 +251,12 @@ export function PDVPage() {
   const [finalizando, setFinalizando] = useState(false);
   const handleFinalizarVenda = async () => {
     if (!lojaId || !user || cart.length === 0 || finalizando) return;
+    // CPF digitado mas inválido: recusa AGORA, com o cliente na frente —
+    // deixar passar viraria rejeição da SEFAZ na hora do cupom.
+    if (!clienteId && cpfNota.trim() && !documentoValido(cpfNota)) {
+      toast.error("CPF/CNPJ da nota inválido — confira os dígitos ou apague o campo.");
+      return;
+    }
     setFinalizando(true);
 
     const custoTotal = cart.reduce((s, i) => s + i.preco_custo * i.quantidade, 0);
@@ -266,6 +278,10 @@ export function PDVPage() {
         custo_total: custoTotal,
         lucro_total: total - custoTotal,
         forma_pagamento: forma,
+        // sem cliente cadastrado, vale o CPF digitado no balcão
+        ...(!clienteId && cpfNota.trim()
+          ? { consumidor_cpf: cpfNota, consumidor_nome: nomeNota.trim() || undefined }
+          : {}),
         status: "finalizada",
         tipo_venda: "pdv",
         observacoes: "",
@@ -854,6 +870,31 @@ export function PDVPage() {
                   <span>{brl(troco)}</span>
                 </div>
               </>
+            )}
+            {!clienteId && (
+              <div className="mt-2 space-y-2 rounded-md border p-3">
+                <p className="text-sm font-medium">CPF na nota? <span className="font-normal text-muted-foreground">(opcional)</span></p>
+                <Input
+                  inputMode="numeric"
+                  placeholder="000.000.000-00"
+                  value={cpfNota}
+                  onChange={(e) => setCpfNota(mascaraDocumento(e.target.value))}
+                  className={cpfNota.trim() && !documentoValido(cpfNota) ? "border-red-500" : ""}
+                />
+                {cpfNota.trim() && !documentoValido(cpfNota) && (
+                  <p className="text-xs text-red-600">CPF/CNPJ inválido — confira os dígitos.</p>
+                )}
+                {cpfNota.trim() && documentoValido(cpfNota) && (
+                  <Input
+                    placeholder="Nome do cliente (opcional)"
+                    value={nomeNota}
+                    onChange={(e) => setNomeNota(e.target.value)}
+                  />
+                )}
+                <p className="text-xs text-muted-foreground">
+                  O cupom sai no CPF informado, sem precisar cadastrar o cliente.
+                </p>
+              </div>
             )}
             <label className="mt-2 flex cursor-pointer items-start gap-2 rounded-md border p-3 text-sm">
               <input

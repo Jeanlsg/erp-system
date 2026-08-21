@@ -296,11 +296,14 @@ Deno.serve(async (req) => {
       }
 
       if (isNFCe) {
-        // NFC-e: consumidor é opcional. Se houver CPF/CNPJ, vai identificado;
-        // sem ele, sai como consumidor não identificado — e nunca leva endereço.
+        // NFC-e: consumidor é opcional. Cliente cadastrado vai identificado;
+        // sem cadastro, vale o "CPF na nota" digitado no balcão; sem nenhum
+        // dos dois, sai como consumidor não identificado — nunca com endereço.
         destinatario = venda.cliente?.cpf_cnpj
           ? { cpf_cnpj: venda.cliente.cpf_cnpj, nome: venda.cliente.nome_razao }
-          : {};
+          : venda.consumidor_cpf
+            ? { cpf_cnpj: venda.consumidor_cpf, nome: venda.consumidor_nome ?? undefined }
+            : {};
       } else {
         if (!venda.cliente?.cpf_cnpj) {
           return json(422, { erro: "venda sem cliente identificado com CPF/CNPJ (NF-e modelo 55 exige destinatário)" });
@@ -507,6 +510,8 @@ Deno.serve(async (req) => {
         ? `${resultado.motivo ?? ""} [XML/DANFE não gravados no storage — reprocessar arquivos]`.trim()
         : resultado.motivo,
       venda_id: venda_id ?? null,
+      consumidor_cpf_cnpj: (destinatario as any)?.cpf_cnpj ?? null,
+      consumidor_nome: (destinatario as any)?.nome ?? null,
       certificado_id: cert.id,
       configuracao_sefaz_id: sefaz.id,
       ambiente: sefaz.ambiente,
