@@ -42,7 +42,7 @@ const A: Record<string, AjudaPagina> = {
   "exapp-pedidos": { titulo: "ExApp Pedidos", descricao: "Pedidos recebidos pelo aplicativo próprio da loja." },
   devolucoes: {
     titulo: "Devoluções",
-    descricao: "Devolução de venda: o estoque volta, a NF-e de devolução (entrada, finalidade 4) referencia a nota original e o financeiro é ajustado.",
+    descricao: "Parcial ou total, por item e quantidade — a creatina vencida volta, o whey da mesma venda fica. Cada item decide se retorna ao estoque (vencido/avariado vira perda, sem voltar à prateleira). Estoque via kardex, financeiro (abate ou reembolso) e pontos são ajustados na mesma operação. Com nota autorizada, emita a NF-e de devolução em Notas Fiscais.",
   },
   estoque: {
     titulo: "Estoque",

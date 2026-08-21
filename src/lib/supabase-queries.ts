@@ -3817,36 +3817,79 @@ export function useDeleteServico() {
 // DEVOLUÇÕES — registrar devolução de venda
 // ========================================
 
+// ── Devolução parcial/total (migration 061) ──
+// A transação inteira (registro, estoque via kardex, financeiro, pontos)
+// vive em erp.registrar_devolucao — a tela só monta os itens.
+export function useItensDevolviveis(vendaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_itens_devolviveis', vendaId],
+    enabled: !!vendaId,
+    queryFn: async () => {
+      if (!isSupabaseConfigured() || !vendaId) return [];
+      const [{ data: itens, error: e1 }, { data: devolvidos, error: e2 }] = await Promise.all([
+        supabase.from('erp_venda_itens')
+          .select('id, produto_id, kit_id, nome, quantidade, preco_unitario, subtotal')
+          .eq('venda_id', vendaId),
+        supabase.from('erp_devolucao_itens')
+          .select('venda_item_id, quantidade, devolucao:erp_devolucoes!inner(venda_id)')
+          .eq('devolucao.venda_id', vendaId),
+      ]);
+      if (e1) throw e1;
+      if (e2) throw e2;
+      const ja = new Map<string, number>();
+      for (const d of devolvidos ?? []) {
+        ja.set(d.venda_item_id, (ja.get(d.venda_item_id) ?? 0) + Number(d.quantidade));
+      }
+      return (itens ?? []).map((i: any) => ({
+        ...i,
+        devolvido: ja.get(i.id) ?? 0,
+        devolvivel: Number(i.quantidade) - (ja.get(i.id) ?? 0),
+      }));
+    },
+  });
+}
+
+export function useDevolucoes(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ['erp_devolucoes', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let q = supabase.from('erp_devolucoes')
+        .select('*, venda:erp_vendas(numero_pedido, cliente:erp_pessoas(nome_razao)), itens:erp_devolucao_itens(nome, quantidade, retornou_estoque)')
+        .order('created_at', { ascending: false }).limit(50);
+      if (lojaId) q = q.eq('loja_id', lojaId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
 export function useRegistrarDevolucao() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ vendaId, motivo, estornarEstoque, lojaId }: { vendaId: string; motivo?: string; estornarEstoque: boolean; lojaId?: string }) => {
-      // 1) Marca a venda como devolvida
-      const { data: venda, error } = await supabase.from('erp_vendas')
-        .update({ status: 'devolvida', observacoes: motivo ?? null })
-        .eq('id', vendaId).select('id, loja_id').single();
-      if (error) throw error;
-
-      // 2) Estorna estoque dos itens (opcional)
-      if (estornarEstoque) {
-        const { data: itens, error: e2 } = await supabase.from('erp_venda_itens')
-          .select('produto_id, quantidade').eq('venda_id', vendaId).not('produto_id', 'is', null);
-        if (e2) throw e2;
-        const loja = lojaId ?? venda.loja_id;
-        for (const item of itens ?? []) {
-          const { data: est } = await supabase.from('erp_estoque')
-            .select('id, quantidade').eq('produto_id', item.produto_id).eq('loja_id', loja).maybeSingle();
-          if (est) {
-            await supabase.from('erp_estoque').update({ quantidade: est.quantidade + item.quantidade }).eq('id', est.id);
-          }
-        }
-      }
-      return venda;
+    mutationFn: async (p: {
+      vendaId: string;
+      itens: { venda_item_id: string; quantidade: number; retorna_estoque: boolean }[];
+      motivo?: string;
+    }) => {
+      const { data, error } = await supabase.schema('erp').rpc('registrar_devolucao', {
+        p_venda_id: p.vendaId,
+        p_itens: p.itens,
+        p_motivo: p.motivo ?? null,
+      });
+      if (error) throw new Error(error.message);
+      return data;
     },
     onSuccess: () => {
+      // devolução mexe em estoque, kardex, contas e pontos — invalida o conjunto
       qc.invalidateQueries({ queryKey: ['erp_devolucoes'] });
+      qc.invalidateQueries({ queryKey: ['erp_itens_devolviveis'] });
       qc.invalidateQueries({ queryKey: ['erp_vendas'] });
       qc.invalidateQueries({ queryKey: ['erp_estoque'] });
+      qc.invalidateQueries({ queryKey: ['erp_estoque_movimentacoes'] });
+      qc.invalidateQueries({ queryKey: ['erp_contas'] });
+      qc.invalidateQueries({ queryKey: ['erp_cartao_fidelidade'] });
     },
   });
 }
