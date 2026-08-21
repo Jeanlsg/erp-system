@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { ClipboardList, Loader2, Play, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Camera, ClipboardList, Loader2, Play, CheckCircle2, AlertTriangle } from "lucide-react";
+import { LeitorCodigoBarras } from "@/components/leitor-codigo-barras";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,7 @@ export function InventarioPage() {
   const [novaLoja, setNovaLoja] = useState("");
   const [novaObs, setNovaObs] = useState("");
   const [confirmarAplicar, setConfirmarAplicar] = useState(false);
+  const [leitorAberto, setLeitorAberto] = useState(false);
 
   const { data: lojas = [] } = useLojas();
   const { data: inventarios = [], isLoading } = useInventarios(
@@ -70,6 +72,23 @@ export function InventarioPage() {
       setSelecionado(id);
     } catch (err: any) {
       toast.error(err?.message ?? "Falha ao abrir inventário");
+    }
+  };
+
+  // Conferência bipando: cada leitura soma +1 na contagem do produto — é
+  // como se conta prateleira de verdade, item a item, sem digitar.
+  const aoLerCodigo = async (codigo: string) => {
+    const item = itens.find((i: any) => i.produto?.codigo_barras === codigo);
+    if (!item) {
+      toast.error(`Código ${codigo} não está neste inventário`);
+      return;
+    }
+    const novo = Number(item.quantidade_contada ?? 0) + 1;
+    try {
+      await salvarContagem.mutateAsync({ itemId: item.id, quantidadeContada: novo });
+      toast.success(`${item.produto?.nome}: ${novo}`, { duration: 1200 });
+    } catch (err: any) {
+      toast.error(err?.message ?? "Falha ao salvar contagem");
     }
   };
 
@@ -224,6 +243,12 @@ export function InventarioPage() {
                 </p>
               </div>
               {inventarioAtual?.status === "aberto" && (
+                <Button variant="outline" onClick={() => setLeitorAberto(true)}
+                  title="Contar bipando: cada leitura soma +1 no produto">
+                  <Camera className="mr-2 h-4 w-4" /> Contar pela câmera
+                </Button>
+              )}
+              {inventarioAtual?.status === "aberto" && (
                 <Button
                   onClick={() => setConfirmarAplicar(true)}
                   disabled={aplicar.isPending || divergencias.length === 0}
@@ -335,6 +360,13 @@ export function InventarioPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <LeitorCodigoBarras
+        aberto={leitorAberto}
+        aoFechar={() => setLeitorAberto(false)}
+        aoLer={aoLerCodigo}
+        titulo="Contagem por leitura"
+      />
 
       <Dialog open={confirmarAplicar} onOpenChange={setConfirmarAplicar}>
         <DialogContent>

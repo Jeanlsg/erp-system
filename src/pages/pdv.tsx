@@ -10,7 +10,7 @@ import {
 import {
   Calculator, Plus, Trash2, Loader2, ShoppingCart, Package,
   CreditCard, Banknote, QrCode, Lock, Unlock, Settings,
-  Check, X, AlertCircle, Receipt, CloudOff, RefreshCw, Cloud,
+  Check, X, AlertCircle, Receipt, CloudOff, RefreshCw, Cloud, Camera,
 } from "lucide-react";
 import {
   useProdutos, useClientes, useCaixaAberto, useCreateCaixa, useFecharCaixa, useKits,
@@ -26,6 +26,7 @@ import { brl } from "@/lib/format";
 import { useConexao } from "@/lib/offline/conexao";
 import { registrarVenda, useFilaVendas } from "@/lib/offline/fila-vendas";
 import { useCatalogoOffline } from "@/lib/offline/catalogo";
+import { LeitorCodigoBarras } from "@/components/leitor-codigo-barras";
 
 interface CartItem {
   produto_id: string;          // para kit: o id do kit (kit_id === produto_id)
@@ -158,6 +159,19 @@ export function PDVPage() {
       }];
     });
   }, []);
+
+  // Leitor por câmera: cada bipe adiciona o produto ao carrinho — o operador
+  // passa os itens em sequência sem tocar na tela.
+  const [leitorAberto, setLeitorAberto] = useState(false);
+  const aoLerCodigo = useCallback((codigo: string) => {
+    const p = produtos.find((x: any) => x.codigo_barras === codigo);
+    if (!p) {
+      toast.error(`Código ${codigo} não está no catálogo`);
+      return;
+    }
+    adicionar(p);
+    toast.success(`${p.nome} adicionado`, { duration: 1500 });
+  }, [produtos, adicionar]);
 
   // Atualizar quantidade
   const atualizarQuantidade = useCallback((id: string, qtd: number) => {
@@ -520,14 +534,18 @@ export function PDVPage() {
               </div>
             )}
 
-            {/* Busca */}
-            <div className="p-4 border-b">
+            {/* Busca + leitor por câmera */}
+            <div className="flex items-center gap-2 p-4 border-b">
               <Input
                 placeholder="Buscar por nome, SKU ou código de barras..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="max-w-md"
               />
+              <Button variant="outline" size="icon" title="Ler código de barras pela câmera"
+                onClick={() => setLeitorAberto(true)}>
+                <Camera className="h-4 w-4" />
+              </Button>
             </div>
 
             {/* Grid de Produtos */}
@@ -793,6 +811,13 @@ export function PDVPage() {
       </Dialog>
 
       {/* Modal: Confirmação de Venda */}
+      <LeitorCodigoBarras
+        aberto={leitorAberto}
+        aoFechar={() => setLeitorAberto(false)}
+        aoLer={aoLerCodigo}
+        titulo="Bipar produtos"
+      />
+
       <Dialog open={modalConfirmarVenda} onOpenChange={setModalConfirmarVenda}>
         <DialogContent>
           <DialogHeader>

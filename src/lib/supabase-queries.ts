@@ -4132,7 +4132,7 @@ export function useInventarioItens(inventarioId?: string) {
       if (!isSupabaseConfigured() || !inventarioId) return [];
       const { data, error } = await supabase
         .from('erp_inventario_itens')
-        .select('*, produto:erp_produtos(id, nome, sku, unidade)')
+        .select('*, produto:erp_produtos(id, nome, sku, unidade, codigo_barras)')
         .eq('inventario_id', inventarioId);
       if (error) throw error;
       return data ?? [];
