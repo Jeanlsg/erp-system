@@ -138,7 +138,10 @@ const A: Record<string, AjudaPagina> = {
   "tef-sitef": { titulo: "TEF / SITEF", descricao: "Integração com maquininha via TEF." },
   "marketplace-ifood": { titulo: "iFood Marketplace", descricao: "Catálogo e preços publicados no iFood." },
   ajuda: { titulo: "Ajuda", descricao: "Documentação e canais de suporte." },
-  "treinamento/tutoriais": { titulo: "Treinamento", descricao: "Tutoriais de uso do sistema." },
+  "treinamento/tutoriais": {
+    titulo: "Treinamento",
+    descricao: "Guia de operação por papel (caixa, estoquista, gerente, admin) com capturas reais de cada tela, passo a passo e link direto para onde a tarefa acontece. Abre já no papel de quem está logado.",
+  },
   gestao: {
     titulo: "Gestão Empresarial",
     descricao: "Hub dos módulos de gestão: cadastros, financeiro, cobrança, fiscal e configurações.",
