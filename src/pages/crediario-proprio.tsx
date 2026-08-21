@@ -31,6 +31,7 @@ import {
   useCrediarioContratos, useCrediarioClientes, useAbrirCrediario,
   useBaixarParcelaCrediario, useVendas,
 } from "@/lib/supabase-queries";
+import { ComboboxBusca } from "@/components/ui/combobox-busca";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { isSupabaseConfigured } from "@/lib/supabase";
@@ -363,16 +364,17 @@ export function CrediarioProprioPage() {
           <div className="space-y-3">
             <div>
               <Label className="text-xs">Venda</Label>
-              <Select value={vendaId} onValueChange={setVendaId}>
-                <SelectTrigger><SelectValue placeholder="Selecione a venda" /></SelectTrigger>
-                <SelectContent>
-                  {elegiveis.slice(0, 50).map((v: any) => (
-                    <SelectItem key={v.id} value={v.id}>
-                      #{v.numero_pedido} · {brl(v.total)} · {date(v.data_venda)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <ComboboxBusca
+                className="mt-1"
+                itens={elegiveis.map((v: any) => ({
+                  id: v.id,
+                  rotulo: `Venda #${v.numero_pedido} · ${brl(v.total)}`,
+                  detalhe: date(v.data_venda),
+                }))}
+                value={vendaId}
+                onChange={setVendaId}
+                placeholder="Buscar pela venda (número ou valor)…"
+              />
             </div>
 
             <div className="grid grid-cols-2 gap-3">

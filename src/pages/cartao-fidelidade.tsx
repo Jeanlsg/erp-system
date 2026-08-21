@@ -17,7 +17,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -27,6 +26,7 @@ import {
   useCartoesFidelidade, useEmitirCartaoFidelidade, useResgatarPontos,
   useMovimentacoesFidelidade, useClientes, useConfiguracoesGerais,
 } from "@/lib/supabase-queries";
+import { ComboboxBusca } from "@/components/ui/combobox-busca";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { isSupabaseConfigured } from "@/lib/supabase";
@@ -266,14 +266,16 @@ export function CartaoFidelidadePage() {
           </DialogHeader>
           <div>
             <Label className="text-xs">Cliente</Label>
-            <Select value={clienteId} onValueChange={setClienteId}>
-              <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-              <SelectContent>
-                {semCartao.slice(0, 100).map((c: any) => (
-                  <SelectItem key={c.id} value={c.id}>{c.nome_razao}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <ComboboxBusca
+              className="mt-1"
+              itens={semCartao.map((c: any) => ({
+                id: c.id, rotulo: c.nome_razao,
+                detalhe: [c.cpf_cnpj, c.celular ?? c.telefone].filter(Boolean).join(" · "),
+              }))}
+              value={clienteId}
+              onChange={setClienteId}
+              placeholder="Buscar cliente por nome, CPF ou telefone…"
+            />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setModalEmitir(false)}>Cancelar</Button>

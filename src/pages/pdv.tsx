@@ -27,6 +27,7 @@ import { useConexao } from "@/lib/offline/conexao";
 import { registrarVenda, useFilaVendas } from "@/lib/offline/fila-vendas";
 import { useCatalogoOffline } from "@/lib/offline/catalogo";
 import { LeitorCodigoBarras } from "@/components/leitor-codigo-barras";
+import { ComboboxBusca } from "@/components/ui/combobox-busca";
 
 interface CartItem {
   produto_id: string;          // para kit: o id do kit (kit_id === produto_id)
@@ -589,16 +590,16 @@ export function PDVPage() {
             {/* Cliente */}
             <div className="p-4 border-b">
               <Label className="text-xs">Cliente</Label>
-              <select
-                className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm mt-1"
+              <ComboboxBusca
+                className="mt-1"
+                itens={clientes.map((c: any) => ({
+                  id: c.id, rotulo: c.nome_razao,
+                  detalhe: [c.cpf_cnpj, c.celular ?? c.telefone].filter(Boolean).join(" · "),
+                }))}
                 value={clienteId}
-                onChange={(e) => setClienteId(e.target.value)}
-              >
-                <option value="">Consumidor Final</option>
-                {clientes.slice(0, 50).map((c) => (
-                  <option key={c.id} value={c.id}>{c.nome_razao}</option>
-                ))}
-              </select>
+                onChange={setClienteId}
+                vazio="Consumidor Final"
+              />
             </div>
 
             {/* Carrinho */}

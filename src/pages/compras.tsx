@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ComboboxBusca } from "@/components/ui/combobox-busca";
 import { ShoppingCart, Loader2, Plus, Upload, X, Check } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import {
@@ -124,12 +125,12 @@ export function ComprasPage() {
           <div className="space-y-3">
             <div>
               <Label>Fornecedor *</Label>
-              <select className="w-full h-9 rounded-md border bg-background px-2 text-sm" value={fornecedorId} onChange={(e) => setFornecedorId(e.target.value)}>
-                <option value="">Selecione...</option>
-                {fornecedores.map((f: any) => (
-                  <option key={f.id} value={f.id}>{f.nome_razao}</option>
-                ))}
-              </select>
+              <ComboboxBusca
+                itens={fornecedores.map((f: any) => ({ id: f.id, rotulo: f.nome_razao, detalhe: f.cpf_cnpj ?? undefined }))}
+                value={fornecedorId}
+                onChange={setFornecedorId}
+                placeholder="Buscar fornecedor…"
+              />
             </div>
 
             <div className="border rounded-md p-3 space-y-2">

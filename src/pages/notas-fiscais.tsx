@@ -21,6 +21,7 @@ import {
   useNfeEventos, useInutilizacoes, isSupabaseConfigured, supabase,
 } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
+import { ComboboxBusca } from "@/components/ui/combobox-busca";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { brl, date, dateTime } from "@/lib/format";
 import { toast } from "sonner";
@@ -434,19 +435,16 @@ export function NotasFiscaisPage() {
           <div className="space-y-3">
             <div>
               <p className="text-sm mb-1 font-medium">Venda finalizada (sem nota) *</p>
-              <select
-                className="w-full h-9 rounded-md border bg-background px-2 text-sm"
+              <ComboboxBusca
+                itens={vendasSemNota.map((v: any) => ({
+                  id: v.id,
+                  rotulo: `#${v.numero_pedido ?? v.id.slice(0, 8)} · ${brl(v.total)}${v.cliente?.nome_razao ? ` · ${v.cliente.nome_razao}` : ""}`,
+                  detalhe: date(v.data_venda),
+                }))}
                 value={vendaSelecionada}
-                onChange={(e) => setVendaSelecionada(e.target.value)}
-              >
-                <option value="">Selecione...</option>
-                {vendasSemNota.map((v: any) => (
-                  <option key={v.id} value={v.id}>
-                    #{v.numero_pedido ?? v.id.slice(0, 8)} — {date(v.data_venda)} — {brl(v.total)}
-                    {v.cliente?.nome_razao ? ` — ${v.cliente.nome_razao}` : ""}
-                  </option>
-                ))}
-              </select>
+                onChange={setVendaSelecionada}
+                placeholder="Buscar por número, valor ou cliente…"
+              />
               {vendasSemNota.length === 0 && (
                 <p className="text-xs text-muted-foreground mt-1">Nenhuma venda finalizada sem nota.</p>
               )}

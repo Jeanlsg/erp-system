@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ComboboxBusca } from "@/components/ui/combobox-busca";
 import { Badge } from "@/components/ui/badge";
 import { ShoppingCart, FileText, Wrench, Truck, Store, Plus, Loader2, X, Check, Ban } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
@@ -44,10 +45,17 @@ function SelectCliente({ value, onChange, clientes, obrigatorio }: {
   return (
     <div>
       <Label>Cliente {obrigatorio ? "*" : ""}</Label>
-      <select className="w-full h-9 rounded-md border bg-background px-2 text-sm" value={value} onChange={(e) => onChange(e.target.value)}>
-        <option value="">Selecione...</option>
-        {clientes.map((c: any) => <option key={c.id} value={c.id}>{c.nome_razao}</option>)}
-      </select>
+      <ComboboxBusca
+        className="mt-1"
+        itens={clientes.map((c: any) => ({
+          id: c.id, rotulo: c.nome_razao,
+          detalhe: [c.cpf_cnpj, c.celular ?? c.telefone].filter(Boolean).join(" · "),
+        }))}
+        value={value}
+        onChange={onChange}
+        vazio={obrigatorio ? undefined : "Sem cliente"}
+        placeholder="Buscar cliente por nome, CPF ou telefone…"
+      />
     </div>
   );
 }
@@ -461,10 +469,13 @@ export function ConsignacaoPage() {
             <div className="border rounded-md p-3 space-y-2">
               <Label>Produtos consignados *</Label>
               <div className="flex gap-2">
-                <select className="flex-1 h-9 rounded-md border bg-background px-2 text-sm" value={novoProduto} onChange={(e) => setNovoProduto(e.target.value)}>
-                  <option value="">Produto...</option>
-                  {produtos.map((p: any) => <option key={p.id} value={p.id}>{p.nome}</option>)}
-                </select>
+                <ComboboxBusca
+                  className="flex-1"
+                  itens={produtos.map((p: any) => ({ id: p.id, rotulo: p.nome, detalhe: p.sku ?? undefined }))}
+                  value={novoProduto}
+                  onChange={setNovoProduto}
+                  placeholder="Buscar produto…"
+                />
                 <Input type="number" min="1" className="w-16" value={novaQtd} onChange={(e) => setNovaQtd(e.target.value)} />
                 <Input type="number" step="0.01" placeholder="R$" className="w-24" value={novoValor} onChange={(e) => setNovoValor(e.target.value)} />
                 <Button type="button" variant="outline" disabled={!novoProduto || !novoValor}

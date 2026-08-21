@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ComboboxBusca } from "@/components/ui/combobox-busca";
 import {
   DollarSign, Loader2, Trash2, Plus,
   AlertTriangle, CheckCircle,
@@ -309,10 +310,12 @@ export function NegativarDevedoresPage() {
           <div className="space-y-3">
             <div>
               <Label>Cliente *</Label>
-              <select className="flex h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm" value={form.pessoa_id} onChange={(e) => setForm({ ...form, pessoa_id: e.target.value })}>
-                <option value="">Selecione...</option>
-                {pessoas.map((p) => <option key={p.id} value={p.id}>{p.nome_razao}</option>)}
-              </select>
+              <ComboboxBusca
+                itens={pessoas.map((p) => ({ id: p.id, rotulo: p.nome_razao, detalhe: (p as any).cpf_cnpj ?? undefined }))}
+                value={form.pessoa_id}
+                onChange={(v) => setForm({ ...form, pessoa_id: v })}
+                placeholder="Buscar cliente…"
+              />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Valor Total</Label><Input type="number" step="0.01" value={form.valor_total} onChange={(e) => setForm({ ...form, valor_total: e.target.value })} /></div>
@@ -452,10 +455,12 @@ export function ParcelarDebitosPage() {
           <div className="space-y-3">
             <div>
               <Label>Cliente *</Label>
-              <select className="flex h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm" value={form.pessoa_id} onChange={(e) => setForm({ ...form, pessoa_id: e.target.value })}>
-                <option value="">Selecione...</option>
-                {pessoas.map((p) => <option key={p.id} value={p.id}>{p.nome_razao}</option>)}
-              </select>
+              <ComboboxBusca
+                itens={pessoas.map((p) => ({ id: p.id, rotulo: p.nome_razao, detalhe: (p as any).cpf_cnpj ?? undefined }))}
+                value={form.pessoa_id}
+                onChange={(v) => setForm({ ...form, pessoa_id: v })}
+                placeholder="Buscar cliente…"
+              />
             </div>
             <div className="grid grid-cols-3 gap-3">
               <div><Label>Dívida Original</Label><Input type="number" step="0.01" value={form.divida_original} onChange={(e) => setForm({ ...form, divida_original: e.target.value })} /></div>
@@ -584,10 +589,12 @@ export function EncaminharProtestoPage() {
           <div className="space-y-3">
             <div>
               <Label>Cliente *</Label>
-              <select className="flex h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm" value={form.pessoa_id} onChange={(e) => setForm({ ...form, pessoa_id: e.target.value })}>
-                <option value="">Selecione...</option>
-                {pessoas.map((p) => <option key={p.id} value={p.id}>{p.nome_razao}</option>)}
-              </select>
+              <ComboboxBusca
+                itens={pessoas.map((p) => ({ id: p.id, rotulo: p.nome_razao, detalhe: (p as any).cpf_cnpj ?? undefined }))}
+                value={form.pessoa_id}
+                onChange={(v) => setForm({ ...form, pessoa_id: v })}
+                placeholder="Buscar cliente…"
+              />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
