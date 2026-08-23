@@ -33,6 +33,7 @@ import { ConfigEmpresarialPage } from "@/pages/config.empresarial";
 import { DocumentosPage } from "@/pages/documentos";
 import { CrediarioProprioPage } from "@/pages/crediario-proprio";
 import { GestaoHubPage } from "@/pages/gestao";
+import { toast } from "sonner";
 
 // ====================================================================
 // CONSULTA PESSOA FÍSICA
@@ -346,7 +347,7 @@ function imprimirEtiqueta(p: any) {
     .map((_, i) => `<rect x="${i * 5}" y="0" width="${i % 3 === 0 ? 3 : i % 2 === 0 ? 2 : 1}" height="60" fill="black"/>`)
     .join("");
   const w = window.open("", "_blank", "width=400,height=300");
-  if (!w) { alert("Habilite pop-ups para imprimir a etiqueta."); return; }
+  if (!w) { toast.error("Habilite pop-ups para imprimir a etiqueta."); return; }
   w.document.write(`<!doctype html><html><head><title>Etiqueta — ${p.nome}</title>
     <style>body{font-family:sans-serif;text-align:center;padding:16px}p{margin:2px}</style></head><body>
     <p style="font-weight:bold">${p.nome}</p>
@@ -730,7 +731,7 @@ export function ExclusaoInformacoesPage() {
 
   const handleSolicitarExclusao = (pessoa: any) => {
     if (!confirm(`Solicitar exclusão dos dados de ${pessoa.nome_razao}? Esta ação é definitiva (LGPD).`)) return;
-    alert(`Solicitação de exclusão registrada para ${pessoa.nome_razao}.\nConforme LGPD Art. 18, o prazo para atendimento é de 15 dias.`);
+    toast.success(`Solicitação de exclusão registrada para ${pessoa.nome_razao}. Conforme LGPD Art. 18, o prazo para atendimento é de 15 dias.`);
   };
 
   return (
@@ -1070,7 +1071,7 @@ export function PainelContadorPage() {
       if (!file) return;
       const texto = await file.text();
       const trans = parseOfx(texto);
-      if (trans.length === 0) { alert("Nenhuma transação encontrada no arquivo OFX."); return; }
+      if (trans.length === 0) { toast.error("Nenhuma transação encontrada no arquivo OFX."); return; }
       setOfxTrans(trans);
     };
     input.click();

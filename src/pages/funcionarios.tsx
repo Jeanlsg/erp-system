@@ -10,6 +10,7 @@ import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { brl, date } from "@/lib/format";
+import { toast } from "sonner";
 
 export function FuncionariosPage() {
   const { lojaId } = useAutoSelectLoja();
@@ -53,7 +54,7 @@ export function FuncionariosPage() {
     };
     const { data: pessoa, error: eP } = await (await import("@/lib/supabase")).supabase
       .from("erp_pessoas").insert(pessoaInsert).select().single();
-    if (eP) return alert(eP.message);
+    if (eP) return toast.error(eP.message);
 
     await create.mutateAsync({
       pessoa_id: pessoa.id,

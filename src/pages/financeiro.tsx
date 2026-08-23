@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +23,7 @@ import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { chart } from "@/lib/chart";
+import { supabase } from "@/lib/supabase";
 
 type AbaAtiva = "fluxo" | "vendas" | "graficos" | "formas" | "taxas" | "pagas" | "apagar" | "recebidas" | "areceber" | "nf";
 
@@ -30,6 +31,8 @@ export function FinanceiroPage() {
   const { lojaId } = useAutoSelectLoja();
   const [searchParams] = useSearchParams();
   const qc = useQueryClient();
+  const navigate = useNavigate();
+
   const [aba, setAba] = useState<AbaAtiva>((searchParams.get("aba") as AbaAtiva) ?? "fluxo");
 
   // Filtro Período (default = mês atual)
@@ -37,6 +40,97 @@ export function FinanceiroPage() {
   const primeiroDia = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
   const [dataInicio, setDataInicio] = useState(primeiroDia.toISOString().slice(0, 10));
   const [dataFim, setDataFim] = useState(hoje.toISOString().slice(0, 10));
+
+  // ── Relatórios dos botões de ação ──
+  // Antes, sete destes botões só abriam um alert com o próprio nome. Cada um
+  // agora consulta o dado real do período selecionado nos filtros acima.
+  type TipoRelatorio = "servicos" | "fechamentos" | "vendas_excluidas"
+    | "contas_excluidas" | "entradas_canceladas" | "sangrias" | "entradas_extra";
+  const [relatorio, setRelatorio] = useState<TipoRelatorio | null>(null);
+
+  const REL: Record<TipoRelatorio, { titulo: string; descricao: string }> = {
+    servicos:            { titulo: "Extrato de Serviços",  descricao: "Serviços vendidos no período (itens de venda vinculados a serviço)." },
+    fechamentos:         { titulo: "Fechamentos de Caixa", descricao: "Cada fechamento com o esperado, o contado e a diferença — diferença recorrente é o sinal de olhar a gaveta." },
+    vendas_excluidas:    { titulo: "Vendas Excluídas",     descricao: "Vendas canceladas ou devolvidas no período." },
+    contas_excluidas:    { titulo: "Contas Excluídas",     descricao: "Contas canceladas — inclui as substituídas por crediário ou zeradas por devolução." },
+    entradas_canceladas: { titulo: "Entradas Canceladas",  descricao: "Notas de entrada canceladas pelo fornecedor (detectadas pelo canal da SEFAZ)." },
+    sangrias:            { titulo: "Sangrias de Caixa",    descricao: "Retiradas de dinheiro da gaveta no período, com motivo." },
+    entradas_extra:      { titulo: "Entradas Extra Caixa", descricao: "Entradas avulsas de dinheiro no caixa no período." },
+  };
+
+  const { data: linhasRelatorio = [], isLoading: carregandoRelatorio } = useQuery<any[]>({
+    queryKey: ["fin_relatorio", relatorio, dataInicio, dataFim, lojaId],
+    enabled: !!relatorio,
+    queryFn: async () => {
+      const ini = dataInicio, fim = dataFim + "T23:59:59";
+      if (relatorio === "servicos") {
+        const { data, error } = await supabase.from("erp_venda_itens")
+          .select("nome, quantidade, subtotal, servico:erp_servicos(nome), venda:erp_vendas!inner(numero_pedido, data_venda, loja_id, status)")
+          .not("servico_id", "is", null)
+          .gte("venda.data_venda", ini).lte("venda.data_venda", fim)
+          .eq("venda.status", "finalizada");
+        if (error) throw error;
+        return data ?? [];
+      }
+      if (relatorio === "fechamentos") {
+        const q = supabase.from("erp_fechamentos_caixa")
+          .select("*, caixa:erp_caixa(numero_caixa, loja_id), usuario:erp_usuarios(nome)")
+          .gte("data_fechamento", ini).lte("data_fechamento", fim)
+          .order("data_fechamento", { ascending: false });
+        const { data, error } = await q;
+        if (error) throw error;
+        return (data ?? []).filter((f: any) => !lojaId || f.caixa?.loja_id === lojaId);
+      }
+      if (relatorio === "vendas_excluidas") {
+        let q = supabase.from("erp_vendas")
+          .select("numero_pedido, data_venda, total, status, motivo_cancelamento, observacoes, cliente:erp_pessoas(nome_razao)")
+          .in("status", ["cancelada", "devolvida"])
+          .gte("data_venda", ini).lte("data_venda", fim)
+          .order("data_venda", { ascending: false });
+        if (lojaId) q = q.eq("loja_id", lojaId);
+        const { data, error } = await q;
+        if (error) throw error;
+        return data ?? [];
+      }
+      if (relatorio === "contas_excluidas") {
+        let q = supabase.from("erp_contas")
+          .select("descricao, tipo, valor, updated_at, observacoes, pessoa:erp_pessoas(nome_razao)")
+          .eq("status", "cancelado")
+          .gte("updated_at", ini).lte("updated_at", fim)
+          .order("updated_at", { ascending: false });
+        if (lojaId) q = q.eq("loja_id", lojaId);
+        const { data, error } = await q;
+        if (error) throw error;
+        return data ?? [];
+      }
+      if (relatorio === "entradas_canceladas") {
+        let q = supabase.from("erp_nfe_entrada")
+          .select("numero, serie, emitente_nome, valor_total, data_emissao, motivo_cancelamento")
+          .eq("status", "cancelada")
+          .order("data_emissao", { ascending: false });
+        if (lojaId) q = q.eq("loja_id", lojaId);
+        const { data, error } = await q;
+        if (error) throw error;
+        return data ?? [];
+      }
+      if (relatorio === "sangrias") {
+        const { data, error } = await supabase.from("erp_sangrias")
+          .select("data_hora, valor, motivo, observacoes, usuario:erp_usuarios(nome), caixa:erp_caixa(numero_caixa, loja_id)")
+          .gte("data_hora", ini).lte("data_hora", fim)
+          .order("data_hora", { ascending: false });
+        if (error) throw error;
+        return (data ?? []).filter((x: any) => !lojaId || x.caixa?.loja_id === lojaId);
+      }
+      // entradas_extra
+      const { data, error } = await supabase.from("erp_caixa_movimentacoes")
+        .select("data_hora, valor, motivo, tipo, observacoes, caixa:erp_caixa(numero_caixa, loja_id)")
+        .eq("tipo", "entrada")
+        .gte("data_hora", ini).lte("data_hora", fim)
+        .order("data_hora", { ascending: false });
+      if (error) throw error;
+      return (data ?? []).filter((x: any) => !lojaId || x.caixa?.loja_id === lojaId);
+    },
+  });
 
   const kpis = useFluxoCaixaKpis(lojaId ?? undefined, dataInicio, dataFim);
   const formas = useFormasRecebimento(lojaId ?? undefined, dataInicio, dataFim);
@@ -185,17 +279,17 @@ export function FinanceiroPage() {
       {/* BOTÕES DE AÇÃO RÁPIDA (12 botões em grid 4x3) */}
       <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 md:grid-cols-4">
         <BotaoAcao titulo="Incluir Contas P/R" icone={Plus} onClick={() => setModalConta({ tipo: "pagar" })} />
-        <BotaoAcao titulo="Sangrias de Caixa" icone={TrendingDown} onClick={() => setAba("pagas")} />
-        <BotaoAcao titulo="Entradas Extra Caixa" icone={TrendingUp} onClick={() => setAba("pagas")} />
-        <BotaoAcao titulo="Extrato de Serviços" icone={ClipboardList} onClick={() => alert("Extrato de Serviços — módulo administrativo")} />
-        <BotaoAcao titulo="Fechamento Caixa" icone={Receipt} onClick={() => alert("Relatório de fechamento de caixa")} />
+        <BotaoAcao titulo="Sangrias de Caixa" icone={TrendingDown} onClick={() => setRelatorio("sangrias")} />
+        <BotaoAcao titulo="Entradas Extra Caixa" icone={TrendingUp} onClick={() => setRelatorio("entradas_extra")} />
+        <BotaoAcao titulo="Extrato de Serviços" icone={ClipboardList} onClick={() => setRelatorio("servicos")} />
+        <BotaoAcao titulo="Fechamento Caixa" icone={Receipt} onClick={() => setRelatorio("fechamentos")} />
         <BotaoAcao titulo="Conta Bancária" icone={Banknote} onClick={() => setModalContaBancaria(true)} />
         <BotaoAcao titulo="Ações de NF" icone={FileText} onClick={() => setAba("nf")} />
-        <BotaoAcao titulo="Vendas Excluídas" icone={Trash2} onClick={() => alert("Vendas excluídas")} />
-        <BotaoAcao titulo="Contas Excluídas" icone={Trash2} onClick={() => alert("Contas excluídas")} />
-        <BotaoAcao titulo="Relatório Gerencial" icone={BarChart3} onClick={() => alert("Relatório gerencial consolidado")} />
-        <BotaoAcao titulo="Entregas Delivery" icone={ShoppingCart} onClick={() => alert("Entregas delivery")} />
-        <BotaoAcao titulo="Entradas Canceladas" icone={X} onClick={() => alert("Entradas canceladas")} />
+        <BotaoAcao titulo="Vendas Excluídas" icone={Trash2} onClick={() => setRelatorio("vendas_excluidas")} />
+        <BotaoAcao titulo="Contas Excluídas" icone={Trash2} onClick={() => setRelatorio("contas_excluidas")} />
+        <BotaoAcao titulo="Relatório Gerencial" icone={BarChart3} onClick={() => navigate("/relatorios/analise")} />
+        <BotaoAcao titulo="Entregas Delivery" icone={ShoppingCart} onClick={() => navigate("/pedidos-delivery")} />
+        <BotaoAcao titulo="Entradas Canceladas" icone={X} onClick={() => setRelatorio("entradas_canceladas")} />
       </div>
 
       {/* ABAS */}
@@ -598,6 +692,93 @@ export function FinanceiroPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setModalContaBancaria(false)}>Fechar</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== Relatórios dos botões de ação ===== */}
+      <Dialog open={!!relatorio} onOpenChange={(o) => { if (!o) setRelatorio(null); }}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>{relatorio ? REL[relatorio].titulo : ""}</DialogTitle>
+          </DialogHeader>
+          {relatorio && (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                {REL[relatorio].descricao} Período: {date(dataInicio)} a {date(dataFim)}.
+              </p>
+              {carregandoRelatorio ? (
+                <div className="flex items-center gap-2 py-8 text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" /> consultando…
+                </div>
+              ) : linhasRelatorio.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  Nada encontrado no período selecionado.
+                </p>
+              ) : (
+                <div className="max-h-96 overflow-y-auto rounded-md border">
+                  <table className="w-full text-sm">
+                    <tbody>
+                      {relatorio === "fechamentos" && linhasRelatorio.map((f: any) => (
+                        <tr key={f.id} className="border-b">
+                          <td className="p-2">{dateTime(f.data_fechamento)}<span className="block text-xs text-muted-foreground">Caixa {f.caixa?.numero_caixa} · {f.usuario?.nome}</span></td>
+                          <td className="p-2 text-right">esperado {brl(Number(f.valor_final ?? 0) - Number(f.diferenca ?? 0))}</td>
+                          <td className="p-2 text-right">contado {brl(f.valor_final)}</td>
+                          <td className={`p-2 text-right font-semibold ${Number(f.diferenca) < 0 ? "text-red-600" : Number(f.diferenca) > 0 ? "text-amber-600" : "text-emerald-700"}`}>
+                            {Number(f.diferenca) === 0 ? "bateu" : `dif. ${brl(f.diferenca)}`}
+                          </td>
+                        </tr>
+                      ))}
+                      {relatorio === "vendas_excluidas" && linhasRelatorio.map((v: any, i: number) => (
+                        <tr key={i} className="border-b">
+                          <td className="p-2">#{v.numero_pedido}<span className="block text-xs text-muted-foreground">{dateTime(v.data_venda)} · {v.cliente?.nome_razao ?? "sem cliente"}</span></td>
+                          <td className="p-2"><Badge variant="outline">{v.status}</Badge></td>
+                          <td className="p-2 text-xs text-muted-foreground">{v.motivo_cancelamento ?? v.observacoes ?? ""}</td>
+                          <td className="p-2 text-right font-medium">{brl(v.total)}</td>
+                        </tr>
+                      ))}
+                      {relatorio === "contas_excluidas" && linhasRelatorio.map((c: any, i: number) => (
+                        <tr key={i} className="border-b">
+                          <td className="p-2">{c.descricao}<span className="block text-xs text-muted-foreground">{dateTime(c.updated_at)} · {c.pessoa?.nome_razao ?? ""}</span></td>
+                          <td className="p-2"><Badge variant="outline">{c.tipo}</Badge></td>
+                          <td className="p-2 text-xs text-muted-foreground">{c.observacoes ?? ""}</td>
+                          <td className="p-2 text-right font-medium">{brl(c.valor)}</td>
+                        </tr>
+                      ))}
+                      {relatorio === "entradas_canceladas" && linhasRelatorio.map((n: any, i: number) => (
+                        <tr key={i} className="border-b">
+                          <td className="p-2">NF {n.numero}/{n.serie}<span className="block text-xs text-muted-foreground">{date(n.data_emissao)} · {n.emitente_nome}</span></td>
+                          <td className="p-2 text-xs text-muted-foreground">{n.motivo_cancelamento ?? "cancelada pelo emitente"}</td>
+                          <td className="p-2 text-right font-medium">{brl(n.valor_total)}</td>
+                        </tr>
+                      ))}
+                      {(relatorio === "sangrias" || relatorio === "entradas_extra") && linhasRelatorio.map((m: any, i: number) => (
+                        <tr key={i} className="border-b">
+                          <td className="p-2">{dateTime(m.data_hora)}<span className="block text-xs text-muted-foreground">Caixa {m.caixa?.numero_caixa}{m.usuario?.nome ? ` · ${m.usuario.nome}` : ""}</span></td>
+                          <td className="p-2 text-xs text-muted-foreground">{m.motivo ?? m.observacoes ?? ""}</td>
+                          <td className={`p-2 text-right font-medium ${relatorio === "sangrias" ? "text-red-600" : "text-emerald-700"}`}>
+                            {relatorio === "sangrias" ? "−" : "+"}{brl(m.valor)}
+                          </td>
+                        </tr>
+                      ))}
+                      {relatorio === "servicos" && linhasRelatorio.map((sv: any, i: number) => (
+                        <tr key={i} className="border-b">
+                          <td className="p-2">{sv.servico?.nome ?? sv.nome}<span className="block text-xs text-muted-foreground">venda #{sv.venda?.numero_pedido} · {dateTime(sv.venda?.data_venda)}</span></td>
+                          <td className="p-2 text-right">{Number(sv.quantidade)}x</td>
+                          <td className="p-2 text-right font-medium">{brl(sv.subtotal)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {linhasRelatorio.length > 0 && (
+                <p className="text-right text-sm font-semibold">
+                  {linhasRelatorio.length} registro(s) · total {brl(linhasRelatorio.reduce((t: number, x: any) =>
+                    t + Number(x.valor ?? x.total ?? x.subtotal ?? x.valor_total ?? 0), 0))}
+                </p>
+              )}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

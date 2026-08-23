@@ -171,11 +171,11 @@ export function RemessasPage() {
 
   const handleSalvar = async () => {
     if (!user || !form.loja_destino_id || form.itens.length === 0) {
-      alert("Preencha todos os campos e adicione pelo menos 1 item");
+      toast.error("Preencha todos os campos e adicione pelo menos 1 item");
       return;
     }
     if (form.loja_origem_id === form.loja_destino_id) {
-      alert("Origem e destino devem ser diferentes");
+      toast.error("Origem e destino devem ser diferentes");
       return;
     }
 

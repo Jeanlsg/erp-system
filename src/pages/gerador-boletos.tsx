@@ -19,6 +19,11 @@ export function GeradorBoletosPage() {
           <Barcode className="h-6 w-6" /> Gerador de Boletos
         </h1>
         <p className="text-sm text-muted-foreground mt-1">{boletos.length} boleto(s) emitido(s)</p>
+        <p className="text-xs text-muted-foreground mt-2 rounded-md border border-dashed px-3 py-2 max-w-2xl">
+          A emissão de boletos registrados exige convênio bancário (contrato com o banco + API de cobrança).
+          Enquanto o convênio não é contratado, use <b>Promissórias</b> ou o <b>Crediário Próprio</b> para
+          formalizar cobranças a prazo.
+        </p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">

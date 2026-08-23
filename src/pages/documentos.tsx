@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogC
 import { supabase } from "@/lib/supabase";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { date } from "@/lib/format";
+import { toast } from "sonner";
 
 export function DocumentosPage() {
   const { user } = useAuth();
@@ -34,7 +35,7 @@ export function DocumentosPage() {
 
   const baixar = async (d: any) => {
     const { data, error } = await supabase.storage.from("midias").download(d.storage_path);
-    if (error || !data) { alert("Falha ao baixar o arquivo: " + (error?.message ?? "não encontrado")); return; }
+    if (error || !data) { toast.error("Falha ao baixar o arquivo: " + (error?.message ?? "não encontrado")); return; }
     const url = URL.createObjectURL(data);
     const a = document.createElement("a");
     a.href = url;

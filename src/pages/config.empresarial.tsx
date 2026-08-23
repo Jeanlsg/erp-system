@@ -1,3 +1,4 @@
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,7 +28,7 @@ export function ConfigEmpresarialPage() {
   const handleSalvar = async () => {
     if (!form || !form.loja_id) return;
     await upsert.mutateAsync(form);
-    alert("Dados salvos!");
+    toast.success("Dados salvos.");
   };
 
   return (

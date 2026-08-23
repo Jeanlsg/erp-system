@@ -2,6 +2,7 @@
 // Páginas extras de Gestão Empresarial (parte 2)
 // ============================================================
 
+import { toast } from "sonner";
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -517,7 +518,7 @@ export function ConfiguracoesSefazPage() {
   const handleSalvar = async () => {
     if (!form) return;
     await upsert.mutateAsync(form);
-    alert("Configurações SEFAZ salvas!");
+    toast.success("Configurações SEFAZ salvas.");
   };
 
   return (
