@@ -153,12 +153,18 @@ X-Life Suplementos`;
     }
 
     // ================= WHATSAPP (Uazapi) =================
+    // Cada loja tem a própria instância (número) no Uazapi; o token
+    // certo vem de config.lojas[loja_id], com config.token de fallback
+    // para instalação de instância única.
     const { data: wpp } = await adminPublic
       .from("integrations").select("config").eq("provider", "nota_whatsapp").maybeSingle();
-    if (!wpp?.config?.url || !wpp?.config?.token) {
+    const cfgLoja = wpp?.config?.lojas?.[nota.loja_id] ?? {};
+    const wppUrl = cfgLoja.url ?? wpp?.config?.url;
+    const wppToken = cfgLoja.token ?? wpp?.config?.token;
+    if (!wppUrl || !wppToken) {
       await registrar(false, destino ?? "(sem canal)", "canal de WhatsApp não configurado (provider nota_whatsapp)");
       return json(422, {
-        erro: "canal de WhatsApp não configurado — cadastre provider 'nota_whatsapp' {url, token} em integrations",
+        erro: "canal de WhatsApp não configurado — cadastre provider 'nota_whatsapp' {url, token, lojas?} em integrations",
       });
     }
     const tel = String(destino ?? cliente?.celular ?? cliente?.telefone ?? "").replace(/\D/g, "");
@@ -171,9 +177,9 @@ X-Life Suplementos`;
       await registrar(false, numero, "sem DANFE para anexar");
       return json(422, { erro: "não foi possível obter o DANFE para enviar" });
     }
-    const resp = await fetch(`${String(wpp.config.url).replace(/\/$/, "")}/send/media`, {
+    const resp = await fetch(`${String(wppUrl).replace(/\/$/, "")}/send/media`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", token: wpp.config.token },
+      headers: { "Content-Type": "application/json", token: wppToken },
       body: JSON.stringify({
         number: numero,
         type: "document",
