@@ -16,6 +16,7 @@ import {
   Store, MapPin, Phone, Mail, FileText, Hash, ShieldX, LogIn,
 } from "lucide-react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { useLojas } from "@/lib/supabase-queries";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { useAuth } from "@/lib/store/auth-store";
 import { toast } from "sonner";
@@ -30,6 +31,7 @@ const REGIMES_TRIBUTARIOS = [
 export function SetupPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { data: lojas = [], isSuccess: lojasCarregadas } = useLojas();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [loading, setLoading] = useState(false);
   const [criado, setCriado] = useState(false);
@@ -98,8 +100,42 @@ export function SetupPage() {
     return <SupabaseNotConfigured title="Configuração Inicial" />;
   }
 
+  // Sistema já configurado: o wizard é só para a PRIMEIRA empresa.
+  // Loja nova entra por Configurações → Lojas, sem risco de duplicar
+  // o cadastro inicial por quem chega aqui pela URL.
+  if (lojasCarregadas && lojas.length > 0 && !criado) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background p-4">
+        <Card className="max-w-md w-full">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-6 w-6 text-green-600" />
+              <CardTitle>Sistema já configurado</CardTitle>
+            </div>
+            <CardDescription>
+              {lojas.length === 1
+                ? `A empresa "${lojas[0].apelido ?? lojas[0].nome}" já está cadastrada.`
+                : `Já existem ${lojas.length} lojas cadastradas (${lojas.map((l: any) => l.apelido ?? l.nome).join(", ")}).`}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Para adicionar outra loja ou filial, use Configurações → Lojas.
+            </p>
+            <Button onClick={() => navigate("/", { replace: true })} className="w-full">
+              Ir para o Dashboard
+            </Button>
+            <Button variant="outline" onClick={() => navigate("/lojas")} className="w-full">
+              <Store className="mr-2 h-4 w-4" /> Gerenciar Lojas
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   // Tela de carregamento
-  if (verificandoAuth) {
+  if (verificandoAuth || !lojasCarregadas) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3 text-muted-foreground">

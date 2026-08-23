@@ -34,7 +34,7 @@ export function RootLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, isAuthenticated } = useAuth();
-  const { data: lojas = [] } = useLojas();
+  const { data: lojas = [], isSuccess: lojasCarregadas } = useLojas();
   const currentLojaId = useLojaAtualStore((s) => s.currentLojaId);
   const setCurrentLojaId = useLojaAtualStore((s) => s.setCurrentLojaId);
 
@@ -59,12 +59,14 @@ export function RootLayout() {
     }
   }, [lojas, currentLojaId, setCurrentLojaId]);
 
-  // Redirecionar para setup se não houver nenhuma loja cadastrada
+  // Redirecionar para setup se não houver nenhuma loja cadastrada.
+  // Só depois da query RESOLVER: enquanto carrega, `lojas` é [] e o
+  // redirect mandava usuário com loja cadastrada para o /setup.
   useEffect(() => {
-    if (hydrated && isAuthenticated && lojas.length === 0) {
+    if (hydrated && isAuthenticated && lojasCarregadas && lojas.length === 0) {
       navigate("/setup", { replace: true });
     }
-  }, [hydrated, isAuthenticated, lojas.length, navigate]);
+  }, [hydrated, isAuthenticated, lojasCarregadas, lojas.length, navigate]);
 
   function handleLogout() {
     logout();
