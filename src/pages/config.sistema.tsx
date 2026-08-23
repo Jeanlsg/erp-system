@@ -474,13 +474,18 @@ function FeatureFlagsPanel() {
 // ====================================================================
 // CONFIG TÉCNICAS PANEL (todos os usuários autenticados)
 // ====================================================================
+// Chaves que NUNCA aparecem nesta tela: editar a chave de criptografia
+// sem re-encriptar as senhas junto inutiliza os certificados A1 na hora.
+// Rotação só pelo scripts/rotacionar-chave-certificado.sh.
+const CHAVES_OCULTAS = new Set(["chave_cripto_certificado"]);
+
 function ConfigTecnicasPanel() {
   const { data: configs = [], refetch } = useQuery<any[]>({
     queryKey: ["erp_configuracoes_sistema"],
     queryFn: async () => {
       const { data, error } = await supabase.from("erp_configuracoes_sistema").select("*").order("chave");
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []).filter((c: any) => !CHAVES_OCULTAS.has(c.chave));
     },
   });
 

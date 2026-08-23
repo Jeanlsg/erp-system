@@ -25,7 +25,7 @@ import {
 import {
   Package, Search, Loader2, Save, Plus,
   Edit, Trash2, Boxes, Calendar, Barcode,
-  Tag, AlertCircle, Clock,
+  Tag, AlertCircle, Clock, FileSpreadsheet,
   TrendingUp,
   ChevronLeft, ChevronRight, ArrowDownToLine,
 } from "lucide-react";
@@ -45,12 +45,14 @@ import { toast } from "sonner";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose,
 } from "@/components/ui/dialog";
+import { ImportarProdutosDialog } from "@/components/importar-produtos";
 
 // =============================
 // Ações rápidas (botões topo)
 // =============================
 const ACOES_RAPIDAS = [
   { id: "cadastrar-produto", label: "Cadastrar Produto", icon: Plus, primary: true },
+  { id: "importar-planilha", label: "Importar Planilha", icon: FileSpreadsheet },
   { id: "classificacao", label: "Classificação", icon: Tag },
   { id: "movimentacao-estoque", label: "Movimentação Estoque", icon: ArrowDownToLine },
   { id: "reajuste-precos", label: "Reajustes de Preços", icon: TrendingUp },
@@ -130,6 +132,7 @@ export function ProdutosEstoqueLotesPage() {
   // Todas as listagens filtram ativo=true, então um produto desativado some
   // do sistema inteiro. Esta é a única porta de volta.
   const [modalExcluidos, setModalExcluidos] = useState(false);
+  const [modalImportar, setModalImportar] = useState(false);
   const { data: excluidos = [] } = useQuery<any[]>({
     queryKey: ["erp_produtos_excluidos"],
     enabled: modalExcluidos,
@@ -240,6 +243,9 @@ export function ProdutosEstoqueLotesPage() {
         break;
       case "produtos-excluidos":
         setModalExcluidos(true);
+        break;
+      case "importar-planilha":
+        setModalImportar(true);
         break;
     }
   };
@@ -985,6 +991,14 @@ export function ProdutosEstoqueLotesPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <ImportarProdutosDialog
+        open={modalImportar}
+        onOpenChange={setModalImportar}
+        lojas={lojas}
+        lojaIdInicial={lojaFiltro || lojaIdHook}
+        categorias={categorias}
+      />
     </div>
   );
 }
