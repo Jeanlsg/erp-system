@@ -133,6 +133,7 @@ export function ProdutosEstoqueLotesPage() {
   // do sistema inteiro. Esta é a única porta de volta.
   const [modalExcluidos, setModalExcluidos] = useState(false);
   const [modalImportar, setModalImportar] = useState(false);
+  const [modalEtiquetas, setModalEtiquetas] = useState(false);
   const { data: excluidos = [] } = useQuery<any[]>({
     queryKey: ["erp_produtos_excluidos"],
     enabled: modalExcluidos,
@@ -224,12 +225,7 @@ export function ProdutosEstoqueLotesPage() {
         break;
       case "gerar-etiquetas": {
         if (filtered.length === 0) { toast.error("Nenhum produto no filtro atual."); break; }
-        const r = imprimirEtiquetas(filtered.map((p: any) => ({
-          nome: p.nome, sku: p.sku, codigo_barras: p.codigo_barras, preco_venda: p.preco_venda,
-        })));
-        if (r.semBarras > 0) {
-          toast.warning(`${r.semBarras} etiqueta(s) saíram sem código de barras: EAN ausente ou com dígito verificador inválido.`);
-        }
+        setModalEtiquetas(true);
         break;
       }
       case "kit-combo":
@@ -248,6 +244,16 @@ export function ProdutosEstoqueLotesPage() {
         setModalImportar(true);
         break;
     }
+  };
+
+  const gerarEtiquetas = (formato: "a4" | "bobina79x40") => {
+    const r = imprimirEtiquetas(filtered.map((p: any) => ({
+      nome: p.nome, sku: p.sku, codigo_barras: p.codigo_barras, preco_venda: p.preco_venda,
+    })), formato);
+    if (r.semBarras > 0) {
+      toast.warning(`${r.semBarras} etiqueta(s) saíram sem código de barras: EAN ausente ou com dígito verificador inválido.`);
+    }
+    setModalEtiquetas(false);
   };
 
   // ===== Handlers: Produto =====
@@ -989,6 +995,23 @@ export function ProdutosEstoqueLotesPage() {
               ))}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={modalEtiquetas} onOpenChange={setModalEtiquetas}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Formato das etiquetas</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {filtered.length} etiqueta(s) do filtro atual.
+          </p>
+          <div className="grid gap-2">
+            <Button onClick={() => gerarEtiquetas("a4")}>
+              Folha A4 — grade de etiquetas 48 mm
+            </Button>
+            <Button variant="outline" onClick={() => gerarEtiquetas("bobina79x40")}>
+              Bobina 79×40 mm — etiquetadora térmica (ex.: Bematech LB-1000)
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 

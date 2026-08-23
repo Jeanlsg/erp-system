@@ -27,6 +27,7 @@ import { useConexao } from "@/lib/offline/conexao";
 import { registrarVenda, useFilaVendas } from "@/lib/offline/fila-vendas";
 import { useCatalogoOffline } from "@/lib/offline/catalogo";
 import { LeitorCodigoBarras } from "@/components/leitor-codigo-barras";
+import { useLeitorUsb } from "@/lib/use-leitor-usb";
 import { documentoValido, mascaraDocumento } from "@/lib/documento";
 import { ComboboxBusca } from "@/components/ui/combobox-busca";
 
@@ -169,14 +170,20 @@ export function PDVPage() {
   // passa os itens em sequência sem tocar na tela.
   const [leitorAberto, setLeitorAberto] = useState(false);
   const aoLerCodigo = useCallback((codigo: string) => {
-    const p = produtos.find((x: any) => x.codigo_barras === codigo);
+    const c = codigo.trim();
+    const p = produtos.find((x: any) =>
+      x.codigo_barras === c || (x.sku && x.sku.toUpperCase() === c.toUpperCase()));
     if (!p) {
-      toast.error(`Código ${codigo} não está no catálogo`);
+      toast.error(`Código ${c} não está no catálogo`);
       return;
     }
     adicionar(p);
     toast.success(`${p.nome} adicionado`, { duration: 1500 });
   }, [produtos, adicionar]);
+
+  // Leitor USB (emulação de teclado): bipar em qualquer lugar da tela
+  // adiciona o item — sem precisar clicar ou abrir a câmera.
+  useLeitorUsb(aoLerCodigo);
 
   // Atualizar quantidade
   const atualizarQuantidade = useCallback((id: string, qtd: number) => {

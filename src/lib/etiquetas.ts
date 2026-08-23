@@ -64,8 +64,16 @@ const brl = (v: number | string) =>
 const escapa = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-/** Abre a janela de impressão com uma etiqueta por produto. */
-export function imprimirEtiquetas(produtos: ProdutoEtiqueta[]): { total: number; semBarras: number } {
+/**
+ * Abre a janela de impressão com uma etiqueta por produto.
+ * formato "a4": grade de etiquetas 48mm em folha comum.
+ * formato "bobina79x40": uma etiqueta por página de 79×40mm — o padrão
+ * de etiquetadoras térmicas como a Bematech LB-1000 (driver define a bobina).
+ */
+export function imprimirEtiquetas(
+  produtos: ProdutoEtiqueta[],
+  formato: "a4" | "bobina79x40" = "a4",
+): { total: number; semBarras: number } {
   let semBarras = 0;
   const etiquetas = produtos.map((p) => {
     const svg = p.codigo_barras ? svgEan13(p.codigo_barras) : null;
@@ -78,8 +86,7 @@ export function imprimirEtiquetas(produtos: ProdutoEtiqueta[]): { total: number;
     </div>`;
   }).join("");
 
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Etiquetas</title>
-<style>
+  const estiloA4 = `
   @page { margin: 8mm; }
   body { font-family: Arial, sans-serif; display: flex; flex-wrap: wrap; gap: 3mm; margin: 0; }
   .et { width: 48mm; border: 0.2mm solid #999; padding: 2mm; text-align: center;
@@ -87,7 +94,21 @@ export function imprimirEtiquetas(produtos: ProdutoEtiqueta[]): { total: number;
   .nome { font-size: 8pt; line-height: 1.15; height: 8.5mm; overflow: hidden; }
   .preco { font-size: 14pt; font-weight: bold; margin: 1mm 0; }
   .cod { font-size: 7pt; letter-spacing: 0.5mm; font-family: monospace; }
-  svg { display: block; margin: 0 auto; }
+  svg { display: block; margin: 0 auto; }`;
+
+  // Bobina: cada etiqueta é uma página inteira; sem borda (o corte é físico).
+  const estiloBobina = `
+  @page { size: 79mm 40mm; margin: 0; }
+  body { font-family: Arial, sans-serif; margin: 0; }
+  .et { width: 79mm; height: 40mm; padding: 2mm 3mm; box-sizing: border-box;
+        text-align: center; page-break-after: always; overflow: hidden; }
+  .nome { font-size: 9pt; line-height: 1.15; height: 8.5mm; overflow: hidden; }
+  .preco { font-size: 16pt; font-weight: bold; margin: 0.5mm 0; }
+  .cod { font-size: 8pt; letter-spacing: 0.5mm; font-family: monospace; }
+  svg { display: block; margin: 0 auto; }`;
+
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Etiquetas</title>
+<style>${formato === "bobina79x40" ? estiloBobina : estiloA4}
 </style></head><body>${etiquetas}
 <script>window.onload = function () { window.print(); };</script>
 </body></html>`;

@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Camera, ClipboardList, Loader2, Play, CheckCircle2, AlertTriangle } from "lucide-react";
 import { LeitorCodigoBarras } from "@/components/leitor-codigo-barras";
+import { useLeitorUsb } from "@/lib/use-leitor-usb";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -51,6 +52,12 @@ export function InventarioPage() {
   const salvarContagem = useSalvarContagem();
   const aplicar = useAplicarInventario();
 
+  // Leitor USB: cada bipe soma +1 na contagem, igual ao leitor por câmera.
+  // Hook fica ANTES dos early returns (regra dos hooks); o handler real é
+  // definido mais abaixo e entra via ref.
+  const aoLerRef = useRef<(codigo: string) => void>(() => {});
+  useLeitorUsb((codigo) => aoLerRef.current(codigo));
+
   if (!isSupabaseConfigured()) return <SupabaseNotConfigured />;
 
   const inventarioAtual = inventarios.find((i: any) => i.id === selecionado);
@@ -91,6 +98,7 @@ export function InventarioPage() {
       toast.error(err?.message ?? "Falha ao salvar contagem");
     }
   };
+  aoLerRef.current = (codigo: string) => { void aoLerCodigo(codigo); };
 
   const handleContagem = async (itemId: string, valor: string) => {
     const n = valor === "" ? null : Number(valor);
