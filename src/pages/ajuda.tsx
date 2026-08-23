@@ -27,7 +27,7 @@ const FAQ: { categoria: string; perguntas: { p: string; r: string; link?: { to: 
     categoria: "Financeiro e Cobrança",
     perguntas: [
       { p: "Como lançar contas a pagar/receber?", r: "Em Relatórios Financeiros, use o botão Incluir Contas P/R, ou navegue nas abas À Pagar / À Receber.", link: { to: "/financeiro?aba=apagar", label: "Contas" } },
-      { p: "Como gerar boleto, carnê ou promissória?", r: "No menu Financeiro estão Boletos, Crediário Próprio e Promissórias — cada tela emite o documento vinculado à venda ou conta.", link: { to: "/gerador-boletos", label: "Boletos" } },
+      { p: "Como gerar carnê ou promissória?", r: "No menu Financeiro estão Crediário Próprio (carnê com parcelas) e Promissórias (documento formal para assinatura). Boleto registrado depende de convênio bancário ainda não contratado.", link: { to: "/promissoria", label: "Promissórias" } },
       { p: "Como negativar ou protestar um devedor?", r: "No menu Cobrança: Negativar Devedores registra a negativação; Encaminhar Protesto gera o título para cartório.", link: { to: "/gestao/negativar-devedores", label: "Cobrança" } },
     ],
   },

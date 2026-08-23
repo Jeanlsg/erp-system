@@ -26,14 +26,14 @@ import { CaixaPage } from "@/pages/caixa";
 import { PDVPage } from "@/pages/pdv";
 import { NotasFiscaisPage } from "@/pages/notas-fiscais";
 import { PedidosDeliveryPage } from "@/pages/pedidos-delivery";
-import { GeradorBoletosPage } from "@/pages/gerador-boletos";
+// import { GeradorBoletosPage } from "@/pages/gerador-boletos"; // desativado: sem provedor contratado — reativar quando houver (convênio bancário)
 import { PromissoriaPage } from "@/pages/promissoria";
 import { CrediarioProprioPage } from "@/pages/crediario-proprio";
 import { CartaoFidelidadePage } from "@/pages/cartao-fidelidade";
-import { MalaDiretaPage } from "@/pages/mala-direta";
-import { TorpedosPage } from "@/pages/torpedos";
+// import { MalaDiretaPage } from "@/pages/mala-direta"; // desativado: sem provedor contratado — reativar quando houver
+// import { TorpedosPage } from "@/pages/torpedos"; // desativado: sem provedor contratado — reativar quando houver (SMS)
 import { EmailMarketingPage } from "@/pages/email-marketing";
-import { DownloadsPage } from "@/pages/downloads";
+// import { DownloadsPage } from "@/pages/downloads"; // desativado: sem provedor contratado — reativar quando houver
 import { LojasPage } from "@/pages/lojas";
 import { VendasPage } from "@/pages/vendas";
 import { KitsPage } from "@/pages/kits";
@@ -99,12 +99,12 @@ export default function App() {
         <Route path="pedidos-delivery" element={<PedidosDeliveryPage />} />
         <Route path="ifood" element={<IFoodPage />} />
         <Route path="exapp-pedidos" element={<ExAppPedidosPage />} />
-        <Route path="gerador-boletos" element={<GeradorBoletosPage />} />
+        {/* <Route path="gerador-boletos" element={<GeradorBoletosPage />} /> // desativado: sem provedor contratado — reativar quando houver */}
 
         {/* Venda Mais */}
-        <Route path="mala-direta" element={<MalaDiretaPage />} />
+        {/* <Route path="mala-direta" element={<MalaDiretaPage />} /> // desativado: sem provedor contratado — reativar quando houver */}
         <Route path="email-marketing" element={<EmailMarketingPage />} />
-        <Route path="torpedos" element={<TorpedosPage />} />
+        {/* <Route path="torpedos" element={<TorpedosPage />} /> // desativado: sem provedor contratado — reativar quando houver */}
         <Route path="cartao-fidelidade" element={<CartaoFidelidadePage />} />
         <Route path="crediario-proprio" element={<CrediarioProprioPage />} />
         <Route path="promissoria" element={<PromissoriaPage />} />
@@ -172,7 +172,7 @@ export default function App() {
 
         {/* Documentos / Código de Barras / Downloads */}
         <Route path="gestao/codigo-barras" element={<CodigoBarrasPage />} />
-        <Route path="gestao/downloads" element={<DownloadsPage />} />
+        {/* <Route path="gestao/downloads" element={<DownloadsPage />} /> // desativado: sem provedor contratado — reativar quando houver */}
 
         {/* Localizar / LGPD / Contador / Dados Empresariais */}
         <Route path="gestao/localizar-pessoas" element={<LocalizarPessoasPage />} />
@@ -190,7 +190,7 @@ export default function App() {
 
         {/* Crediário com juros */}
         <Route path="gestao/gerar-crediario" element={<GerarCrediarioPage />} />
-        <Route path="gestao/gerar-boleto" element={<GeradorBoletosPage />} />
+        {/* <Route path="gestao/gerar-boleto" element={<GeradorBoletosPage />} /> // desativado: sem provedor contratado — reativar quando houver */}
         <Route path="gestao/gerar-crediario-proprio" element={<CrediarioProprioPage />} />
         <Route path="gestao/gerar-promissoria" element={<PromissoriaPage />} />
 
@@ -213,7 +213,7 @@ export default function App() {
         <Route path="config/sistema" element={<ConfigSistemaPage />} />
         <Route path="config/empresarial" element={<ConfigEmpresarialPage />} />
         <Route path="config/minhas-chaves" element={<ConfigChavesPixPage />} />
-        <Route path="config/downloads" element={<DownloadsPage />} />
+        {/* <Route path="config/downloads" element={<DownloadsPage />} /> // desativado: sem provedor contratado — reativar quando houver */}
         <Route path="treinamento/tutoriais" element={<TreinamentoPage />} />
 
         {/* ===== ROTAS LEGADO (compatibilidade) ===== */}

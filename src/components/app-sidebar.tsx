@@ -166,7 +166,7 @@ const sections: NavSection[] = [
       { title: "Cartão de Crédito", url: "/gestao/cartao-credito", icon: CreditCard },
       { title: "Cartão de Débito", url: "/gestao/cartao-debito", icon: CreditCard },
       { title: "Dinheiro", url: "/gestao/dinheiro", icon: DollarSign },
-      { title: "Boletos", url: "/gerador-boletos", icon: Barcode, badge: "novo" },
+      // { title: "Boletos", url: "/gerador-boletos", icon: Barcode, badge: "novo" }, // desativado: sem provedor contratado — reativar quando houver (convênio bancário)
       { title: "Promissórias", url: "/promissoria", icon: ScrollText },
       { title: "Crediário Próprio", url: "/crediario-proprio", icon: CreditCard },
       { title: "Crediário (com juros)", url: "/gestao/gerar-crediario", icon: CreditCard },
@@ -184,9 +184,9 @@ const sections: NavSection[] = [
   {
     label: "Venda Mais",
     items: [
-      { title: "Mala Direta", url: "/mala-direta", icon: Mail },
+      // { title: "Mala Direta", url: "/mala-direta", icon: Mail }, // desativado: sem provedor contratado — reativar quando houver
       { title: "E-mail Marketing", url: "/email-marketing", icon: Mail },
-      { title: "Torpedos SMS", url: "/torpedos", icon: Smartphone },
+      // { title: "Torpedos SMS", url: "/torpedos", icon: Smartphone }, // desativado: sem provedor contratado — reativar quando houver (SMS)
       { title: "Cartão Fidelidade", url: "/cartao-fidelidade", icon: CreditCard },
       { title: "Email Inteligente", url: "/gestao/email-inteligente", icon: Mail },
     ],
@@ -242,7 +242,7 @@ const sections: NavSection[] = [
       { title: "Configurações Empresariais", url: "/config/empresarial", icon: Briefcase, perm: "config.editar" },
       { title: "Minhas Chaves PIX", url: "/config/minhas-chaves", icon: Key, badge: "novo" },
       { title: "Gerar Código de Barras", url: "/gestao/codigo-barras", icon: Barcode },
-      { title: "Downloads", url: "/config/downloads", icon: Barcode },
+      // { title: "Downloads", url: "/config/downloads", icon: Barcode }, // desativado: sem provedor contratado — reativar quando houver
       { title: "Treinamento", url: "/treinamento/tutoriais", icon: HelpCircle },
       { title: "Relatórios", url: "/relatorios", icon: LineChart },
       { title: "Análise Gerencial", url: "/relatorios/analise", icon: LineChart, perm: "relatorio.ver", badge: "novo" },

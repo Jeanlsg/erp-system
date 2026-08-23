@@ -94,7 +94,7 @@ const A: Record<string, AjudaPagina> = {
     descricao: "Pontos por real gasto, creditados automaticamente na venda finalizada. Resgate vira desconto; o nível (bronze/prata/ouro) sai do acumulado, então resgatar não rebaixa o cliente.",
   },
   "mala-direta": { titulo: "Mala Direta", descricao: "Campanhas impressas ou por e-mail para a base de clientes." },
-  "email-marketing": { titulo: "E-mail Marketing", descricao: "Campanhas de e-mail. Depende de provedor de envio contratado." },
+  "email-marketing": { titulo: "E-mail Marketing", descricao: "Crie campanhas e envie para todos os cadastros ativos com e-mail. O disparo usa o Resend já configurado e a campanha guarda enviados e falhas." },
   torpedos: { titulo: "Torpedos SMS", descricao: "Envio de SMS para clientes. Depende de provedor contratado." },
   "notas-fiscais": {
     titulo: "Notas Fiscais",
