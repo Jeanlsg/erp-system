@@ -6,6 +6,7 @@ import { LoginPage } from "@/pages/login";
 import { RedefinirSenhaPage } from "@/pages/redefinir-senha";
 import { DashboardPage } from "@/pages/dashboard";
 import { SetupPage } from "@/pages/setup";
+import { EquipamentosPage } from "@/pages/equipamentos";
 import { OrdersPage } from "@/pages/orders";
 import { CustomersPage } from "@/pages/customers";
 import { VisaoGeralPage } from "@/pages/visao-geral";
@@ -214,6 +215,7 @@ export default function App() {
         <Route path="config/empresarial" element={<ConfigEmpresarialPage />} />
         <Route path="config/minhas-chaves" element={<ConfigChavesPixPage />} />
         {/* <Route path="config/downloads" element={<DownloadsPage />} /> // desativado: sem provedor contratado — reativar quando houver */}
+        <Route path="equipamentos" element={<EquipamentosPage />} />
         <Route path="treinamento/tutoriais" element={<TreinamentoPage />} />
 
         {/* ===== ROTAS LEGADO (compatibilidade) ===== */}

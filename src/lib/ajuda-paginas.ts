@@ -126,7 +126,7 @@ const A: Record<string, AjudaPagina> = {
   },
   "config/empresarial": { titulo: "Configurações Empresariais", descricao: "Dados empresariais usados em documentos e relatórios." },
   "config/minhas-chaves": { titulo: "Chaves PIX", descricao: "Chaves PIX da loja para recebimento e exibição no PDV." },
-  "config/downloads": { titulo: "Downloads", descricao: "Arquivos e utilitários para download." },
+  equipamentos: { titulo: "Equipamentos", descricao: "Leitores, impressoras térmicas e etiquetadoras homologados, com instruções de instalação e links de driver." },
   "controle-comercial/pedido": { titulo: "Pedido / Pré-venda", descricao: "Pedido registrado antes do faturamento; vira venda ao confirmar." },
   "controle-comercial/orcamento": {
     titulo: "Orçamento",
@@ -210,7 +210,7 @@ const ALIASES: Record<string, string> = {
   "gestao/gerar-promissoria": "promissoria",
   "gestao/gerar-crediario-proprio": "crediario-proprio",
   "gestao/minhas-chaves": "config/minhas-chaves",
-  "gestao/downloads": "config/downloads",
+  "gestao/downloads": "equipamentos",
   "gestao/pasta-principal": "gestao/arquivos-pastas",
   "gestao/administrar-usuarios": "gestao/usuarios",
   "gestao/usuario-permissoes": "gestao/usuarios",

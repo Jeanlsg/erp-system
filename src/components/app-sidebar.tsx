@@ -242,7 +242,7 @@ const sections: NavSection[] = [
       { title: "Configurações Empresariais", url: "/config/empresarial", icon: Briefcase, perm: "config.editar" },
       { title: "Minhas Chaves PIX", url: "/config/minhas-chaves", icon: Key, badge: "novo" },
       { title: "Gerar Código de Barras", url: "/gestao/codigo-barras", icon: Barcode },
-      // { title: "Downloads", url: "/config/downloads", icon: Barcode }, // desativado: sem provedor contratado — reativar quando houver
+      { title: "Equipamentos", url: "/equipamentos", icon: Barcode },
       { title: "Treinamento", url: "/treinamento/tutoriais", icon: HelpCircle },
       { title: "Relatórios", url: "/relatorios", icon: LineChart },
       { title: "Análise Gerencial", url: "/relatorios/analise", icon: LineChart, perm: "relatorio.ver", badge: "novo" },
