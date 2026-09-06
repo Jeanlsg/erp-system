@@ -7,14 +7,16 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
-import { useClientes, useCreatePessoa, useUpdatePessoa, useDeletePessoa, isSupabaseConfigured } from "@/lib/supabase-queries";
+import { useClientesCompras, useCreatePessoa, useUpdatePessoa, useDeletePessoa, chaveTelefone, isSupabaseConfigured } from "@/lib/supabase-queries";
+import { brl, date } from "@/lib/format";
+import { toast } from "sonner";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import type { Pessoa } from "@/types/database";
 
 const FORM_VAZIO = { tipo: "fisica" as "fisica" | "juridica", nome_razao: "", cpf_cnpj: "", email: "", telefone: "", celular: "" };
 
 export function CustomersPage() {
-  const { data: clientes = [], isLoading } = useClientes();
+  const { data: clientes = [], isLoading } = useClientesCompras();
   const create = useCreatePessoa();
   const update = useUpdatePessoa();
   const del = useDeletePessoa();
@@ -33,7 +35,9 @@ export function CustomersPage() {
     return (
       c.nome_razao.toLowerCase().includes(s) ||
       (c.cpf_cnpj ?? "").toLowerCase().includes(s) ||
-      (c.email ?? "").toLowerCase().includes(s)
+      (c.email ?? "").toLowerCase().includes(s) ||
+      (c.telefone ?? "").includes(s) ||
+      (c.celular ?? "").includes(s)
     );
   });
 
@@ -58,6 +62,27 @@ export function CustomersPage() {
 
   const handleSalvar = async () => {
     if (!form.nome_razao) return;
+
+    // Cadastro repetido do mesmo telefone é o que quebra a contagem de
+    // compras e duplica o lead no CRM (lá o telefone É a identidade).
+    // Avisa antes de criar mais um, mostrando quem já usa o número.
+    const chave = chaveTelefone(form.celular || form.telefone);
+    if (chave) {
+      const jaExiste = clientes.find(
+        (c) => c.chave_telefone === chave && c.id !== editando?.id,
+      );
+      if (jaExiste) {
+        const ok = confirm(
+          `Este telefone já é de "${jaExiste.nome_razao}"` +
+          (jaExiste.compras > 0 ? ` (${jaExiste.compras} compra(s) no histórico).` : ".") +
+          "\n\nCadastrar assim mesmo cria um segundo cadastro para a mesma pessoa." +
+          "\nO histórico continua somado pelo telefone, mas o cadastro fica repetido." +
+          "\n\nContinuar?"
+        );
+        if (!ok) return;
+      }
+    }
+
     const payload = {
       tipo: form.tipo,
       nome_razao: form.nome_razao,
@@ -66,12 +91,18 @@ export function CustomersPage() {
       telefone: form.telefone || null,
       celular: form.celular || null,
     };
-    if (editando) {
-      await update.mutateAsync({ id: editando.id, ...payload } as any);
-    } else {
-      await create.mutateAsync({ ...payload, ativo: true } as any);
+    try {
+      if (editando) {
+        await update.mutateAsync({ id: editando.id, ...payload } as any);
+        toast.success("Cliente atualizado.");
+      } else {
+        await create.mutateAsync({ ...payload, ativo: true } as any);
+        toast.success("Cliente cadastrado.");
+      }
+      setModalAberto(false);
+    } catch (e: any) {
+      toast.error(`Não foi possível salvar: ${e.message ?? e}`);
     }
-    setModalAberto(false);
   };
 
   const salvando = create.isPending || update.isPending;
@@ -118,13 +149,16 @@ export function CustomersPage() {
                   <TableHead>CPF/CNPJ</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Telefone</TableHead>
+                  <TableHead className="text-right">Compras</TableHead>
+                  <TableHead className="text-right">Total gasto</TableHead>
+                  <TableHead>Última compra</TableHead>
                   <TableHead className="text-center">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtrados.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                       Nenhum cliente encontrado
                     </TableCell>
                   </TableRow>
@@ -136,6 +170,17 @@ export function CustomersPage() {
                       <TableCell className="font-mono text-xs">{c.cpf_cnpj ?? "—"}</TableCell>
                       <TableCell>{c.email ?? "—"}</TableCell>
                       <TableCell>{c.telefone ?? c.celular ?? "—"}</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {c.compras > 0
+                          ? <Badge variant={c.compras >= 5 ? "default" : "outline"}>{c.compras}</Badge>
+                          : <span className="text-muted-foreground">—</span>}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {c.compras > 0 ? brl(c.total_gasto) : "—"}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {c.ultima_compra ? date(c.ultima_compra) : "—"}
+                      </TableCell>
                       <TableCell className="text-center whitespace-nowrap">
                         <Button variant="ghost" size="icon" onClick={() => abrirEdicao(c)} title="Editar">
                           <Pencil className="h-4 w-4" />

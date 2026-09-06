@@ -128,6 +128,14 @@ Deno.serve(async (req) => {
           const produtos = (v.itens as any[])
             .map((i) => `${Number(i.quantidade)}x ${i.nome}`).join(", ").slice(0, 500);
 
+          // Quantas vezes esse cliente já comprou. A contagem é por TELEFONE,
+          // não por cadastro: o mesmo cliente costuma ter cadastro repetido no
+          // ERP, e contar por id devolveria "1ª compra" para quem já comprou
+          // cinco vezes. O telefone é justamente a identidade do lead no CRM.
+          const { data: resumo } = await admin
+            .rpc("resumo_compras_telefone", { p_telefone: tel })
+            .maybeSingle();
+
           corpo = {
             telefone: tel,
             nome: (v.cliente as any)?.nome_razao ?? undefined,
@@ -139,6 +147,12 @@ Deno.serve(async (req) => {
               // Sem duração cadastrada não há término: apagar o valor antigo é
               // melhor que deixar uma previsão obsoleta disparando recompra.
               [cfg.campos.termino]: termino ?? "",
+              ...(cfg.campos.compras && resumo
+                ? { [cfg.campos.compras]: String((resumo as any).compras ?? 0) }
+                : {}),
+              ...(cfg.campos.total_gasto && resumo
+                ? { [cfg.campos.total_gasto]: String((resumo as any).total ?? 0) }
+                : {}),
             },
           };
         }

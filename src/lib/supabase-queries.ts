@@ -541,6 +541,41 @@ export function useTopProdutos(lojaId: string, limite: number = 5, dias: number 
 // ========================================
 // PESSOAS
 // ========================================
+/**
+ * Clientes com o histórico de compras junto — contado por TELEFONE, para
+ * que cadastro repetido da mesma pessoa não vire "primeira compra".
+ */
+export interface ClienteCompras extends Pessoa {
+  chave_telefone: string | null;
+  compras: number;
+  total_gasto: number;
+  primeira_compra: string | null;
+  ultima_compra: string | null;
+}
+
+export function useClientesCompras() {
+  return useQuery<ClienteCompras[]>({
+    queryKey: ["erp_clientes_compras"],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      const { data, error } = await supabase
+        .from("vw_clientes_compras")
+        .select("*")
+        .eq("ativo", true)
+        .order("nome_razao");
+      if (error) throw error;
+      return (data ?? []) as ClienteCompras[];
+    },
+  });
+}
+
+/** DDD + 8 últimos dígitos — mesma regra da função no banco. */
+export function chaveTelefone(v: string | null | undefined): string | null {
+  const d = String(v ?? "").replace(/\D/g, "");
+  if (d.length < 10) return null;
+  return d.replace(/^55/, "").slice(0, 2) + d.slice(-8);
+}
+
 export function useClientes() {
   return useQuery<Pessoa[]>({
     queryKey: ["erp_clientes"],
