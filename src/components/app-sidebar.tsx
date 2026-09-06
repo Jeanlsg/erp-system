@@ -428,7 +428,7 @@ function SidebarSection({
 }
 
 export function AppSidebar() {
-  const pathname = useLocation().pathname;
+  const { pathname, search } = useLocation();
   const collapsed = useSidebarCollapsed();
   const { user, can } = useAuth();
   const { data: flags = [] } = useFeatureFlags();
@@ -461,7 +461,15 @@ export function AppSidebar() {
   // ===== Build set de URLs ativas para o isActive respeitar flags =====
   const allUrls = sections.flatMap((s) => s.items.map((i) => i.url));
 
+  // Item com query string (ex.: /financeiro?aba=apagar) só acende quando a
+  // query bate; e o item "pai" sem query (/financeiro) NÃO acende enquanto
+  // um irmão com query estiver ativo — senão os dois ficam destacados.
+  const irmaosComQuery = (base: string) =>
+    allUrls.filter((u) => u.startsWith(base + "?"));
   const isActive = (url: string, exact?: boolean) => {
+    const [urlPath, urlQuery] = url.split("?");
+    if (urlQuery) return pathname === urlPath && search === "?" + urlQuery;
+    if (irmaosComQuery(url).some((u) => pathname === urlPath && search === "?" + u.split("?")[1])) return false;
     if (exact) return pathname === url;
     if (pathname === url) return true;
     if (!pathname.startsWith(url + "/")) return false;

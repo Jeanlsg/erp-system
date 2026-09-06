@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -29,22 +29,24 @@ type AbaAtiva = "fluxo" | "vendas" | "graficos" | "formas" | "taxas" | "pagas" |
 
 export function FinanceiroPage() {
   const { lojaId } = useAutoSelectLoja();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const qc = useQueryClient();
   const navigate = useNavigate();
 
-  const [aba, setAba] = useState<AbaAtiva>((searchParams.get("aba") as AbaAtiva) ?? "fluxo");
-
-  // O ?aba= da URL só era lido na montagem: quem já estava no Financeiro e
-  // clicava em "Contas a Pagar/Receber" no menu não via a aba mudar, porque a
-  // rota é a mesma e o componente não remonta. Aqui a URL passa a mandar sempre.
-  const abaUrl = searchParams.get("aba") as AbaAtiva | null;
-  useEffect(() => {
-    if (abaUrl && abaUrl !== aba) setAba(abaUrl);
-    // `aba` fora das deps de propósito: trocar de aba pelo clique não deve
-    // ser desfeito pelo parâmetro antigo que continua na URL.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [abaUrl]);
+  // A aba vive na URL, e só nela. Guardar em estado local criava dois donos
+  // da verdade: quem trocava de aba pelo clique ficava com ?aba=apagar velho
+  // na URL, e o próximo clique no menu "Contas a Pagar/Receber" — que aponta
+  // para a MESMA URL — não mudava nada. Derivando da URL, o clique no menu
+  // sempre vale, e F5 mantém a aba.
+  const ABAS: AbaAtiva[] = ["fluxo", "vendas", "graficos", "formas", "taxas", "pagas", "apagar", "recebidas", "areceber", "nf"];
+  const abaParam = searchParams.get("aba") as AbaAtiva | null;
+  const aba: AbaAtiva = abaParam && ABAS.includes(abaParam) ? abaParam : "fluxo";
+  const setAba = (v: AbaAtiva) =>
+    setSearchParams((prev) => {
+      const n = new URLSearchParams(prev);
+      if (v === "fluxo") n.delete("aba"); else n.set("aba", v);
+      return n;
+    }, { replace: true });
 
   // Filtro Período (default = mês atual)
   const hoje = new Date();
