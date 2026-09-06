@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Cog, Flag, Search, Loader2, ShieldOff, ShieldCheck, Power, AlertTriangle, Eye, History, Lock } from "lucide-react";
+import { Cog, Flag, Search, Loader2, ShieldOff, ShieldCheck, Power, AlertTriangle, Eye, History, Lock, CheckSquare, Square } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useFeatureFlags, useToggleFeatureFlag } from "@/lib/supabase-queries";
@@ -87,6 +87,12 @@ function FeatureFlagsPanel() {
   const [showApenasAtivas, setShowApenasAtivas] = useState(false);
   const [modalMotivo, setModalMotivo] = useState<{ flag: FF; novoValor: boolean } | null>(null);
   const [motivo, setMotivo] = useState("");
+  // Seleção múltipla: desligar página por página é inviável quando se está
+  // enxugando o menu — aqui marca-se um lote e aplica de uma vez.
+  const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set());
+  const [modalLote, setModalLote] = useState<null | "ativar" | "desativar">(null);
+  const [motivoLote, setMotivoLote] = useState("");
+  const [aplicandoLote, setAplicandoLote] = useState(false);
 
   const flagsFiltradas = useMemo(() => {
     let result = flags;
@@ -163,6 +169,65 @@ function FeatureFlagsPanel() {
     if (!confirm(`Reativar todas as ${totalDesativadas} página(s) desativada(s)?`)) return;
     for (const f of flags.filter((x) => !x.ativo)) {
       toggle.mutate({ id: f.id, ativo: true, userId: user?.id });
+    }
+  };
+
+  // ---- seleção múltipla ----
+  // Protegidas nunca entram na seleção: o switch delas é travado, e deixá-las
+  // marcáveis daria a impressão de que o lote vai desligá-las.
+  const selecionaveis = useMemo(
+    () => flagsFiltradas.filter((f) => !f.is_protegida),
+    [flagsFiltradas],
+  );
+  const todasMarcadas = selecionaveis.length > 0 && selecionaveis.every((f) => selecionadas.has(f.id));
+
+  const alternarUma = (id: string) => {
+    setSelecionadas((prev) => {
+      const nova = new Set(prev);
+      if (nova.has(id)) nova.delete(id); else nova.add(id);
+      return nova;
+    });
+  };
+
+  const alternarGrupo = (items: FF[]) => {
+    const alvos = items.filter((f) => !f.is_protegida);
+    const todos = alvos.length > 0 && alvos.every((f) => selecionadas.has(f.id));
+    setSelecionadas((prev) => {
+      const nova = new Set(prev);
+      for (const f of alvos) { if (todos) nova.delete(f.id); else nova.add(f.id); }
+      return nova;
+    });
+  };
+
+  const alternarTodasVisiveis = () => {
+    setSelecionadas((prev) => {
+      const nova = new Set(prev);
+      for (const f of selecionaveis) { if (todasMarcadas) nova.delete(f.id); else nova.add(f.id); }
+      return nova;
+    });
+  };
+
+  const aplicarLote = async () => {
+    if (!modalLote) return;
+    const ativo = modalLote === "ativar";
+    const alvos = flags.filter((f) => selecionadas.has(f.id) && !f.is_protegida && f.ativo !== ativo);
+    setAplicandoLote(true);
+    try {
+      // Uma chamada por flag: a mutation já cuida do log de quem desativou
+      // e do motivo. São dezenas de linhas, não milhares.
+      for (const f of alvos) {
+        await toggle.mutateAsync({
+          id: f.id,
+          ativo,
+          motivo: ativo ? undefined : (motivoLote || "Desativada em lote pelo admin"),
+          userId: user?.id,
+        });
+      }
+      setSelecionadas(new Set());
+      setModalLote(null);
+      setMotivoLote("");
+    } finally {
+      setAplicandoLote(false);
     }
   };
 
@@ -253,6 +318,12 @@ function FeatureFlagsPanel() {
             >
               {showApenasAtivas ? "Mostrar todas" : "Apenas ativas"}
             </Button>
+            <Button variant="outline" size="sm" onClick={alternarTodasVisiveis}
+              disabled={selecionaveis.length === 0}>
+              {todasMarcadas
+                ? <><Square className="h-3.5 w-3.5 mr-1.5" /> Limpar seleção</>
+                : <><CheckSquare className="h-3.5 w-3.5 mr-1.5" /> Selecionar visíveis ({selecionaveis.length})</>}
+            </Button>
             {totalDesativadas > 0 && (
               <Button variant="outline" size="sm" onClick={handleAtivarTodas}>
                 <Power className="h-3.5 w-3.5 mr-1.5" /> Reativar todas ({totalDesativadas})
@@ -261,6 +332,26 @@ function FeatureFlagsPanel() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Ações em lote — só aparece com algo marcado */}
+      {selecionadas.size > 0 && (
+        <div className="sticky top-2 z-20 flex flex-wrap items-center gap-3 rounded-md border bg-background p-3 shadow-sm">
+          <span className="text-sm font-medium">
+            {selecionadas.size} página(s) selecionada(s)
+          </span>
+          <div className="flex flex-wrap gap-2 ml-auto">
+            <Button size="sm" variant="outline" onClick={() => setSelecionadas(new Set())}>
+              Limpar
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setModalLote("ativar")}>
+              <ShieldCheck className="h-3.5 w-3.5 mr-1.5" /> Ativar selecionadas
+            </Button>
+            <Button size="sm" variant="destructive" onClick={() => { setModalLote("desativar"); setMotivoLote(""); }}>
+              <ShieldOff className="h-3.5 w-3.5 mr-1.5" /> Desativar selecionadas
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Aviso */}
       <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-md p-3 flex gap-2 text-sm">
@@ -287,7 +378,14 @@ function FeatureFlagsPanel() {
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base flex items-center justify-between">
                     <span className="flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full bg-primary" />
+                      <button type="button" onClick={() => alternarGrupo(items)}
+                        title="Selecionar/desmarcar a categoria inteira"
+                        className="text-muted-foreground hover:text-foreground">
+                        {items.filter((f) => !f.is_protegida).every((f) => selecionadas.has(f.id))
+                          && items.some((f) => !f.is_protegida)
+                          ? <CheckSquare className="h-4 w-4" />
+                          : <Square className="h-4 w-4" />}
+                      </button>
                       {CATEGORIAS_LABEL[categoria] ?? categoria}
                     </span>
                     <Badge variant="outline" className="text-[10px]">
@@ -299,6 +397,7 @@ function FeatureFlagsPanel() {
                   <table className="w-full">
                     <thead className="border-y text-xs text-muted-foreground bg-muted/30">
                       <tr>
+                        <th className="text-left p-3 w-10"><span className="sr-only">Selecionar</span></th>
                         <th className="text-left p-3 w-12">Ativa</th>
                         <th className="text-left p-3">Página</th>
                         <th className="text-left p-3 hidden md:table-cell">Path</th>
@@ -312,9 +411,21 @@ function FeatureFlagsPanel() {
                           key={f.id}
                           className={cn(
                             "border-b transition-colors",
-                            !f.ativo && "bg-red-50/50 dark:bg-red-950/10 opacity-75"
+                            !f.ativo && "bg-red-50/50 dark:bg-red-950/10 opacity-75",
+                            selecionadas.has(f.id) && "bg-primary/5"
                           )}
                         >
+                          <td className="p-3">
+                            {!f.is_protegida && (
+                              <button type="button" onClick={() => alternarUma(f.id)}
+                                aria-label={`Selecionar ${f.titulo}`}
+                                className="text-muted-foreground hover:text-foreground">
+                                {selecionadas.has(f.id)
+                                  ? <CheckSquare className="h-4 w-4 text-primary" />
+                                  : <Square className="h-4 w-4" />}
+                              </button>
+                            )}
+                          </td>
                           <td className="p-3">
                             {f.is_protegida ? (
                               <div className="flex items-center gap-2">
@@ -463,6 +574,62 @@ function FeatureFlagsPanel() {
             <Button variant="outline" onClick={() => setModalMotivo(null)}>Cancelar</Button>
             <Button variant="destructive" onClick={confirmarDesativacao} disabled={!motivo.trim()}>
               <ShieldOff className="h-4 w-4 mr-1" /> Desativar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmação do lote */}
+      <Dialog open={!!modalLote} onOpenChange={(o) => !o && setModalLote(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {modalLote === "ativar"
+                ? <><ShieldCheck className="h-5 w-5 text-green-600" /> Ativar páginas selecionadas</>
+                : <><ShieldOff className="h-5 w-5 text-red-600" /> Desativar páginas selecionadas</>}
+            </DialogTitle>
+            <DialogClose />
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="max-h-48 overflow-y-auto rounded-md border p-2 text-sm space-y-0.5">
+              {flags.filter((f) => selecionadas.has(f.id)).map((f) => (
+                <p key={f.id} className="flex justify-between gap-3">
+                  <span>{f.titulo}</span>
+                  <span className="font-mono text-xs text-muted-foreground">{f.path}</span>
+                </p>
+              ))}
+            </div>
+            {modalLote === "desativar" ? (
+              <div>
+                <Label>Motivo da desativação</Label>
+                <Input
+                  value={motivoLote}
+                  onChange={(e) => setMotivoLote(e.target.value)}
+                  placeholder="Ex: fora do uso da loja"
+                  autoFocus
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  O mesmo motivo é gravado em todas. Elas somem da sidebar de todos os usuários;
+                  o admin continua vendo em modo preview.
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                As páginas voltam para a sidebar de todos os usuários.
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setModalLote(null)} disabled={aplicandoLote}>
+              Cancelar
+            </Button>
+            <Button
+              variant={modalLote === "ativar" ? "default" : "destructive"}
+              onClick={() => void aplicarLote()}
+              disabled={aplicandoLote}
+            >
+              {aplicandoLote && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+              {modalLote === "ativar" ? "Ativar" : "Desativar"} {selecionadas.size} página(s)
             </Button>
           </DialogFooter>
         </DialogContent>
