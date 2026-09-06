@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -34,6 +34,17 @@ export function FinanceiroPage() {
   const navigate = useNavigate();
 
   const [aba, setAba] = useState<AbaAtiva>((searchParams.get("aba") as AbaAtiva) ?? "fluxo");
+
+  // O ?aba= da URL só era lido na montagem: quem já estava no Financeiro e
+  // clicava em "Contas a Pagar/Receber" no menu não via a aba mudar, porque a
+  // rota é a mesma e o componente não remonta. Aqui a URL passa a mandar sempre.
+  const abaUrl = searchParams.get("aba") as AbaAtiva | null;
+  useEffect(() => {
+    if (abaUrl && abaUrl !== aba) setAba(abaUrl);
+    // `aba` fora das deps de propósito: trocar de aba pelo clique não deve
+    // ser desfeito pelo parâmetro antigo que continua na URL.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abaUrl]);
 
   // Filtro Período (default = mês atual)
   const hoje = new Date();

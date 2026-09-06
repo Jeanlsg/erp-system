@@ -46,6 +46,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose,
 } from "@/components/ui/dialog";
 import { ImportarProdutosDialog } from "@/components/importar-produtos";
+import { LotesProdutoDialog } from "@/components/lotes-produto";
+import { ComboboxBusca } from "@/components/ui/combobox-busca";
 
 // =============================
 // Ações rápidas (botões topo)
@@ -56,7 +58,7 @@ const ACOES_RAPIDAS = [
   { id: "classificacao", label: "Classificação", icon: Tag },
   { id: "movimentacao-estoque", label: "Movimentação Estoque", icon: ArrowDownToLine },
   { id: "reajuste-precos", label: "Reajustes de Preços", icon: TrendingUp },
-  { id: "lote", label: "Lote", icon: Calendar },
+  { id: "lote", label: "Validade / Lotes", icon: Calendar },
   { id: "catalogo", label: "Catálogo", icon: Package },
   { id: "gerar-etiquetas", label: "Gerar Etiquetas", icon: Barcode },
   { id: "kit-combo", label: "Kit/Combo", icon: Boxes },
@@ -134,6 +136,8 @@ export function ProdutosEstoqueLotesPage() {
   const [modalExcluidos, setModalExcluidos] = useState(false);
   const [modalImportar, setModalImportar] = useState(false);
   const [modalEtiquetas, setModalEtiquetas] = useState(false);
+  const [produtoLotes, setProdutoLotes] = useState<{ id: string; nome: string; sku?: string | null; controla_lote?: boolean } | null>(null);
+  const [modalEscolherLote, setModalEscolherLote] = useState(false);
   const { data: excluidos = [] } = useQuery<any[]>({
     queryKey: ["erp_produtos_excluidos"],
     enabled: modalExcluidos,
@@ -218,7 +222,7 @@ export function ProdutosEstoqueLotesPage() {
         setModalReajuste(true);
         break;
       case "lote":
-        toast.info("Use a tabela abaixo para gerenciar lotes");
+        setModalEscolherLote(true);
         break;
       case "catalogo":
         window.print();
@@ -639,6 +643,18 @@ export function ProdutosEstoqueLotesPage() {
                               >
                                 <Edit className="h-3 w-3" />
                               </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 w-7 p-0"
+                                onClick={() => setProdutoLotes({
+                                  id: p.produto_id, nome: p.nome,
+                                  sku: p.sku, controla_lote: p.controla_lote,
+                                })}
+                                title="Validade e lotes"
+                              >
+                                <Calendar className="h-3 w-3" />
+                              </Button>
                             </div>
                           </td>
                         </tr>
@@ -1011,6 +1027,40 @@ export function ProdutosEstoqueLotesPage() {
             <Button variant="outline" onClick={() => gerarEtiquetas("bobina79x40")}>
               Bobina 79×40 mm — etiquetadora térmica (ex.: Bematech LB-1000)
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <LotesProdutoDialog
+        open={!!produtoLotes}
+        onOpenChange={(v) => { if (!v) setProdutoLotes(null); }}
+        produto={produtoLotes}
+        lojas={lojas}
+        lojaIdInicial={lojaFiltro || lojaIdHook}
+      />
+
+      {/* Ação rápida "Validade / Lotes": escolhe o produto antes de abrir */}
+      <Dialog open={modalEscolherLote} onOpenChange={setModalEscolherLote}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Validade / Lotes</DialogTitle></DialogHeader>
+          <div className="space-y-2">
+            <Label>Produto</Label>
+            <ComboboxBusca
+              itens={produtos.map((pr: any) => ({
+                id: pr.id, rotulo: pr.nome, detalhe: pr.sku ?? pr.codigo_barras ?? undefined,
+              }))}
+              value=""
+              onChange={(id) => {
+                const pr = produtos.find((x: any) => x.id === id);
+                if (!pr) return;
+                setModalEscolherLote(false);
+                setProdutoLotes({ id: pr.id, nome: pr.nome, sku: pr.sku, controla_lote: pr.controla_lote });
+              }}
+              placeholder="Buscar produto…"
+            />
+            <p className="text-xs text-muted-foreground">
+              Ou use o ícone de calendário na linha do produto, na tabela abaixo.
+            </p>
           </div>
         </DialogContent>
       </Dialog>
