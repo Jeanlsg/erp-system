@@ -125,7 +125,10 @@ const SCROLLBAR_W = 0;
 // ============================================================
 const sections: NavSection[] = [
   {
-    label: "Início",
+    // Sem título, como no Excellent: a Página Inicial fica solta acima das
+    // quatro seções nomeadas (Vendas e Pedidos, Gestão, Vendas pela
+    // Internet, Configurações).
+    label: "",
     items: [
       { title: "Página Inicial", url: "/", icon: LayoutDashboard, exact: true },
       { title: "Visão Geral", url: "/visao-geral", icon: Globe, perm: "relatorio.ver" },
@@ -476,7 +479,7 @@ function SidebarSection({
 
   return (
     <div className={cn("py-1.5", globalCollapsed ? "px-2" : "px-3")}>
-      {!globalCollapsed ? (
+      {!section.label ? null : !globalCollapsed ? (
         <button
           type="button"
           onClick={() => toggleSection(section.label)}
