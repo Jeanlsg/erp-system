@@ -152,7 +152,7 @@ A SEFAZ das duas lojas está em **ambiente de homologação** (`ambiente=homolog
 | **Emitir NFC-e (SEFAZ homologação)** | **nota #3 série 1 AUTORIZADA — cStat 100, protocolo 329260000149953**, chave `2926095383322600030065001…` | ✅ |
 | Sangria R$ 20 (motivo obrigatório) | registrada e vinculada ao caixa | ✅ |
 | Entrada extra R$ 50 (valor, motivo, forma) | registrada e vinculada ao caixa | ✅ |
-| Fechar caixa | resumo aparece e o caixa fecha com valor contado R$ 133 | ⚠️ **ver BUG-01-05** |
+| Fechar caixa | resumo aparece e o caixa fecha | ⚠️ **BUG-01-05, corrigido — ver verificação abaixo** |
 
 *Registros criados nesta auditoria (todos de teste, ambiente de homologação): vendas #20 e #21 de R$ 3,00, NFC-e #3 (sem valor fiscal), 1 sangria de R$ 20, 1 entrada extra de R$ 50, caixa #1 aberto e fechado.*
 
@@ -163,10 +163,21 @@ A SEFAZ das duas lojas está em **ambiente de homologação** (`ambiente=homolog
   Verificado no banco: os lançamentos existem e estão todos ligados ao caixa correto (`f272a416…`): 2 vendas (R$ 6,00), 1 sangria (R$ 20), 1 entrada (R$ 50). O caixa gravou `total_vendas = 0,00`.
   Causa: a tela lê as colunas `total_vendas`, `total_sangrias`, `total_entradas_extras` e `valor_troco` de `erp_caixa` ([pdv.tsx:127](../../src/pages/pdv.tsx#L127)), mas **nada alimenta essas colunas** — não há gatilho em `erp_vendas`, `erp_sangrias` nem `erp_entradas_extras` que as atualize; a única função que as menciona (`fn_criar_fechamento_automatico`) apenas copia o valor já zerado.
   Impacto: **todo fechamento acusa quebra de caixa do tamanho do movimento do dia.** O operador confere a gaveta contra um número errado — é o tipo de defeito que gera desconfiança sobre o caixa e some no meio da rotina.
-  Correção sugerida: calcular os totais na fonte, somando `erp_vendas`, `erp_sangrias` e `erp_entradas_extras` pelo `caixa_id` — de preferência numa função/view no banco, para valer também na venda offline e em qualquer outro caminho, em vez de depender de a tela lembrar de atualizar contadores.
+  **CORRIGIDO e verificado** (migration 066 + `a04d…`): criada a view `erp.vw_caixa_resumo`, que soma vendas, sangrias e entradas pelo `caixa_id` e calcula o esperado em gaveta; os hooks de caixa passaram a ler dela, devolvendo os totais com os mesmos nomes (nenhuma tela mudou). Somar na fonte, em vez de manter contadores, faz a conta valer também para a venda offline que sincroniza depois.
+
+- **[BUG-01-06] Entrada extra não atualizava o valor esperado** · Severidade: média · **CORRIGIDO**
+  Descoberto ao refazer o ciclo depois da correção acima: Vendas e Sangrias passaram a aparecer, mas Entradas continuava R$ 0,00. A entrada **estava gravada** no banco e a view calculava certo — faltava a tela recarregar: `useCreateEntradaExtra` invalidava só a própria lista, enquanto `useCreateSangria` já invalidava o caixa. Corrigido acrescentando as invalidações de `erp_caixa` e `erp_caixa-aberto`.
+
+#### Verificação final do fechamento (ciclo completo refeito)
+Abrir caixa R$ 200 → venda R$ 3,00 → sangria R$ 30 → entrada extra R$ 80 → Fechar Caixa:
+
+> Saldo Inicial: R$ 200,00 · Vendas: R$ 3,00 · Sangrias: −R$ 30,00 · Entradas: +R$ 80,00 · Troco: −R$ 0,00
+> **Valor Esperado em Gaveta: R$ 253,00**
+
+Confere com o cálculo do banco (200 + 3 − 30 + 80). Print: [fechamento corrigido](prints/01-vendas-balcao/05-pdv-fechamento-corrigido.jpeg).
 
 ### Resumo da sessão
-6 páginas auditadas | **36 funções verificadas** (29 ✅, 1 ⚠️) | **4 problemas reais**: 3 corrigidos (1 crítico, 2 altos) + **1 aberto de severidade alta (BUG-01-05)** + 1 falso positivo descartado
+6 páginas auditadas | **36 funções verificadas** (29 ✅, 1 ⚠️) | **5 problemas reais, todos corrigidos e verificados** (1 crítico, 2 altos, 1 alto, 1 médio) + 1 falso positivo descartado
 Páginas novas descobertas: nenhuma.
 Executado de verdade (SEFAZ em homologação): abrir/fechar caixa, venda completa, **emissão de NFC-e autorizada**, sangria e entrada extra.
 Ainda não executado: inutilizar numeração, cancelar nota autorizada, registrar devolução e envio de nota por e-mail/WhatsApp (este último tem efeito externo real, independente do ambiente fiscal).
