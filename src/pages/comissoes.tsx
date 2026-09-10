@@ -43,7 +43,7 @@ export function ComissoesPage() {
     queryFn: async () => {
       let q = supabase
         .from("erp_comissoes")
-        .select("*, funcionario:erp_funcionarios(id, cargo, pessoa:erp_pessoas(nome_razao)), venda:erp_vendas(numero, data_venda)")
+        .select("*, funcionario:erp_funcionarios(id, cargo, pessoa:erp_pessoas(nome_razao)), venda:erp_vendas(numero_pedido, data_venda)")
         .eq("loja_id", lojaId)
         .gte("data_referencia", ini)
         .lte("data_referencia", fim)
@@ -183,7 +183,7 @@ export function ComissoesPage() {
                       )}
                     </td>
                     <td className="p-3">{date(c.data_referencia)}</td>
-                    <td className="p-3 font-mono text-xs">{c.venda?.numero ?? "—"}</td>
+                    <td className="p-3 font-mono text-xs">{c.venda?.numero_pedido ?? "—"}</td>
                     <td className="p-3">{nomeDe(c)}</td>
                     <td className="p-3 text-right tabular-nums">{brl(c.valor_venda)}</td>
                     <td className="p-3 text-right tabular-nums">{Number(c.percentual_comissao).toFixed(2)}%</td>

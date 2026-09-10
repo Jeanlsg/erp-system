@@ -2551,7 +2551,8 @@ export function useNotasFiscais(filters?: { lojaId?: string; tipo?: string; stat
     queryKey: ['erp_notas_fiscais', filters],
     queryFn: async () => {
       if (!isSupabaseConfigured()) return [];
-      let query = supabase.from('erp_notas_fiscais').select('*').order('created_at', { ascending: false }).limit(200);
+      // erp_notas_fiscais não tem created_at — ordenar por ele devolvia 400 e a lista nunca carregava
+      let query = supabase.from('erp_notas_fiscais').select('*').order('data_emissao', { ascending: false }).limit(200);
       if (filters?.lojaId) query = query.eq('loja_id', filters.lojaId);
       if (filters?.tipo) query = query.eq('tipo', filters.tipo);
       if (filters?.status) query = query.eq('status', filters.status);
