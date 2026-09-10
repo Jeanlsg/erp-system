@@ -421,7 +421,7 @@ export function useVendas(filters?: { lojaId?: string; status?: string; dataInic
           itens:erp_venda_itens(*),
           cliente:erp_pessoas(*),
           loja:erp_lojas(*),
-          usuario:erp_usuarios(*)
+          usuario:erp_usuarios!erp_vendas_usuario_id_fkey(*)
         `)
         .order("data_venda", { ascending: false })
         .limit(200);
@@ -1093,7 +1093,7 @@ export function useCaixas(lojaId?: string) {
         .select(`
           *,
           loja:erp_lojas(id, nome, apelido),
-          usuario:erp_usuarios(id, nome)
+          usuario:erp_usuarios!erp_caixa_usuario_id_fkey(id, nome)
         `)
         .order('data_abertura', { ascending: false })
         .limit(100);
@@ -1135,7 +1135,7 @@ export function useCaixaPorId(caixaId?: string) {
         .select(`
           *,
           loja:erp_lojas(*),
-          usuario:erp_usuarios(id, nome)
+          usuario:erp_usuarios!erp_caixa_usuario_id_fkey(id, nome)
         `)
         .eq('id', caixaId)
         .single();
@@ -1900,7 +1900,7 @@ export function useRemessas(filters?: { lojaId?: string; status?: string; tipo?:
             *,
             produto:erp_produtos(id, nome, sku, preco_custo, preco_venda)
           ),
-          usuario:erp_usuarios(id, nome)
+          usuario:erp_usuarios!erp_remessas_usuario_id_fkey(id, nome)
         `)
         .order('data_remessa', { ascending: false })
         .limit(200);
