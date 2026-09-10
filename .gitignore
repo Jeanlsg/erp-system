@@ -41,3 +41,8 @@ docs/
 .env
 .env.*
 !.env.example
+
+# auditoria funcional é documentação versionada
+!docs/
+!docs/auditoria/
+!docs/auditoria/**
