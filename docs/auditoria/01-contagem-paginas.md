@@ -4,7 +4,7 @@ Data: 10/09/2026 · Ambiente: **produção** (erp.lojaxlife.com.br — não exis
 
 ## 1. Número total de páginas
 
-**Total: 89 páginas** | Ativas: 46 | Ocultas/órfãs: 2 | Inativas/quebradas: 0 | Só no código: 4 | Atrás de flag/permissão: 37
+**Total: 89 páginas** | Ativas: 46 | Ocultas/órfãs: 2 | Inativas/quebradas: 0 | Só no código: 5 | Atrás de flag/permissão: 36
 
 Regra aplicada: 1 página = 1 tela com rota própria; rotas-apelido para a mesma tela contam uma vez; `?aba=`, modais e abas são estados; login/setup/404 entram em "Acesso e sistema".
 
@@ -12,7 +12,7 @@ Regra aplicada: 1 página = 1 tela com rota própria; rotas-apelido para a mesma
 
 | Fonte | Encontrado | Observação |
 |---|---|---|
-| Código (`src/App.tsx`) | 110 rotas ativas + 6 comentadas → **89 telas únicas** | 20 rotas são apelidos da mesma tela (ex.: `/produtos`, `/estoque`, `/lotes` → Cadastro e Estoque); `FaturamentoPage` só embrulha Notas Fiscais |
+| Código (`src/App.tsx`) | 108 rotas ativas + 8 comentadas → **89 telas únicas** | 20 rotas são apelidos da mesma tela (ex.: `/produtos`, `/estoque`, `/lotes` → Cadastro e Estoque); `FaturamentoPage` só embrulha Notas Fiscais |
 | Navegação (conta demo, 108 URLs abertas) | 108 abriram; menu lateral lista 45 entradas (42 páginas únicas) | 0 URL(s) apareceram só por link interno; rodada final não trouxe rota nova |
 | Fontes auxiliares (tabela `erp_feature_flags`) | 84 flags (42 ativas), 84 com rota correspondente | flag desligada esconde do menu e bloqueia não-admin; admin vê com faixa "Página desativada" |
 | Por perfil (`ROLE_PERMISSIONS` + `perm` do menu) | admin 33 permissões · gerente 26 · estoquista 11 · caixa 7 | 31 itens de menu exigem permissão; os demais abrem para todos |
@@ -35,7 +35,7 @@ Diferenças: o código tem mais rotas que telas porque mantém apelidos do siste
 | 10 | Boletos | `/gerador-boletos` | Vendas e Pedidos | formulário | todos | só no código | código (rota comentada) |
 | 11 | ExApp Pedidos | `/exapp-pedidos` | Vendas e Pedidos | lista | admin (preview) | atrás de flag/permissão | flags (banco) |
 | 12 | Mala Direta | `/mala-direta` | Vendas e Pedidos | formulário | todos | só no código | código (rota comentada) |
-| 13 | Pedidos iFood | `/ifood` | Vendas e Pedidos | lista | admin (preview) | atrás de flag/permissão | flags (banco) |
+| 13 | Pedidos iFood | `/ifood` | Vendas e Pedidos | lista | admin, gerente, caixa | só no código | código (rota comentada) |
 | 14 | TEF / SITEF | `/tef-sitef` | Vendas e Pedidos | lista | admin (preview) | atrás de flag/permissão | flags (banco) |
 | 15 | Torpedos SMS | `/torpedos` | Vendas e Pedidos | formulário | todos | só no código | código (rota comentada) |
 | 16 | Locação | `/controle-comercial/locacao` | Vendas e Pedidos › Controle Comercial | lista | admin (preview) | atrás de flag/permissão | flags (banco) |
@@ -118,7 +118,7 @@ Diferenças: o código tem mais rotas que telas porque mantém apelidos do siste
 | Sessão/Módulo | Páginas | Ativas | Atrás de flag | Só no código | Outras |
 |---|---|---|---|---|---|
 | Início | 3 | 3 | 0 | 0 | 0 |
-| Vendas e Pedidos | 12 | 6 | 3 | 3 | 0 |
+| Vendas e Pedidos | 12 | 6 | 2 | 4 | 0 |
 | Vendas e Pedidos › Controle Comercial | 5 | 0 | 5 | 0 | 0 |
 | Vendas e Pedidos › Venda Mais | 4 | 4 | 0 | 0 | 0 |
 | Gestão | 4 | 2 | 0 | 0 | 2 |
@@ -240,6 +240,17 @@ Sessões mais usadas e críticas primeiro; configurações e raras por último. 
 - Ambiente: só existe produção. Nesta fase nenhuma ação de escrita foi executada — apenas leitura e navegação.
 - Conta temporária: `demo.admin@lojaxlife.com.br`, role admin (todas as permissões), criada em 10/09/2026 10:37, senha fora do repositório (`~/.config/erp-xlife/conta-temporaria.txt`). Será desativada no relatório final.
 - Dados nos prints: a base de produção ainda só tem dados de teste da implantação (cadastros fictícios); a virada para dados reais ainda não aconteceu.
+
+
+### Decisões aprovadas (10/09/2026)
+
+| # | Dúvida | Decisão | Efeito |
+|---|---|---|---|
+| 1 | Rotas que só redirecionam / iFood | **iFood removido** — cliente não usa. Rotas `/ifood` e `/marketplace-ifood` e os dois itens de menu ficam **comentados**, prontos para voltar | iFood sai de "atrás de flag" para "só no código"; a seção **Vendas pela Internet** fica sem itens e some do menu |
+| 1b | Órfãs `/pedidos` e `/gestao/cadastro-produtos` | **Remover na Fase 5** | telas antigas, substituídas por Ciclo de Pedidos e Cadastro e Estoque |
+| 3 | Duas telas de "Visão Geral" | **Manter como está** — é o comportamento desejado | `/visao-geral` (indicadores) e `/gestao` (painel) seguem separadas |
+| 4 | Quem vê página desativada | **Só o administrador principal.** Desligou, some para todos os cargos — inclusive outros admins | implementado na migration 065: coluna `admin_principal`, RLS de escrita das flags restrita a ele, preview do FeatureGuard idem |
+| 4b | Alternar conjuntos de telas | **Padrões de tela**: salvar o conjunto atual com nome e alternar em um clique | tabela `erp_flag_presets` + funções salvar/aplicar; já existem "Loja de suplementos" (42 desligadas) e "Sistema completo" |
 
 
 ### Achados de passagem (registrados, não corrigidos nesta fase)
