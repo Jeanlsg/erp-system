@@ -51,6 +51,7 @@ import {
   Flag,
   Upload,
   ChevronDown, ExternalLink,
+  BookOpen,
 } from "lucide-react";
 
 import { useAuth, type Permission } from "@/lib/store/auth-store";
@@ -279,6 +280,7 @@ const sections: NavSection[] = [
       {
         title: "Treinamento Sistema", url: "", icon: HelpCircle,
         children: [
+          { title: "Tutoriais", url: "/tutoriais", icon: BookOpen },
           { title: "Treinamento", url: "/treinamento/tutoriais", icon: HelpCircle },
           { title: "Ajuda", url: "/ajuda", icon: HelpCircle },
         ],

@@ -7,6 +7,7 @@ import { RedefinirSenhaPage } from "@/pages/redefinir-senha";
 import { DashboardPage } from "@/pages/dashboard";
 import { SetupPage } from "@/pages/setup";
 import { EquipamentosPage } from "@/pages/equipamentos";
+import { TutoriaisPage } from "@/pages/tutoriais";
 import { ComissoesPage } from "@/pages/comissoes";
 import { OrdersPage } from "@/pages/orders";
 import { CustomersPage } from "@/pages/customers";
@@ -219,6 +220,7 @@ export default function App() {
         {/* <Route path="config/downloads" element={<DownloadsPage />} /> // desativado: sem provedor contratado — reativar quando houver */}
         <Route path="equipamentos" element={<EquipamentosPage />} />
         <Route path="treinamento/tutoriais" element={<TreinamentoPage />} />
+        <Route path="tutoriais" element={<TutoriaisPage />} />
 
         {/* ===== ROTAS LEGADO (compatibilidade) ===== */}
         <Route path="visao-geral" element={<VisaoGeralPage />} />

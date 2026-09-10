@@ -1,0 +1,2026 @@
+[
+ {
+  "url": "/pdv",
+  "titulo": "PDV",
+  "sessao": "Vendas e balcão",
+  "grupo": null,
+  "objetivo": "Frente de caixa: busca produto, monta o carrinho, recebe e finaliza. Funciona sem internet — a venda fica guardada neste computador e sobe sozinha quando a conexão volta. O cupom fiscal (NFC-e) é emitido junto quando configurado.",
+  "apoio": "",
+  "perfis": [
+   "admin",
+   "gerente",
+   "caixa"
+  ],
+  "campos": [
+   "Cliente",
+   "Vendedor",
+   "Desconto",
+   "Acréscimo",
+   "Forma de Pagamento",
+   "Valor Recebido"
+  ],
+  "controles": [
+   {
+    "nome": "Caixas em Aberto",
+    "tipo": "botão",
+    "faz": "Abre Caixas em Aberto",
+    "cuidado": false
+   },
+   {
+    "nome": "Configurações",
+    "tipo": "botão",
+    "faz": "Abre Configurações de Caixa, pedindo: Quantidade de Caixas",
+    "cuidado": false
+   },
+   {
+    "nome": "Sangria",
+    "tipo": "botão",
+    "faz": "Abre Registrar Sangria, pedindo: Valor, Motivo",
+    "cuidado": false
+   },
+   {
+    "nome": "Entrada Extra",
+    "tipo": "botão",
+    "faz": "Abre Entrada Extra, pedindo: Valor, Motivo, Forma de Pagamento",
+    "cuidado": false
+   },
+   {
+    "nome": "Fechar Caixa",
+    "tipo": "botão",
+    "faz": "Ação definitiva — confirme antes, não dá para desfazer",
+    "cuidado": true
+   },
+   {
+    "nome": "Ler código de barras pela câmera",
+    "tipo": "botão",
+    "faz": "Abre Bipar produtos",
+    "cuidado": false
+   },
+   {
+    "nome": "Limpar",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "%",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Dinheiro",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "PIX",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Crédito",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Débito",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Crediário",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Boleto",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Cancelar",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Finalizar",
+    "tipo": "botão",
+    "faz": "Fica bloqueado até a condição ser atendida",
+    "cuidado": false
+   }
+  ],
+  "imagens": [
+   {
+    "arquivo": "01-vendas-balcao-01-pdv-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   },
+   {
+    "arquivo": "01-vendas-balcao-01-pdv-modal-caixas-em-aberto.jpeg",
+    "legenda": "O que aparece ao clicar em \"Caixas em Aberto\""
+   },
+   {
+    "arquivo": "01-vendas-balcao-01-pdv-modal-configuracoes.jpeg",
+    "legenda": "O que aparece ao clicar em \"Configurações\""
+   },
+   {
+    "arquivo": "01-vendas-balcao-01-pdv-modal-sangria.jpeg",
+    "legenda": "O que aparece ao clicar em \"Sangria\""
+   },
+   {
+    "arquivo": "01-vendas-balcao-01-pdv-modal-entrada-extra.jpeg",
+    "legenda": "O que aparece ao clicar em \"Entrada Extra\""
+   },
+   {
+    "arquivo": "01-vendas-balcao-01-pdv-modal-ler-codigo-de-barras-pela-camera.jpeg",
+    "legenda": "O que aparece ao clicar em \"Ler código de barras pela câmera\""
+   }
+  ]
+ },
+ {
+  "url": "/caixa",
+  "titulo": "Caixa",
+  "sessao": "Vendas e balcão",
+  "grupo": null,
+  "objetivo": "Abertura, sangria, reforço e fechamento de caixa, com o valor esperado em gaveta calculado a partir das vendas registradas.",
+  "apoio": "Caixa #1 aberto",
+  "perfis": [
+   "admin",
+   "gerente",
+   "caixa"
+  ],
+  "campos": [],
+  "controles": [
+   {
+    "nome": "Todas as lojas",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Atualizar",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Sangria",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Entrada Extra",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   }
+  ],
+  "imagens": [
+   {
+    "arquivo": "01-vendas-balcao-02-caixa-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   }
+  ]
+ },
+ {
+  "url": "/vendas",
+  "titulo": "Vendas",
+  "sessao": "Vendas e balcão",
+  "grupo": null,
+  "objetivo": "Histórico de vendas com filtros por loja, período e forma de pagamento. Cancelamento de venda passa por aqui.",
+  "apoio": "22 venda(s) registrada(s)",
+  "perfis": [
+   "admin",
+   "gerente",
+   "caixa"
+  ],
+  "campos": [],
+  "controles": [],
+  "imagens": [
+   {
+    "arquivo": "01-vendas-balcao-03-vendas-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   }
+  ]
+ },
+ {
+  "url": "/devolucoes",
+  "titulo": "Devoluções",
+  "sessao": "Vendas e balcão",
+  "grupo": null,
+  "objetivo": "Parcial ou total, por item e quantidade — a creatina vencida volta, o whey da mesma venda fica. Cada item decide se retorna ao estoque (vencido/avariado vira perda, sem voltar à prateleira). Estoque via kardex, financeiro (abate ou reembolso) e pontos são ajustados na mesma operação. Com nota autorizada, emita a NF-e de devolução em Notas Fiscais.",
+  "apoio": "Parcial ou total, por item e quantidade. Produto vencido ou avariado não volta ao estoque — desmarque “retorna ao estoque” e ele fica registrado como perda.",
+  "perfis": [
+   "admin",
+   "gerente",
+   "caixa"
+  ],
+  "campos": [
+   "Venda"
+  ],
+  "controles": [],
+  "imagens": [
+   {
+    "arquivo": "01-vendas-balcao-04-devolucoes-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   }
+  ]
+ },
+ {
+  "url": "/notas-fiscais",
+  "titulo": "Notas Fiscais",
+  "sessao": "Vendas e balcão",
+  "grupo": null,
+  "objetivo": "NF-e e NFC-e emitidas: consulta, XML, DANFE (gerado na hora se a nota não o tiver arquivado), cancelamento, carta de correção e inutilização de numeração.",
+  "apoio": "2 nota(s) emitida(s) pela loja atual",
+  "perfis": [
+   "admin",
+   "gerente"
+  ],
+  "campos": [],
+  "controles": [
+   {
+    "nome": "Inutilizar numeração",
+    "tipo": "botão",
+    "faz": "Ação definitiva — confirme antes, não dá para desfazer",
+    "cuidado": true
+   },
+   {
+    "nome": "Emitir NF-e",
+    "tipo": "botão",
+    "faz": "Abre Emitir documento fiscal da venda",
+    "cuidado": false
+   },
+   {
+    "nome": "Ver detalhes",
+    "tipo": "botão",
+    "faz": "Abre NF-e #3/1",
+    "cuidado": false
+   },
+   {
+    "nome": "Baixar XML",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Ver DANFE",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Enviar por e-mail ao cliente",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   }
+  ],
+  "imagens": [
+   {
+    "arquivo": "01-vendas-balcao-05-notas-fiscais-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   },
+   {
+    "arquivo": "01-vendas-balcao-05-notas-fiscais-modal-emitir-nf-e.jpeg",
+    "legenda": "O que aparece ao clicar em \"Emitir NF-e\""
+   },
+   {
+    "arquivo": "01-vendas-balcao-05-notas-fiscais-modal-ver-detalhes.jpeg",
+    "legenda": "O que aparece ao clicar em \"Ver detalhes\""
+   }
+  ]
+ },
+ {
+  "url": "/pedidos-delivery",
+  "titulo": "Pedidos Delivery",
+  "sessao": "Vendas e balcão",
+  "grupo": null,
+  "objetivo": "Kanban de logística: Pagamento → Separação → Despacho → Entregue. Arraste o pedido (ou use o botão do cartão); pedido parado além do normal fica marcado em vermelho. Taxas e regiões vêm de Regiões de Entrega.",
+  "apoio": "Arraste o pedido pela esteira — ou use o botão do cartão. Pedido parado além do normal fica marcado em vermelho.",
+  "perfis": [
+   "admin",
+   "gerente",
+   "caixa"
+  ],
+  "campos": [],
+  "controles": [],
+  "imagens": [
+   {
+    "arquivo": "01-vendas-balcao-06-pedidos-delivery-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   }
+  ]
+ },
+ {
+  "url": "/email-marketing",
+  "titulo": "E-mail Marketing",
+  "sessao": "Venda Mais",
+  "grupo": "Venda Mais",
+  "objetivo": "Crie campanhas e envie para todos os cadastros ativos com e-mail. O disparo usa o Resend já configurado e a campanha guarda enviados e falhas.",
+  "apoio": "0 campanha(s) · 10 cadastro(s) com e-mail válido",
+  "perfis": [
+   "admin",
+   "gerente",
+   "caixa",
+   "estoquista"
+  ],
+  "campos": [],
+  "controles": [
+   {
+    "nome": "Nova Campanha",
+    "tipo": "botão",
+    "faz": "Abre Nova Campanha de E-mail, pedindo: Nome da campanha (interno), Assunto do e-mail, Corpo do e-mail",
+    "cuidado": false
+   }
+  ],
+  "imagens": [
+   {
+    "arquivo": "02-venda-mais-01-e-mail-marketing-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   },
+   {
+    "arquivo": "02-venda-mais-01-e-mail-marketing-modal-nova-campanha.jpeg",
+    "legenda": "O que aparece ao clicar em \"Nova Campanha\""
+   }
+  ]
+ },
+ {
+  "url": "/cartao-fidelidade",
+  "titulo": "Cartão Fidelidade",
+  "sessao": "Venda Mais",
+  "grupo": "Venda Mais",
+  "objetivo": "Pontos por real gasto, creditados automaticamente na venda finalizada. Resgate vira desconto; o nível (bronze/prata/ouro) sai do acumulado, então resgatar não rebaixa o cliente.",
+  "apoio": "1 ponto por real gasto · cada ponto vale R$ 0,05 no resgate. Ajustável em Configurações do sistema.",
+  "perfis": [
+   "admin",
+   "gerente",
+   "caixa",
+   "estoquista"
+  ],
+  "campos": [],
+  "controles": [
+   {
+    "nome": "Emitir cartão",
+    "tipo": "botão",
+    "faz": "Abre Emitir cartão fidelidade, pedindo: Cliente",
+    "cuidado": false
+   }
+  ],
+  "imagens": [
+   {
+    "arquivo": "02-venda-mais-02-cartao-fidelidade-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   },
+   {
+    "arquivo": "02-venda-mais-02-cartao-fidelidade-modal-emitir-cartao.jpeg",
+    "legenda": "O que aparece ao clicar em \"Emitir cartão\""
+   }
+  ]
+ },
+ {
+  "url": "/crediario-proprio",
+  "titulo": "Crediário Próprio",
+  "sessao": "Venda Mais",
+  "grupo": "Gestão Recebimentos",
+  "objetivo": "Parcelamento da loja com juros próprios (Price ou simples), limite de crédito por cliente e contrato. Cada parcela é também uma conta a receber: baixar aqui baixa no financeiro.",
+  "apoio": "Cada parcela é também uma conta a receber — baixar aqui baixa no financeiro.",
+  "perfis": [
+   "admin",
+   "gerente",
+   "caixa",
+   "estoquista"
+  ],
+  "campos": [],
+  "controles": [
+   {
+    "nome": "Novo contrato",
+    "tipo": "botão",
+    "faz": "Abre Novo contrato de crediário, pedindo: Venda, Parcelas, Juros ao mês (%), Tipo de juros, Entrada (opcional)",
+    "cuidado": false
+   },
+   {
+    "nome": "Contratos",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Clientes e limites",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   }
+  ],
+  "imagens": [
+   {
+    "arquivo": "02-venda-mais-03-crediario-proprio-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   },
+   {
+    "arquivo": "02-venda-mais-03-crediario-proprio-modal-novo-contrato.jpeg",
+    "legenda": "O que aparece ao clicar em \"Novo contrato\""
+   }
+  ]
+ },
+ {
+  "url": "/promissoria",
+  "titulo": "Promissórias",
+  "sessao": "Venda Mais",
+  "grupo": "Gestão Recebimentos",
+  "objetivo": "Emissão de notas promissórias para venda a prazo.",
+  "apoio": "0 promissória(s)",
+  "perfis": [
+   "admin",
+   "gerente",
+   "caixa",
+   "estoquista"
+  ],
+  "campos": [],
+  "controles": [
+   {
+    "nome": "Emitir Promissória",
+    "tipo": "botão",
+    "faz": "Abre Emitir Nota Promissória, pedindo: Cliente (devedor), Valor (R$), Vencimento, Observações (opcional)",
+    "cuidado": false
+   }
+  ],
+  "imagens": [
+   {
+    "arquivo": "02-venda-mais-04-promissorias-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   },
+   {
+    "arquivo": "02-venda-mais-04-promissorias-modal-emitir-promissoria.jpeg",
+    "legenda": "O que aparece ao clicar em \"Emitir Promissória\""
+   }
+  ]
+ },
+ {
+  "url": "/produtos-estoque-lotes",
+  "titulo": "Cadastro e Estoque",
+  "sessao": "Estoque e compras",
+  "grupo": "Gestão Empresarial",
+  "objetivo": "Cadastro de produtos, categorias, lotes e posição de estoque numa tela só. As ações rápidas incluem reajuste de preços em massa (sobre o filtro atual), etiquetas com código de barras e a lista de produtos desativados para reativação.",
+  "apoio": "",
+  "perfis": [
+   "admin",
+   "gerente",
+   "caixa",
+   "estoquista"
+  ],
+  "campos": [
+   "Busca Avançada",
+   "Filtrar por Loja",
+   "Classificação",
+   "Por página:"
+  ],
+  "controles": [
+   {
+    "nome": "Cadastrar Produto",
+    "tipo": "botão",
+    "faz": "Abre Cadastrar Produto, pedindo: SKU *, Cód. Barras, Nome do Produto *, Valor Custo, Valor Venda, Estoque Mín., Duração típica (dias), Marca",
+    "cuidado": false
+   },
+   {
+    "nome": "Importar Planilha",
+    "tipo": "botão",
+    "faz": "Abre Importar Produtos (planilha)",
+    "cuidado": false
+   },
+   {
+    "nome": "Classificação",
+    "tipo": "botão",
+    "faz": "Abre Gerenciar Classificações, pedindo: Nome, Descrição",
+    "cuidado": false
+   },
+   {
+    "nome": "Movimentação Estoque",
+    "tipo": "botão",
+    "faz": "Leva para a tela /estoque/movimentacoes",
+    "cuidado": false
+   },
+   {
+    "nome": "Reajustes de Preços",
+    "tipo": "botão",
+    "faz": "Abre Reajuste de preços, pedindo: Percentual (%)",
+    "cuidado": false
+   },
+   {
+    "nome": "Validade / Lotes",
+    "tipo": "botão",
+    "faz": "Abre Validade / Lotes, pedindo: Produto",
+    "cuidado": false
+   },
+   {
+    "nome": "Catálogo",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Gerar Etiquetas",
+    "tipo": "botão",
+    "faz": "Abre Formato das etiquetas",
+    "cuidado": false
+   },
+   {
+    "nome": "Kit/Combo",
+    "tipo": "botão",
+    "faz": "Leva para a tela /kits",
+    "cuidado": false
+   },
+   {
+    "nome": "Inventário Estoque",
+    "tipo": "botão",
+    "faz": "Leva para a tela /estoque/inventario",
+    "cuidado": false
+   },
+   {
+    "nome": "Relatórios",
+    "tipo": "botão",
+    "faz": "Leva para a tela /relatorios",
+    "cuidado": false
+   },
+   {
+    "nome": "Produtos Excluídos",
+    "tipo": "botão",
+    "faz": "Abre Produtos excluídos",
+    "cuidado": false
+   },
+   {
+    "nome": "Todas",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "25",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Anterior",
+    "tipo": "botão",
+    "faz": "Fica bloqueado até a condição ser atendida",
+    "cuidado": false
+   },
+   {
+    "nome": "Próxima",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   }
+  ],
+  "imagens": [
+   {
+    "arquivo": "03-estoque-01-cadastro-e-estoque-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   },
+   {
+    "arquivo": "03-estoque-01-cadastro-e-estoque-modal-cadastrar-produto.jpeg",
+    "legenda": "O que aparece ao clicar em \"Cadastrar Produto\""
+   },
+   {
+    "arquivo": "03-estoque-01-cadastro-e-estoque-modal-importar-planilha.jpeg",
+    "legenda": "O que aparece ao clicar em \"Importar Planilha\""
+   },
+   {
+    "arquivo": "03-estoque-01-cadastro-e-estoque-modal-classificacao.jpeg",
+    "legenda": "O que aparece ao clicar em \"Classificação\""
+   },
+   {
+    "arquivo": "03-estoque-01-cadastro-e-estoque-modal-reajustes-de-precos.jpeg",
+    "legenda": "O que aparece ao clicar em \"Reajustes de Preços\""
+   },
+   {
+    "arquivo": "03-estoque-01-cadastro-e-estoque-modal-validade-lotes.jpeg",
+    "legenda": "O que aparece ao clicar em \"Validade / Lotes\""
+   },
+   {
+    "arquivo": "03-estoque-01-cadastro-e-estoque-modal-gerar-etiquetas.jpeg",
+    "legenda": "O que aparece ao clicar em \"Gerar Etiquetas\""
+   },
+   {
+    "arquivo": "03-estoque-01-cadastro-e-estoque-modal-produtos-excluidos.jpeg",
+    "legenda": "O que aparece ao clicar em \"Produtos Excluídos\""
+   }
+  ]
+ },
+ {
+  "url": "/estoque/movimentacoes",
+  "titulo": "Movimentações (Kardex)",
+  "sessao": "Estoque e compras",
+  "grupo": "Gestão Empresarial",
+  "objetivo": "Toda entrada e saída de estoque com saldo anterior, posterior e custo médio no momento do movimento. É o livro-razão do estoque: se um saldo parece errado, a resposta está aqui.",
+  "apoio": "Livro de movimentação (kardex). Cada entrada, saída e ajuste fica registrado com saldo e custo do momento — o histórico não é editável; correções entram como novo ajuste.",
+  "perfis": [
+   "admin",
+   "gerente",
+   "caixa",
+   "estoquista"
+  ],
+  "campos": [
+   "Buscar produto",
+   "Loja",
+   "Produto",
+   "Tipo"
+  ],
+  "controles": [
+   {
+    "nome": "Todas",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Todos",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   }
+  ],
+  "imagens": [
+   {
+    "arquivo": "03-estoque-02-movimentacoes-kardex-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   }
+  ]
+ },
+ {
+  "url": "/estoque/inventario",
+  "titulo": "Inventário / Balanço",
+  "sessao": "Estoque e compras",
+  "grupo": "Gestão Empresarial",
+  "objetivo": "Contagem física contra o saldo do sistema. Abrir o inventário fotografa o saldo atual; aplicar gera um movimento de ajuste rastreável para cada divergência — nada é sobrescrito em silêncio. Saldos negativos deixados por vendas offline aparecem aqui para reconciliar.",
+  "apoio": "Conte o estoque físico e aplique as divergências. Cada ajuste vira um movimento rastreável no kardex, em vez de sobrescrever o saldo em silêncio.",
+  "perfis": [
+   "admin",
+   "gerente",
+   "estoquista"
+  ],
+  "campos": [],
+  "controles": [
+   {
+    "nome": "Abrir inventário",
+    "tipo": "botão",
+    "faz": "Abre Abrir inventário, pedindo: Loja, Observações",
+    "cuidado": false
+   },
+   {
+    "nome": "Todas as lojas",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Contagem",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   }
+  ],
+  "imagens": [
+   {
+    "arquivo": "03-estoque-03-inventario-balanco-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   },
+   {
+    "arquivo": "03-estoque-03-inventario-balanco-modal-abrir-inventario.jpeg",
+    "legenda": "O que aparece ao clicar em \"Abrir inventário\""
+   }
+  ]
+ },
+ {
+  "url": "/estoque.transferencia",
+  "titulo": "Transferências",
+  "sessao": "Estoque e compras",
+  "grupo": "Gestão Empresarial",
+  "objetivo": "Transferência de estoque entre lojas, com baixa na origem e entrada no destino.",
+  "apoio": "Transferência de produtos entre lojas com emissão de NFe",
+  "perfis": [
+   "admin",
+   "gerente",
+   "estoquista"
+  ],
+  "campos": [],
+  "controles": [
+   {
+    "nome": "Nova Remessa",
+    "tipo": "botão",
+    "faz": "Abre Nova Remessa entre Filiais, pedindo: Loja Origem *, Loja Destino *, Tipo *, Previsão Chegada, CFOP Automático, Valor Frete, Valor Seguro, Adicionar Produtos",
+    "cuidado": false
+   }
+  ],
+  "imagens": [
+   {
+    "arquivo": "03-estoque-04-transferencias-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   },
+   {
+    "arquivo": "03-estoque-04-transferencias-modal-nova-remessa.jpeg",
+    "legenda": "O que aparece ao clicar em \"Nova Remessa\""
+   }
+  ]
+ },
+ {
+  "url": "/compras",
+  "titulo": "Compras",
+  "sessao": "Estoque e compras",
+  "grupo": "Gestão Empresarial",
+  "objetivo": "Pedidos de compra a fornecedores. A entrada da mercadoria atualiza estoque e custo médio, e as duplicatas da nota geram as contas a pagar.",
+  "apoio": "0 pedido(s) de compra",
+  "perfis": [
+   "admin",
+   "gerente",
+   "estoquista"
+  ],
+  "campos": [],
+  "controles": [
+   {
+    "nome": "Nova Compra",
+    "tipo": "botão",
+    "faz": "Abre Nova Compra, pedindo: Fornecedor *, Itens da compra *, Observações",
+    "cuidado": false
+   }
+  ],
+  "imagens": [
+   {
+    "arquivo": "03-estoque-05-compras-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   },
+   {
+    "arquivo": "03-estoque-05-compras-modal-nova-compra.jpeg",
+    "legenda": "O que aparece ao clicar em \"Nova Compra\""
+   }
+  ]
+ },
+ {
+  "url": "/compras/importar-nfe",
+  "titulo": "Importar NFe",
+  "sessao": "Estoque e compras",
+  "grupo": "Gestão Empresarial",
+  "objetivo": "Três caminhos: digitar o número da nota (ou a chave) e buscar entre as recebidas da SEFAZ, subir o XML do fornecedor, ou abrir pela tela de Notas Recebidas. Nota que chegou só como resumo pede ciência da operação para liberar o XML. Depois, casa os itens com o cadastro por EAN/SKU e cria a compra com estoque e contas a pagar; a margem sugerida é editável item a item.",
+  "apoio": "Faça o upload do XML da NFe para cadastrar produtos automaticamente",
+  "perfis": [
+   "admin",
+   "gerente",
+   "estoquista"
+  ],
+  "campos": [
+   "Clique aqui ou arraste o XML Tamanho máximo: 5MB"
+  ],
+  "controles": [],
+  "imagens": [
+   {
+    "arquivo": "03-estoque-06-importar-nfe-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   }
+  ]
+ },
+ {
+  "url": "/kits",
+  "titulo": "Kits & Combos",
+  "sessao": "Estoque e compras",
+  "grupo": "Gestão Empresarial",
+  "objetivo": "Produtos compostos: um kit agrupa itens do cadastro e baixa o estoque dos componentes ao vender.",
+  "apoio": "0 kit(s) cadastrado(s)",
+  "perfis": [
+   "admin",
+   "gerente",
+   "caixa",
+   "estoquista"
+  ],
+  "campos": [],
+  "controles": [
+   {
+    "nome": "Novo Kit",
+    "tipo": "botão",
+    "faz": "Abre Novo Kit, pedindo: Nome *, Descrição, Preço do Kit (R$) *, Produtos do kit",
+    "cuidado": false
+   }
+  ],
+  "imagens": [
+   {
+    "arquivo": "03-estoque-07-kits-combos-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   },
+   {
+    "arquivo": "03-estoque-07-kits-combos-modal-novo-kit.jpeg",
+    "legenda": "O que aparece ao clicar em \"Novo Kit\""
+   }
+  ]
+ },
+ {
+  "url": "/gestao/clientes",
+  "titulo": "Clientes",
+  "sessao": "Cadastros e pessoas",
+  "grupo": "Gestão Empresarial",
+  "objetivo": "Cadastro de clientes com limite de crédito, bloqueio e vínculo com tabela de preços.",
+  "apoio": "14 cliente(s) cadastrado(s)",
+  "perfis": [
+   "admin",
+   "gerente"
+  ],
+  "campos": [],
+  "controles": [
+   {
+    "nome": "Novo Cliente",
+    "tipo": "botão",
+    "faz": "Abre Novo Cliente, pedindo: Nome *, CPF, Email, Telefone, Celular",
+    "cuidado": false
+   },
+   {
+    "nome": "Editar",
+    "tipo": "botão",
+    "faz": "Abre Editar Cliente, pedindo: Razão Social *, CNPJ, Email, Telefone, Celular",
+    "cuidado": false
+   },
+   {
+    "nome": "Inativar",
+    "tipo": "botão",
+    "faz": "Ação definitiva — confirme antes, não dá para desfazer",
+    "cuidado": true
+   }
+  ],
+  "imagens": [
+   {
+    "arquivo": "04-cadastros-01-clientes-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   },
+   {
+    "arquivo": "04-cadastros-01-clientes-modal-novo-cliente.jpeg",
+    "legenda": "O que aparece ao clicar em \"Novo Cliente\""
+   },
+   {
+    "arquivo": "04-cadastros-01-clientes-modal-editar.jpeg",
+    "legenda": "O que aparece ao clicar em \"Editar\""
+   }
+  ]
+ },
+ {
+  "url": "/gestao/fornecedores",
+  "titulo": "Fornecedores",
+  "sessao": "Cadastros e pessoas",
+  "grupo": "Gestão Empresarial",
+  "objetivo": "14 fornecedor(es) cadastrado(s)",
+  "apoio": "14 fornecedor(es) cadastrado(s)",
+  "perfis": [
+   "admin",
+   "gerente",
+   "estoquista"
+  ],
+  "campos": [],
+  "controles": [
+   {
+    "nome": "Novo Fornecedor",
+    "tipo": "botão",
+    "faz": "Abre Novo Fornecedor, pedindo: Razão Social *, Nome Fantasia, CNPJ, Email, Telefone",
+    "cuidado": false
+   },
+   {
+    "nome": "Editar",
+    "tipo": "botão",
+    "faz": "Abre Editar Fornecedor, pedindo: Razão Social *, Nome Fantasia, CNPJ, Email, Telefone",
+    "cuidado": false
+   },
+   {
+    "nome": "Excluir",
+    "tipo": "botão",
+    "faz": "Ação definitiva — confirme antes, não dá para desfazer",
+    "cuidado": true
+   }
+  ],
+  "imagens": [
+   {
+    "arquivo": "04-cadastros-02-fornecedores-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   },
+   {
+    "arquivo": "04-cadastros-02-fornecedores-modal-novo-fornecedor.jpeg",
+    "legenda": "O que aparece ao clicar em \"Novo Fornecedor\""
+   },
+   {
+    "arquivo": "04-cadastros-02-fornecedores-modal-editar.jpeg",
+    "legenda": "O que aparece ao clicar em \"Editar\""
+   }
+  ]
+ },
+ {
+  "url": "/gestao/funcionarios",
+  "titulo": "Funcionários",
+  "sessao": "Cadastros e pessoas",
+  "grupo": "Gestão Empresarial",
+  "objetivo": "9 funcionário(s) · 9 ativos",
+  "apoio": "9 funcionário(s) · 9 ativos",
+  "perfis": [
+   "admin"
+  ],
+  "campos": [],
+  "controles": [
+   {
+    "nome": "Novo Funcionário",
+    "tipo": "botão",
+    "faz": "Abre Novo Funcionário, pedindo: Nome *, CPF, Cargo, Departamento, Email, Telefone, Salário, Comissão %",
+    "cuidado": false
+   }
+  ],
+  "imagens": [
+   {
+    "arquivo": "04-cadastros-03-funcionarios-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   },
+   {
+    "arquivo": "04-cadastros-03-funcionarios-modal-novo-funcionario.jpeg",
+    "legenda": "O que aparece ao clicar em \"Novo Funcionário\""
+   }
+  ]
+ },
+ {
+  "url": "/gestao/comissoes",
+  "titulo": "Comissões",
+  "sessao": "Cadastros e pessoas",
+  "grupo": "Gestão Empresarial",
+  "objetivo": "Comissão de cada venda com vendedor, calculada sozinha (% do funcionário; produto ou serviço com % próprio sobrepõe). Filtre por período e vendedor e marque como pagas.",
+  "apoio": "Geradas automaticamente a cada venda com vendedor. O % vem do funcionário; produto ou serviço com % próprio sobrepõe.",
+  "perfis": [
+   "admin"
+  ],
+  "campos": [
+   "De",
+   "Até",
+   "Vendedor",
+   "Situação"
+  ],
+  "controles": [
+   {
+    "nome": "Pagar selecionadas (0)",
+    "tipo": "botão",
+    "faz": "Fica bloqueado até a condição ser atendida",
+    "cuidado": true
+   },
+   {
+    "nome": "Pagar todas pendentes (0)",
+    "tipo": "botão",
+    "faz": "Fica bloqueado até a condição ser atendida",
+    "cuidado": true
+   }
+  ],
+  "imagens": [
+   {
+    "arquivo": "04-cadastros-04-comissoes-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   }
+  ]
+ },
+ {
+  "url": "/lojas",
+  "titulo": "Lojas",
+  "sessao": "Cadastros e pessoas",
+  "grupo": "Gestão Empresarial",
+  "objetivo": "Cadastro das lojas (matriz e filiais). O botão de conferência valida IE e endereço contra o cadastro da SEFAZ — este endereço é o do emitente em toda nota fiscal.",
+  "apoio": "2 loja(s) cadastrada(s)",
+  "perfis": [
+   "admin",
+   "gerente",
+   "estoquista"
+  ],
+  "campos": [],
+  "controles": [
+   {
+    "nome": "Nova Loja",
+    "tipo": "botão",
+    "faz": "Abre Nova Loja, pedindo: Nome *, Apelido *, CNPJ, Telefone, Email, Cidade, UF, Esta loja é a matriz",
+    "cuidado": false
+   },
+   {
+    "nome": "Editar",
+    "tipo": "botão",
+    "faz": "Abre Editar Loja, pedindo: Nome *, Apelido *, CNPJ, Telefone, Email, Cidade, UF, Esta loja é a matriz",
+    "cuidado": false
+   },
+   {
+    "nome": "Conferir cadastro na SEFAZ (IE e endereço do emitente)",
+    "tipo": "botão",
+    "faz": "Executa e confirma com: \"cadastro confere com a SEFAZ IE 233978558 · habilitado\"",
+    "cuidado": false
+   }
+  ],
+  "imagens": [
+   {
+    "arquivo": "04-cadastros-05-lojas-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   },
+   {
+    "arquivo": "04-cadastros-05-lojas-modal-nova-loja.jpeg",
+    "legenda": "O que aparece ao clicar em \"Nova Loja\""
+   },
+   {
+    "arquivo": "04-cadastros-05-lojas-modal-editar.jpeg",
+    "legenda": "O que aparece ao clicar em \"Editar\""
+   }
+  ]
+ },
+ {
+  "url": "/financeiro",
+  "titulo": "Relatórios Financeiros",
+  "sessao": "Financeiro",
+  "grupo": "Financeiro",
+  "objetivo": "Contas a pagar e a receber, fluxo de caixa e baixas. Vendas e compras lançam aqui automaticamente; baixar uma conta registra data, valor e forma de pagamento.",
+  "apoio": "Fluxo de caixa e movimentações",
+  "perfis": [
+   "admin",
+   "gerente"
+  ],
+  "campos": [
+   "Data Inicial",
+   "Data Final"
+  ],
+  "controles": [
+   {
+    "nome": "Consultar",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Imprimir",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Incluir Contas P/R",
+    "tipo": "botão",
+    "faz": "Abre Nova Conta a Pagar, pedindo: Descrição *, Valor *, Vencimento *, Categoria",
+    "cuidado": false
+   },
+   {
+    "nome": "Sangrias de Caixa",
+    "tipo": "botão",
+    "faz": "Abre Sangrias de Caixa",
+    "cuidado": false
+   },
+   {
+    "nome": "Entradas Extra Caixa",
+    "tipo": "botão",
+    "faz": "Abre Entradas Extra Caixa",
+    "cuidado": false
+   },
+   {
+    "nome": "Extrato de Serviços",
+    "tipo": "botão",
+    "faz": "Abre Extrato de Serviços",
+    "cuidado": false
+   },
+   {
+    "nome": "Fechamento Caixa",
+    "tipo": "botão",
+    "faz": "Abre Fechamentos de Caixa",
+    "cuidado": false
+   },
+   {
+    "nome": "Conta Bancária",
+    "tipo": "botão",
+    "faz": "Abre Conta Bancária",
+    "cuidado": false
+   },
+   {
+    "nome": "Ações de NF",
+    "tipo": "botão",
+    "faz": "Leva para a tela /financeiro?aba=nf",
+    "cuidado": false
+   },
+   {
+    "nome": "Vendas Excluídas",
+    "tipo": "botão",
+    "faz": "Abre Vendas Excluídas",
+    "cuidado": false
+   },
+   {
+    "nome": "Contas Excluídas",
+    "tipo": "botão",
+    "faz": "Abre Contas Excluídas",
+    "cuidado": false
+   },
+   {
+    "nome": "Relatório Gerencial",
+    "tipo": "botão",
+    "faz": "Leva para a tela /relatorios/analise",
+    "cuidado": false
+   },
+   {
+    "nome": "Entregas Delivery",
+    "tipo": "botão",
+    "faz": "Leva para a tela /pedidos-delivery",
+    "cuidado": false
+   },
+   {
+    "nome": "Entradas Canceladas",
+    "tipo": "botão",
+    "faz": "Abre Entradas Canceladas",
+    "cuidado": false
+   },
+   {
+    "nome": "Fluxo",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Vendas",
+    "tipo": "botão",
+    "faz": "Leva para a tela /financeiro?aba=vendas",
+    "cuidado": false
+   },
+   {
+    "nome": "Gráficos",
+    "tipo": "botão",
+    "faz": "Leva para a tela /financeiro?aba=graficos",
+    "cuidado": false
+   },
+   {
+    "nome": "Formas",
+    "tipo": "botão",
+    "faz": "Leva para a tela /financeiro?aba=formas",
+    "cuidado": false
+   },
+   {
+    "nome": "Taxas",
+    "tipo": "botão",
+    "faz": "Leva para a tela /financeiro?aba=taxas",
+    "cuidado": false
+   },
+   {
+    "nome": "Pagas",
+    "tipo": "botão",
+    "faz": "Leva para a tela /financeiro?aba=pagas",
+    "cuidado": false
+   },
+   {
+    "nome": "À Pagar",
+    "tipo": "botão",
+    "faz": "Leva para a tela /financeiro?aba=apagar",
+    "cuidado": false
+   },
+   {
+    "nome": "Recebidas",
+    "tipo": "botão",
+    "faz": "Leva para a tela /financeiro?aba=recebidas",
+    "cuidado": false
+   },
+   {
+    "nome": "À Receber",
+    "tipo": "botão",
+    "faz": "Leva para a tela /financeiro?aba=areceber",
+    "cuidado": false
+   },
+   {
+    "nome": "NF",
+    "tipo": "botão",
+    "faz": "Leva para a tela /financeiro?aba=nf",
+    "cuidado": false
+   }
+  ],
+  "imagens": [
+   {
+    "arquivo": "05-financeiro-01-relatorios-financeiros-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   },
+   {
+    "arquivo": "05-financeiro-01-relatorios-financeiros-modal-incluir-contas-p-r.jpeg",
+    "legenda": "O que aparece ao clicar em \"Incluir Contas P/R\""
+   },
+   {
+    "arquivo": "05-financeiro-01-relatorios-financeiros-modal-sangrias-de-caixa.jpeg",
+    "legenda": "O que aparece ao clicar em \"Sangrias de Caixa\""
+   },
+   {
+    "arquivo": "05-financeiro-01-relatorios-financeiros-modal-entradas-extra-caixa.jpeg",
+    "legenda": "O que aparece ao clicar em \"Entradas Extra Caixa\""
+   },
+   {
+    "arquivo": "05-financeiro-01-relatorios-financeiros-modal-extrato-de-servicos.jpeg",
+    "legenda": "O que aparece ao clicar em \"Extrato de Serviços\""
+   },
+   {
+    "arquivo": "05-financeiro-01-relatorios-financeiros-modal-fechamento-caixa.jpeg",
+    "legenda": "O que aparece ao clicar em \"Fechamento Caixa\""
+   },
+   {
+    "arquivo": "05-financeiro-01-relatorios-financeiros-modal-conta-bancaria.jpeg",
+    "legenda": "O que aparece ao clicar em \"Conta Bancária\""
+   },
+   {
+    "arquivo": "05-financeiro-01-relatorios-financeiros-modal-vendas-excluidas.jpeg",
+    "legenda": "O que aparece ao clicar em \"Vendas Excluídas\""
+   },
+   {
+    "arquivo": "05-financeiro-01-relatorios-financeiros-modal-contas-excluidas.jpeg",
+    "legenda": "O que aparece ao clicar em \"Contas Excluídas\""
+   },
+   {
+    "arquivo": "05-financeiro-01-relatorios-financeiros-modal-entradas-canceladas.jpeg",
+    "legenda": "O que aparece ao clicar em \"Entradas Canceladas\""
+   }
+  ]
+ },
+ {
+  "url": "/relatorios",
+  "titulo": "Relatórios",
+  "sessao": "Financeiro",
+  "grupo": "Financeiro",
+  "objetivo": "Relatórios operacionais de vendas, estoque e financeiro.",
+  "apoio": "Visão geral de KPIs do sistema",
+  "perfis": [
+   "admin",
+   "gerente",
+   "caixa",
+   "estoquista"
+  ],
+  "campos": [],
+  "controles": [],
+  "imagens": [
+   {
+    "arquivo": "05-financeiro-02-relatorios-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   }
+  ]
+ },
+ {
+  "url": "/relatorios/analise",
+  "titulo": "Análise Gerencial",
+  "sessao": "Financeiro",
+  "grupo": "Financeiro",
+  "objetivo": "Curva ABC (quais produtos sustentam a receita), ponto de pedido (o que repor antes de faltar), estoque parado (capital imobilizado) e DRE consolidado. Tudo sobre venda realizada e custo médio real — não sobre preço de tabela.",
+  "apoio": "Sobre venda registrada e custo médio real — não sobre preço de tabela.",
+  "perfis": [
+   "admin",
+   "gerente",
+   "estoquista"
+  ],
+  "campos": [
+   "Loja",
+   "De",
+   "Até"
+  ],
+  "controles": [
+   {
+    "nome": "Todas as lojas",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Curva ABC",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Sugestão de compra",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Estoque parado",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "DRE",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   }
+  ],
+  "imagens": [
+   {
+    "arquivo": "05-financeiro-03-analise-gerencial-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   }
+  ]
+ },
+ {
+  "url": "/remessas",
+  "titulo": "Remessas entre Filiais",
+  "sessao": "Fiscal",
+  "grupo": "Fiscal",
+  "objetivo": "Transferência com NF-e de remessa (CFOP 5152/6152): emite a nota, movimenta o estoque e acompanha o trânsito até o recebimento na filial.",
+  "apoio": "Transferência de produtos entre lojas com emissão de NFe",
+  "perfis": [
+   "admin",
+   "gerente"
+  ],
+  "campos": [],
+  "controles": [
+   {
+    "nome": "Nova Remessa",
+    "tipo": "botão",
+    "faz": "Abre Nova Remessa entre Filiais, pedindo: Loja Origem *, Loja Destino *, Tipo *, Previsão Chegada, CFOP Automático, Valor Frete, Valor Seguro, Adicionar Produtos",
+    "cuidado": false
+   }
+  ],
+  "imagens": [
+   {
+    "arquivo": "06-fiscal-01-remessas-entre-filiais-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   },
+   {
+    "arquivo": "06-fiscal-01-remessas-entre-filiais-modal-nova-remessa.jpeg",
+    "legenda": "O que aparece ao clicar em \"Nova Remessa\""
+   }
+  ]
+ },
+ {
+  "url": "/fiscal/notas-recebidas",
+  "titulo": "Notas Recebidas (SEFAZ)",
+  "sessao": "Fiscal",
+  "grupo": "Fiscal",
+  "objetivo": "Toda NF-e emitida contra o CNPJ da loja, buscada direto na SEFAZ — sem depender de o fornecedor mandar o XML. Dar ciência libera o XML completo com os itens; a conferência envia a nota ao importador de compras. A SEFAZ limita a 1 consulta/hora sem novidade.",
+  "apoio": "Toda NF-e emitida contra o CNPJ da loja, direto do canal oficial — sem depender de o fornecedor mandar o XML.",
+  "perfis": [
+   "admin",
+   "gerente",
+   "estoquista"
+  ],
+  "campos": [
+   "Loja",
+   "Ou baixe uma nota pela chave"
+  ],
+  "controles": [
+   {
+    "nome": "X-life Suplementos Juazeiro — BA",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Buscar novas notas",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Baixar",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   }
+  ],
+  "imagens": [
+   {
+    "arquivo": "06-fiscal-02-notas-recebidas-sefaz-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   }
+  ]
+ },
+ {
+  "url": "/fiscal/escrituracao",
+  "titulo": "Escrituração (SPED)",
+  "sessao": "Fiscal",
+  "grupo": "Fiscal",
+  "objetivo": "Gera a EFD ICMS/IPI e o SINTEGRA da competência a partir das notas, do kardex e do inventário. Os avisos listam o que faltou preencher com dado real. O arquivo é rascunho até passar pelo PVA da Receita — a transmissão continua sendo por lá.",
+  "apoio": "EFD ICMS/IPI e SINTEGRA a partir das notas, do kardex e do inventário já registrados.",
+  "perfis": [
+   "admin",
+   "gerente"
+  ],
+  "campos": [
+   "Loja",
+   "Competência",
+   "Arquivo",
+   "Finalidade"
+  ],
+  "controles": [
+   {
+    "nome": "X-life Suplementos Juazeiro — BA",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "EFD ICMS/IPI",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Original",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Gerar",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Baixar",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   }
+  ],
+  "imagens": [
+   {
+    "arquivo": "06-fiscal-03-escrituracao-sped-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   }
+  ]
+ },
+ {
+  "url": "/gestao/nfe-certificado",
+  "titulo": "Certificado Digital",
+  "sessao": "Fiscal",
+  "grupo": "Fiscal",
+  "objetivo": "Upload do certificado A1 (.pfx) que assina as notas fiscais. O teste na SEFAZ valida arquivo e senha antes de gravar; o vencimento é acompanhado aqui.",
+  "apoio": "Gestão de certificados A1 para emissão de NF-e / NFC-e",
+  "perfis": [
+   "admin",
+   "gerente"
+  ],
+  "campos": [],
+  "controles": [
+   {
+    "nome": "Novo Certificado",
+    "tipo": "botão",
+    "faz": "Abre Upload do Certificado A1, pedindo: Clique para selecionar o certificado",
+    "cuidado": false
+   },
+   {
+    "nome": "Baixar .pfx",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Excluir",
+    "tipo": "botão",
+    "faz": "Ação definitiva — confirme antes, não dá para desfazer",
+    "cuidado": true
+   }
+  ],
+  "imagens": [
+   {
+    "arquivo": "06-fiscal-04-certificado-digital-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   },
+   {
+    "arquivo": "06-fiscal-04-certificado-digital-modal-novo-certificado.jpeg",
+    "legenda": "O que aparece ao clicar em \"Novo Certificado\""
+   }
+  ]
+ },
+ {
+  "url": "/gestao/configuracoes-sefaz",
+  "titulo": "Configurações SEFAZ",
+  "sessao": "Fiscal",
+  "grupo": "Fiscal",
+  "objetivo": "Ambiente (homologação/produção), séries, numeração e o CSC da NFC-e por loja. Sem CSC cadastrado, a NFC-e é recusada antes de transmitir.",
+  "apoio": "Integração para NF-e/NFC-e",
+  "perfis": [
+   "admin",
+   "gerente"
+  ],
+  "campos": [
+   "Ambiente",
+   "UF",
+   "Série NF-e",
+   "Série NFC-e",
+   "Numeração Atual NF-e",
+   "Numeração Atual NFC-e",
+   "CSC ID",
+   "CSC Token"
+  ],
+  "controles": [
+   {
+    "nome": "Salvar",
+    "tipo": "botão",
+    "faz": "Executa e confirma com: \"Configurações SEFAZ salvas.\"",
+    "cuidado": false
+   }
+  ],
+  "imagens": [
+   {
+    "arquivo": "06-fiscal-05-configuracoes-sefaz-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   }
+  ]
+ },
+ {
+  "url": "/gestao/notificacoes",
+  "titulo": "Notificações",
+  "sessao": "Início e usuários",
+  "grupo": "Atendimento",
+  "objetivo": "Avisos do sistema: estoque baixo, contas vencendo, lotes a vencer.",
+  "apoio": "0 não lida(s) de 0 total",
+  "perfis": [
+   "admin",
+   "gerente",
+   "caixa",
+   "estoquista"
+  ],
+  "campos": [],
+  "controles": [],
+  "imagens": [
+   {
+    "arquivo": "07-atendimento-inicio-01-notificacoes-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   }
+  ]
+ },
+ {
+  "url": "/gestao/exclusao-informacoes",
+  "titulo": "Exclusão LGPD",
+  "sessao": "Início e usuários",
+  "grupo": "Atendimento",
+  "objetivo": "Atendimento a pedidos de exclusão de dados pessoais (LGPD).",
+  "apoio": "Solicitações de exclusão de dados pessoais conforme Lei 13.709/2018",
+  "perfis": [
+   "admin",
+   "gerente",
+   "caixa",
+   "estoquista"
+  ],
+  "campos": [],
+  "controles": [
+   {
+    "nome": "Solicitar Exclusão",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   }
+  ],
+  "imagens": [
+   {
+    "arquivo": "07-atendimento-inicio-02-exclusao-lgpd-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   }
+  ]
+ },
+ {
+  "url": "/",
+  "titulo": "Dashboard",
+  "sessao": "Início e usuários",
+  "grupo": null,
+  "objetivo": "Resumo do dia.",
+  "apoio": "Visão geral da operação · hoje, 10/09/2026",
+  "perfis": [
+   "admin",
+   "gerente",
+   "caixa",
+   "estoquista"
+  ],
+  "campos": [],
+  "controles": [],
+  "imagens": [
+   {
+    "arquivo": "07-atendimento-inicio-03-dashboard-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   }
+  ]
+ },
+ {
+  "url": "/visao-geral",
+  "titulo": "Visão Geral",
+  "sessao": "Início e usuários",
+  "grupo": null,
+  "objetivo": "Indicadores consolidados das lojas: faturamento, ticket médio e comparativos por período.",
+  "apoio": "Consolidado multi-loja com filtros por período e por unidade.",
+  "perfis": [
+   "admin",
+   "gerente",
+   "estoquista"
+  ],
+  "campos": [
+   "Juazeiro",
+   "Petrolina"
+  ],
+  "controles": [
+   {
+    "nome": "Últimos 30 dias",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Todas",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   }
+  ],
+  "imagens": [
+   {
+    "arquivo": "07-atendimento-inicio-04-visao-geral-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   }
+  ]
+ },
+ {
+  "url": "/gestao",
+  "titulo": "Visão Geral",
+  "sessao": "Início e usuários",
+  "grupo": null,
+  "objetivo": "Hub dos módulos de gestão: cadastros, financeiro, cobrança, fiscal e configurações.",
+  "apoio": "Hub central de cadastros e operações",
+  "perfis": [
+   "admin",
+   "gerente",
+   "caixa",
+   "estoquista"
+  ],
+  "campos": [],
+  "controles": [],
+  "imagens": [
+   {
+    "arquivo": "07-atendimento-inicio-05-visao-geral-gestao-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   }
+  ]
+ },
+ {
+  "url": "/gestao/usuarios",
+  "titulo": "Usuários e Permissões",
+  "sessao": "Início e usuários",
+  "grupo": null,
+  "objetivo": "Contas de acesso ao ERP com papel (admin, gerente, caixa, estoquista) e permissões finas. O convite chega por e-mail com link para definir a senha.",
+  "apoio": "2 usuário(s) cadastrado(s)",
+  "perfis": [
+   "admin"
+  ],
+  "campos": [
+   "Buscar",
+   "Papel (Role)",
+   "Status"
+  ],
+  "controles": [
+   {
+    "nome": "Atualizar",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Novo Usuário",
+    "tipo": "botão",
+    "faz": "Abre Novo Usuário, pedindo: Nome *, E-mail *, Papel, Loja Padrão, Telefone, Status, Usuário ativo, Definir senha agora (senão, envia e-mail de convite)",
+    "cuidado": false
+   },
+   {
+    "nome": "Todos",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Desativar",
+    "tipo": "botão",
+    "faz": "Fica bloqueado — Desativar",
+    "cuidado": true
+   },
+   {
+    "nome": "Excluir usuário",
+    "tipo": "botão",
+    "faz": "Fica bloqueado — Excluir usuário",
+    "cuidado": true
+   }
+  ],
+  "imagens": [
+   {
+    "arquivo": "07-atendimento-inicio-06-usuarios-e-permissoes-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   },
+   {
+    "arquivo": "07-atendimento-inicio-06-usuarios-e-permissoes-modal-novo-usuario.jpeg",
+    "legenda": "O que aparece ao clicar em \"Novo Usuário\""
+   }
+  ]
+ },
+ {
+  "url": "/config/sistema",
+  "titulo": "Configurações do Sistema",
+  "sessao": "Configurações",
+  "grupo": null,
+  "objetivo": "Parâmetros por chave: prazos, juros do crediário, pontos do fidelidade, dados do contabilista para o SPED, coleta automática de DF-e. Cada chave tem descrição do efeito.",
+  "apoio": "Parâmetros técnicos do sistema",
+  "perfis": [
+   "admin",
+   "gerente"
+  ],
+  "campos": [
+   "cfop_remessa_mesma_uf",
+   "cfop_remessa_outra_uf",
+   "cfop_retorno_mesma_uf",
+   "cfop_retorno_outra_uf",
+   "cfop_venda_filial_mesma_uf",
+   "cfop_venda_filial_outra_uf",
+   "crediario_juros_mensal",
+   "crediario_max_parcelas",
+   "crm_sync_ativo",
+   "dfe_coleta_automatica",
+   "fidelidade_nivel_ouro",
+   "fidelidade_nivel_prata"
+  ],
+  "controles": [
+   {
+    "nome": "Configurações Técnicas",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   }
+  ],
+  "imagens": [
+   {
+    "arquivo": "08-configuracoes-01-configuracoes-do-sistema-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   }
+  ]
+ },
+ {
+  "url": "/config/empresarial",
+  "titulo": "Configurações Empresariais",
+  "sessao": "Configurações",
+  "grupo": null,
+  "objetivo": "Dados empresariais usados em documentos e relatórios.",
+  "apoio": "Dados cadastrais da empresa",
+  "perfis": [
+   "admin"
+  ],
+  "campos": [
+   "Razão Social *",
+   "Nome Fantasia",
+   "CNPJ *",
+   "Inscrição Estadual",
+   "Inscrição Municipal",
+   "CEP",
+   "Logradouro",
+   "Número",
+   "Bairro",
+   "Cidade",
+   "UF",
+   "Telefone"
+  ],
+  "controles": [
+   {
+    "nome": "Salvar",
+    "tipo": "botão",
+    "faz": "Executa e confirma com: \"Dados salvos.\"",
+    "cuidado": false
+   }
+  ],
+  "imagens": [
+   {
+    "arquivo": "08-configuracoes-02-configuracoes-empresariais-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   }
+  ]
+ },
+ {
+  "url": "/config/minhas-chaves",
+  "titulo": "Minhas Chaves PIX",
+  "sessao": "Configurações",
+  "grupo": null,
+  "objetivo": "Chaves PIX da loja para recebimento e exibição no PDV.",
+  "apoio": "0 chave(s) cadastrada(s)",
+  "perfis": [
+   "admin",
+   "gerente",
+   "caixa",
+   "estoquista"
+  ],
+  "campos": [],
+  "controles": [
+   {
+    "nome": "Nova Chave",
+    "tipo": "botão",
+    "faz": "Abre Nova Chave PIX, pedindo: Tipo, Chave, Titular, Banco",
+    "cuidado": false
+   }
+  ],
+  "imagens": [
+   {
+    "arquivo": "08-configuracoes-03-minhas-chaves-pix-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   },
+   {
+    "arquivo": "08-configuracoes-03-minhas-chaves-pix-modal-nova-chave.jpeg",
+    "legenda": "O que aparece ao clicar em \"Nova Chave\""
+   }
+  ]
+ },
+ {
+  "url": "/equipamentos",
+  "titulo": "Equipamentos",
+  "sessao": "Configurações",
+  "grupo": null,
+  "objetivo": "Leitores, impressoras térmicas e etiquetadoras homologados, com instruções de instalação e links de driver.",
+  "apoio": "Leitores, impressoras e etiquetadoras homologados e como instalá-los.",
+  "perfis": [
+   "admin",
+   "gerente",
+   "caixa",
+   "estoquista"
+  ],
+  "campos": [],
+  "controles": [],
+  "imagens": [
+   {
+    "arquivo": "08-configuracoes-04-equipamentos-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   }
+  ]
+ },
+ {
+  "url": "/treinamento/tutoriais",
+  "titulo": "Treinamento",
+  "sessao": "Configurações",
+  "grupo": "Treinamento Sistema",
+  "objetivo": "Guia de operação por papel (caixa, estoquista, gerente, admin) com capturas reais de cada tela, passo a passo e link direto para onde a tarefa acontece. Abre já no papel de quem está logado.",
+  "apoio": "Como operar cada parte do sistema, por papel. Toda imagem é uma captura real — o que você vê aqui é o que encontra na tela.",
+  "perfis": [
+   "admin",
+   "gerente",
+   "caixa",
+   "estoquista"
+  ],
+  "campos": [],
+  "controles": [
+   {
+    "nome": "Caixa",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Estoquista",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Gerente",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Administrador",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Para todos",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   }
+  ],
+  "imagens": [
+   {
+    "arquivo": "08-configuracoes-05-treinamento-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   }
+  ]
+ },
+ {
+  "url": "/ajuda",
+  "titulo": "Ajuda",
+  "sessao": "Configurações",
+  "grupo": "Treinamento Sistema",
+  "objetivo": "Documentação e canais de suporte.",
+  "apoio": "Dúvidas frequentes por módulo do sistema",
+  "perfis": [
+   "admin",
+   "gerente",
+   "caixa",
+   "estoquista"
+  ],
+  "campos": [],
+  "controles": [
+   {
+    "nome": "Como registrar uma venda?",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Como abrir e fechar o caixa?",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Como registrar uma devolução?",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Como fazer uma pré-venda ou orçamento?",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Como cadastrar um produto?",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Como controlar lotes e validade?",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Como transferir estoque entre lojas?",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Como montar kits de produtos?",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Como lançar contas a pagar/receber?",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Como gerar carnê ou promissória?",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Como negativar ou protestar um devedor?",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Como configurar o certificado digital?",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Como configurar a SEFAZ?",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Como importar uma NFe de compra?",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Como criar usuários e definir permissões?",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Como cadastrar uma nova loja/filial?",
+    "tipo": "botão",
+    "faz": "Atualiza o conteúdo da própria tela",
+    "cuidado": false
+   },
+   {
+    "nome": "Como ativar/desativar módulos do sistema?",
+    "tipo": "botão",
+    "faz": "Ação definitiva — confirme antes, não dá para desfazer",
+    "cuidado": true
+   }
+  ],
+  "imagens": [
+   {
+    "arquivo": "08-configuracoes-06-ajuda-inicial.jpeg",
+    "legenda": "A tela como ela abre"
+   }
+  ]
+ }
+]
