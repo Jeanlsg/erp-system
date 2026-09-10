@@ -185,6 +185,7 @@ const sections: NavSection[] = [
           { title: "Clientes", url: "/gestao/clientes", icon: Users, perm: "cliente.editar" },
           { title: "Fornecedores", url: "/gestao/fornecedores", icon: Truck, perm: "compra.ver" },
           { title: "Funcionários", url: "/gestao/funcionarios", icon: Building2, perm: "usuario.ver" },
+          { title: "Comissões", url: "/gestao/comissoes", icon: Banknote, perm: "usuario.ver" },
           { title: "Transportadoras", url: "/gestao/transportadoras", icon: Truck },
           { title: "Cadastro e Estoque", url: "/produtos-estoque-lotes", icon: Package, perm: "produto.ver" },
           { title: "Movimentações (Kardex)", url: "/estoque/movimentacoes", icon: ArrowLeftRight, perm: "produto.ver" },

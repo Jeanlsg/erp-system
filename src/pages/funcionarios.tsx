@@ -5,6 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Building2, Plus, Search, Loader2, UserCheck, UserX, Mail, Phone } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/lib/supabase";
 import { useFuncionarios, useCreateFuncionario, isSupabaseConfigured } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
@@ -16,6 +18,16 @@ export function FuncionariosPage() {
   const { lojaId } = useAutoSelectLoja();
   const { data: funcionarios = [], isLoading } = useFuncionarios(lojaId ?? undefined);
   const create = useCreateFuncionario();
+  // Usuários do sistema, para ligar o funcionário ao login: é esse vínculo
+  // que faz a venda no PDV já sair com o vendedor certo (e a comissão).
+  const { data: usuarios = [] } = useQuery<any[]>({
+    queryKey: ["erp_usuarios_ativos"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("erp_usuarios").select("id, nome, email").eq("ativo", true).order("nome");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
   const [search, setSearch] = useState("");
   const [modalAberto, setModalAberto] = useState(false);
   const [form, setForm] = useState({
@@ -27,7 +39,7 @@ export function FuncionariosPage() {
     data_admissao: new Date().toISOString().slice(0, 10),
     email: "",
     telefone: "",
-    comissao: "0",
+    comissao: "0", usuario_id: "",
   });
 
   if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="Funcionários" />;
@@ -64,10 +76,11 @@ export function FuncionariosPage() {
       data_admissao: form.data_admissao || null,
       cpf: form.cpf || null,
       comissao_percentual: parseFloat(form.comissao) || 0,
+      usuario_id: form.usuario_id || null,
       gerente: false,
     });
     setModalAberto(false);
-    setForm({ nome: "", cpf: "", cargo: "", departamento: "", salario: "", data_admissao: new Date().toISOString().slice(0, 10), email: "", telefone: "", comissao: "0" });
+    setForm({ nome: "", cpf: "", cargo: "", departamento: "", salario: "", data_admissao: new Date().toISOString().slice(0, 10), email: "", telefone: "", comissao: "0", usuario_id: "" });
   };
 
   return (
@@ -184,6 +197,14 @@ export function FuncionariosPage() {
             <div className="grid grid-cols-3 gap-3">
               <div><Label>Salário</Label><Input type="number" step="0.01" value={form.salario} onChange={(e) => setForm({ ...form, salario: e.target.value })} /></div>
               <div><Label>Comissão %</Label><Input type="number" step="0.01" value={form.comissao} onChange={(e) => setForm({ ...form, comissao: e.target.value })} /></div>
+              <div>
+                <Label>Usuário do sistema</Label>
+                <select className="flex h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm"
+                  value={form.usuario_id} onChange={(e) => setForm({ ...form, usuario_id: e.target.value })}>
+                  <option value="">Sem login (não vende no PDV)</option>
+                  {usuarios.map((u: any) => <option key={u.id} value={u.id}>{u.nome ?? u.email}</option>)}
+                </select>
+              </div>
               <div><Label>Admissão</Label><Input type="date" value={form.data_admissao} onChange={(e) => setForm({ ...form, data_admissao: e.target.value })} /></div>
             </div>
           </div>

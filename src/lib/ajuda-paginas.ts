@@ -70,11 +70,12 @@ const A: Record<string, AjudaPagina> = {
   },
   "compras/importar-nfe": {
     titulo: "Importar NF-e",
-    descricao: "Lê o XML da nota do fornecedor (upload ou vindo direto da SEFAZ), casa os itens com o cadastro por EAN/SKU e cria a compra com estoque e contas a pagar. A margem sugerida é editável item a item antes de confirmar.",
+    descricao: "Três caminhos: digitar o número da nota (ou a chave) e buscar entre as recebidas da SEFAZ, subir o XML do fornecedor, ou abrir pela tela de Notas Recebidas. Nota que chegou só como resumo pede ciência da operação para liberar o XML. Depois, casa os itens com o cadastro por EAN/SKU e cria a compra com estoque e contas a pagar; a margem sugerida é editável item a item.",
   },
   kits: { titulo: "Kits & Combos", descricao: "Produtos compostos: um kit agrupa itens do cadastro e baixa o estoque dos componentes ao vender." },
   fornecedores: { titulo: "Fornecedores", descricao: "Cadastro de fornecedores usado em compras, contas a pagar e na entrada de NF-e." },
   funcionarios: { titulo: "Funcionários", descricao: "Cadastro de funcionários; vendedores daqui podem ser vinculados às vendas para comissão." },
+  "gestao/comissoes": { titulo: "Comissões", descricao: "Comissão de cada venda com vendedor, calculada sozinha (% do funcionário; produto ou serviço com % próprio sobrepõe). Filtre por período e vendedor e marque como pagas." },
   lojas: {
     titulo: "Lojas",
     descricao: "Cadastro das lojas (matriz e filiais). O botão de conferência valida IE e endereço contra o cadastro da SEFAZ — este endereço é o do emitente em toda nota fiscal.",

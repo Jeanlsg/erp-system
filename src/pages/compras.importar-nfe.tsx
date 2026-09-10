@@ -17,14 +17,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Upload, FileText, Loader2, CheckCircle2, AlertTriangle,
-  Package, Building2, Save, X, Edit2,
-} from "lucide-react";
-import {
-  useProdutos, useClientes, useImportarNFe,
-  isSupabaseConfigured,
-} from "@/lib/supabase-queries";
+import { Upload, FileText, Loader2, CheckCircle2, AlertTriangle, Package, Building2, Save, X, Edit2, Search, Download } from "lucide-react";
+import { useProdutos, useClientes, useImportarNFe, isSupabaseConfigured, useManifestarDfe } from "@/lib/supabase-queries";
+import { supabase } from "@/lib/supabase";
+import { toast } from "sonner";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { useAuth } from "@/lib/store/auth-store";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
@@ -46,6 +42,87 @@ export function ImportarNFePage() {
   const [margemGlobal, setMargemGlobal] = useState(50); // 50%
   const [error, setError] = useState<string | null>(null);
   const [sucessoMsg, setSucessoMsg] = useState<string | null>(null);
+
+  // ---- Buscar nota já recebida da SEFAZ pelo NÚMERO (ou pela chave) ----
+  // O operador tem o DANFE na mão com o "Nº 12345": não precisa de arquivo.
+  // O número da NF-e também está dentro da chave (posições 26–34), então a
+  // busca acha até nota que chegou só como resumo, sem o campo numero.
+  const manifestar = useManifestarDfe();
+  const [termoBusca, setTermoBusca] = useState("");
+  const [buscando, setBuscando] = useState(false);
+  const [achadas, setAchadas] = useState<any[] | null>(null);
+  const [agindo, setAgindo] = useState<string | null>(null);
+
+  const buscarNota = async () => {
+    const t = termoBusca.trim();
+    const digitos = t.replace(/\D/g, "");
+    if (!digitos || !lojaId) { toast.error("Digite o número da nota ou a chave de acesso."); return; }
+    setBuscando(true);
+    try {
+      let q = supabase.from("erp_nfe_entrada")
+        .select("id, numero, serie, chave_acesso, emitente_nome, emitente_cnpj, data_emissao, valor_total, resumo, compra_id, tipo_manifestacao, xml_original")
+        .eq("loja_id", lojaId).order("data_emissao", { ascending: false }).limit(20);
+      if (digitos.length === 44) {
+        q = q.eq("chave_acesso", digitos);
+      } else {
+        // número exato OU número embutido na chave: 25 posições + série(3) + nNF(9)
+        const pad = digitos.padStart(9, "0");
+        q = q.or(`numero.eq.${digitos},chave_acesso.like.${"_".repeat(28)}${pad}*`);
+      }
+      const { data, error } = await q;
+      if (error) throw error;
+      setAchadas(data ?? []);
+      if ((data ?? []).length === 0) {
+        toast.info(digitos.length === 44
+          ? "Nenhuma nota com essa chave — use \"Buscar na SEFAZ\"."
+          : "Nenhuma nota recebida com esse número. Sincronize em Notas Recebidas (SEFAZ) ou importe o XML.");
+      }
+    } catch (e: any) {
+      toast.error(`Falha na busca: ${e.message ?? e}`);
+    } finally {
+      setBuscando(false);
+    }
+  };
+
+  const abrirNota = (n: any) => {
+    if (!n.xml_original || !isValidNFeXML(n.xml_original)) { toast.error("Esta nota ainda não tem o XML completo."); return; }
+    try { setParsed(parseNFeXML(n.xml_original)); setError(null); }
+    catch (e: any) { setError(`Erro ao processar o XML da SEFAZ: ${e.message}`); }
+  };
+
+  // Só resumo → ciência da operação libera o XML completo. Não compromete nada.
+  const manifestarEAbrir = async (n: any) => {
+    setAgindo(n.id);
+    try {
+      const r: any = await manifestar.mutateAsync({ nfe_entrada_id: n.id, tipo: "ciencia" });
+      const { data } = await supabase.from("erp_nfe_entrada").select("xml_original").eq("id", n.id).single();
+      if (data?.xml_original && isValidNFeXML(data.xml_original)) {
+        toast.success("XML completo recebido.");
+        setParsed(parseNFeXML(data.xml_original)); setError(null);
+      } else {
+        toast.info(r?.aviso ?? "Ciência registrada. A SEFAZ costuma liberar o XML em instantes — busque de novo.");
+        void buscarNota();
+      }
+    } catch (e: any) {
+      toast.error(e.message ?? String(e));
+    } finally { setAgindo(null); }
+  };
+
+  // Chave digitada e nada no banco → pede à SEFAZ por essa chave.
+  const buscarNaSefaz = async () => {
+    const chave = termoBusca.replace(/\D/g, "");
+    if (chave.length !== 44 || !lojaId) return;
+    setAgindo("sefaz");
+    try {
+      const { data, error } = await supabase.functions.invoke("erp-dfe", { body: { acao: "baixar_chave", loja_id: lojaId, chave } });
+      if (error) throw error;
+      if (data?.ok === false) { toast.error(data.erro ?? "a SEFAZ não devolveu a nota", { description: data.dica ?? undefined }); return; }
+      toast.success("Nota baixada da SEFAZ.");
+      await buscarNota();
+    } catch (e: any) {
+      toast.error(e.message ?? String(e));
+    } finally { setAgindo(null); }
+  };
 
   // Reset
   const reset = () => {
@@ -232,7 +309,81 @@ export function ImportarNFePage() {
       {!parsed && (
         <Card>
           <CardHeader>
-            <CardTitle>1. Selecione o arquivo XML</CardTitle>
+            <CardTitle>Buscar pelo número da nota</CardTitle>
+            <CardDescription>
+              Digite o número que está no DANFE (ou a chave de acesso de 44 dígitos). Busca entre as notas
+              recebidas da SEFAZ para esta loja — sem precisar do arquivo.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex gap-2">
+              <Input placeholder="Ex.: 12345 ou a chave de acesso" value={termoBusca}
+                onChange={(e) => setTermoBusca(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") void buscarNota(); }} />
+              <Button onClick={() => void buscarNota()} disabled={buscando}>
+                {buscando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+              </Button>
+            </div>
+            {achadas && achadas.length === 0 && termoBusca.replace(/\D/g, "").length === 44 && (
+              <Button variant="outline" size="sm" onClick={() => void buscarNaSefaz()} disabled={agindo === "sefaz"}>
+                {agindo === "sefaz" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                Buscar na SEFAZ por esta chave
+              </Button>
+            )}
+            {achadas && achadas.length > 0 && (
+              <div className="rounded-md border overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="border-b text-xs text-muted-foreground">
+                    <tr>
+                      <th className="text-left p-2">Nº / Série</th>
+                      <th className="text-left p-2">Emitente</th>
+                      <th className="text-left p-2">Emissão</th>
+                      <th className="text-right p-2">Valor</th>
+                      <th className="text-left p-2">Situação</th>
+                      <th className="p-2"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {achadas.map((n: any) => {
+                      const nNF = n.numero ?? (n.chave_acesso ? String(parseInt(n.chave_acesso.slice(25, 34), 10)) : "—");
+                      const serie = n.serie ?? (n.chave_acesso ? String(parseInt(n.chave_acesso.slice(22, 25), 10)) : "");
+                      const completa = !!n.xml_original && isValidNFeXML(n.xml_original);
+                      return (
+                        <tr key={n.id} className="border-b last:border-0">
+                          <td className="p-2 font-mono text-xs">{nNF}{serie ? `/${serie}` : ""}</td>
+                          <td className="p-2">{n.emitente_nome ?? "—"}<div className="text-[11px] text-muted-foreground font-mono">{n.emitente_cnpj ? formatCNPJ(n.emitente_cnpj) : ""}</div></td>
+                          <td className="p-2 text-xs">{n.data_emissao ? dateTime(n.data_emissao) : "—"}</td>
+                          <td className="p-2 text-right tabular-nums">{brl(n.valor_total ?? 0)}</td>
+                          <td className="p-2">
+                            {n.compra_id ? <Badge variant="outline">já importada</Badge>
+                              : completa ? <Badge>XML completo</Badge>
+                              : <Badge variant="outline" className="border-amber-500 text-amber-600">só resumo</Badge>}
+                          </td>
+                          <td className="p-2 text-right whitespace-nowrap">
+                            {n.compra_id ? null : completa ? (
+                              <Button size="sm" onClick={() => abrirNota(n)}>Conferir e importar</Button>
+                            ) : (
+                              <Button size="sm" variant="outline" disabled={agindo === n.id} onClick={() => void manifestarEAbrir(n)}>
+                                {agindo === n.id && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                Dar ciência e baixar XML
+                              </Button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {!parsed && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Ou selecione o arquivo XML</CardTitle>
             <CardDescription>
               Arraste o arquivo ou clique para selecionar. Aceita .xml de NFe modelo 55.
             </CardDescription>

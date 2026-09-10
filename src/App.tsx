@@ -7,6 +7,7 @@ import { RedefinirSenhaPage } from "@/pages/redefinir-senha";
 import { DashboardPage } from "@/pages/dashboard";
 import { SetupPage } from "@/pages/setup";
 import { EquipamentosPage } from "@/pages/equipamentos";
+import { ComissoesPage } from "@/pages/comissoes";
 import { OrdersPage } from "@/pages/orders";
 import { CustomersPage } from "@/pages/customers";
 import { VisaoGeralPage } from "@/pages/visao-geral";
@@ -135,6 +136,7 @@ export default function App() {
         <Route path="gestao/consulta-pessoa-juridica" element={<ConsultaPessoaJuridicaPage />} />
         <Route path="gestao/fornecedores" element={<FornecedoresPage />} />
         <Route path="gestao/funcionarios" element={<FuncionariosPage />} />
+        <Route path="gestao/comissoes" element={<ComissoesPage />} />
         <Route path="gestao/cadastro-produtos" element={<CadastroProdutosPage />} />
         <Route path="gestao/servicos" element={<ServicosPage />} />
         <Route path="gestao/transportadoras" element={<TransportadorasPage />} />
