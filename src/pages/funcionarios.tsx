@@ -55,18 +55,44 @@ export function FuncionariosPage() {
   const inativos = funcionarios.filter((f: any) => f.data_demissao);
 
   const handleCriar = async () => {
-    if (!form.nome) return;
+    if (!form.nome) {
+      toast.error("Informe o nome do funcionário.");
+      return;
+    }
+
+    // Sem CPF o cadastro é aceito, mas o funcionário fica incompleto para
+    // folha, comissão e documentos — melhor avisar na hora do que descobrir
+    // no fechamento do mês.
+    if (!form.cpf.trim()) {
+      const seguir = confirm(
+        "Este funcionário está sendo cadastrado SEM CPF.\n\n" +
+        "O cadastro funciona, mas o CPF é necessário para folha de pagamento, " +
+        "recibo de comissão e documentos. Também é ele que evita cadastrar a " +
+        "mesma pessoa duas vezes.\n\nCadastrar assim mesmo?"
+      );
+      if (!seguir) return;
+    }
+
     // 1) cria pessoa
+    // cpf_cnpj aceita nulo. O marcador "sem-cpf-<timestamp>" que existia aqui
+    // tinha 21 caracteres numa coluna varchar(18): todo cadastro sem CPF
+    // falhava com o erro cru do Postgres.
     const pessoaInsert: any = {
       tipo: "fisica",
-      cpf_cnpj: form.cpf || `sem-cpf-${Date.now()}`,
+      cpf_cnpj: form.cpf.trim() || null,
       nome_razao: form.nome,
       email: form.email || null,
       telefone: form.telefone || null,
     };
     const { data: pessoa, error: eP } = await (await import("@/lib/supabase")).supabase
       .from("erp_pessoas").insert(pessoaInsert).select().single();
-    if (eP) return toast.error(eP.message);
+    if (eP) {
+      // Erro do banco não é mensagem para o usuário final.
+      const amigavel = /duplicate key|unique/i.test(eP.message)
+        ? "Já existe um cadastro com este CPF."
+        : `Não foi possível cadastrar: ${eP.message}`;
+      return toast.error(amigavel);
+    }
 
     await create.mutateAsync({
       pessoa_id: pessoa.id,
@@ -79,6 +105,7 @@ export function FuncionariosPage() {
       usuario_id: form.usuario_id || null,
       gerente: false,
     });
+    toast.success(`${form.nome} cadastrado(a).${form.usuario_id ? " Vendas feitas no login vinculado já geram comissão." : ""}`);
     setModalAberto(false);
     setForm({ nome: "", cpf: "", cargo: "", departamento: "", salario: "", data_admissao: new Date().toISOString().slice(0, 10), email: "", telefone: "", comissao: "0", usuario_id: "" });
   };
