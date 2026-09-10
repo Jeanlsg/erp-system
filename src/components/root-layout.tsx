@@ -1,9 +1,10 @@
 import { Outlet, Link, useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { HelpCircle, LogOut, Store, User as UserIcon } from "lucide-react";
+import { HelpCircle, LogOut, Store, User as UserIcon, PlayCircle, BookOpen } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppSidebar } from "@/components/app-sidebar";
+import { ModoDemonstracao, temDemonstracao } from "@/components/modo-demonstracao";
 import { FeatureGuard } from "@/components/feature-guard";
 import { NotificationIcons } from "@/components/notification-icons";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,9 @@ export function RootLayout() {
   const setCurrentLojaId = useLojaAtualStore((s) => s.setCurrentLojaId);
 
   const [hydrated, setHydrated] = useState(false);
+  // Modo demonstração: o "?" explica a página e, quando há tour, percorre
+  // os botões um a um sem executar nenhuma ação real.
+  const [demo, setDemo] = useState(false);
 
   // ===== TODOS OS HOOKS ANTES DE QUALQUER EARLY RETURN =====
   useEffect(() => {
@@ -142,6 +146,19 @@ export function RootLayout() {
                       <p className="text-sm leading-relaxed text-muted-foreground">
                         {ajuda.descricao}
                       </p>
+                      <div className="mt-3 flex flex-col gap-1.5 border-t pt-3">
+                        {temDemonstracao(location.pathname) && (
+                          <Button size="sm" className="w-full justify-start" onClick={() => setDemo(true)}>
+                            <PlayCircle className="mr-2 h-3.5 w-3.5" />
+                            Ver como usar esta tela
+                          </Button>
+                        )}
+                        <Button asChild size="sm" variant="ghost" className="w-full justify-start">
+                          <Link to="/tutoriais">
+                            <BookOpen className="mr-2 h-3.5 w-3.5" /> Tutorial completo
+                          </Link>
+                        </Button>
+                      </div>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 );
@@ -210,6 +227,8 @@ export function RootLayout() {
           </div>
         </main>
       </div>
+
+      {demo && <ModoDemonstracao rota={location.pathname} aoFechar={() => setDemo(false)} />}
     </div>
   );
 }
