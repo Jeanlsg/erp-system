@@ -143,7 +143,7 @@ const sections: NavSection[] = [
       { title: "Notas Fiscais", url: "/notas-fiscais", icon: FileText, perm: "fiscal.emitir" },
       { title: "Devoluções", url: "/devolucoes", icon: RotateCcw, perm: "venda.criar" },
       { title: "Pedidos Delivery", url: "/pedidos-delivery", icon: Bike, perm: "venda.criar" },
-      { title: "Pedidos iFood", url: "/ifood", icon: ShoppingCart, perm: "venda.criar" },
+      // { title: "Pedidos iFood", url: "/ifood", icon: ShoppingCart, perm: "venda.criar" }, // desativado: cliente não usa iFood — reativar descomentando aqui e a rota
       { title: "ExApp Pedidos", url: "/exapp-pedidos", icon: MessageSquare, perm: "venda.criar" },
       {
         title: "Venda Mais", url: "", icon: Star,
@@ -262,7 +262,7 @@ const sections: NavSection[] = [
   {
     label: "Vendas pela Internet",
     items: [
-      { title: "iFood Marketplace", url: "/marketplace-ifood", icon: ShoppingCart },
+      // { title: "iFood Marketplace", url: "/marketplace-ifood", icon: ShoppingCart }, // desativado: cliente não usa iFood — reativar descomentando aqui e a rota
     ],
   },
   {

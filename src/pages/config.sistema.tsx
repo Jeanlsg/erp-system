@@ -5,10 +5,14 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Cog, Flag, Search, Loader2, ShieldOff, ShieldCheck, Power, AlertTriangle, Eye, History, Lock, CheckSquare, Square } from "lucide-react";
+import { Cog, Flag, Search, Loader2, ShieldOff, ShieldCheck, Power, AlertTriangle, Eye, History, Lock, CheckSquare, Square, Layers, Save, Trash2, Crown } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
-import { useFeatureFlags, useToggleFeatureFlag } from "@/lib/supabase-queries";
+import {
+  useFeatureFlags, useToggleFeatureFlag, useAdminPrincipal,
+  useFlagPresets, useSalvarPreset, useAplicarPreset, useExcluirPreset,
+} from "@/lib/supabase-queries";
+import { toast } from "sonner";
 import type { FeatureFlag as FF } from "@/types/database";
 import { useAuth } from "@/lib/store/auth-store";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
@@ -32,9 +36,10 @@ const CATEGORIAS_LABEL: Record<string, string> = {
 };
 
 export function ConfigSistemaPage() {
-  const { user } = useAuth();
-  const isAdmin = user?.role === "admin";
-  const [abaAtiva, setAbaAtiva] = useState(isAdmin ? "features" : "config");
+  // O conjunto de telas do sistema é decisão do dono, não de qualquer admin:
+  // a aba de Feature Flags só existe para o administrador principal.
+  const { data: isAdmin = false } = useAdminPrincipal();
+  const [abaAtiva, setAbaAtiva] = useState("config");
 
   return (
     <div className="space-y-6">
@@ -44,7 +49,7 @@ export function ConfigSistemaPage() {
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
           {isAdmin
-            ? "Gerencie parâmetros técnicos, feature flags e permissões globais"
+            ? "Parâmetros técnicos, páginas ativas e padrões de tela"
             : "Parâmetros técnicos do sistema"}
         </p>
       </div>
@@ -53,7 +58,7 @@ export function ConfigSistemaPage() {
         <TabsList className="w-full sm:w-auto">
           {isAdmin && (
             <TabsTrigger value="features">
-              <Flag className="h-3.5 w-3.5 mr-1.5" /> Feature Flags
+              <Crown className="h-3.5 w-3.5 mr-1.5" /> Páginas do sistema
             </TabsTrigger>
           )}
           <TabsTrigger value="config">
@@ -76,7 +81,129 @@ export function ConfigSistemaPage() {
 }
 
 // ====================================================================
-// FEATURE FLAGS PANEL (somente admin)
+// PRESETS DE TELAS — conjuntos nomeados de páginas ativas
+// ====================================================================
+// Ligar e desligar dezenas de páginas na mão a cada mudança de fase da
+// loja é inviável. Aqui salva-se o conjunto atual com um nome e alterna-se
+// entre padrões (implantação, operação enxuta, sistema completo). Páginas
+// protegidas nunca entram: preset nenhum consegue desligá-las.
+function PresetsPanel() {
+  const { data: presets = [], isLoading } = useFlagPresets();
+  const salvar = useSalvarPreset();
+  const aplicar = useAplicarPreset();
+  const excluir = useExcluirPreset();
+  const [modalSalvar, setModalSalvar] = useState(false);
+  const [nome, setNome] = useState("");
+  const [descricao, setDescricao] = useState("");
+
+  const aplicarPreset = async (p: { id: string; nome: string }) => {
+    if (!confirm(`Aplicar "${p.nome}"? O menu de TODOS os usuários muda na hora.`)) return;
+    try {
+      const r = await aplicar.mutateAsync(p.id);
+      toast.success(`"${r.preset}" aplicado.`, {
+        description: `${r.desativadas} desativada(s), ${r.reativadas} reativada(s) — ${r.ativas_agora} páginas ativas.`,
+      });
+    } catch (e: any) {
+      toast.error(e.message ?? String(e));
+    }
+  };
+
+  const salvarAtual = async () => {
+    if (!nome.trim()) { toast.error("Dê um nome ao conjunto."); return; }
+    try {
+      await salvar.mutateAsync({ nome: nome.trim(), descricao: descricao.trim() || undefined });
+      toast.success(`Conjunto "${nome.trim()}" salvo com as páginas desativadas de agora.`);
+      setModalSalvar(false); setNome(""); setDescricao("");
+    } catch (e: any) {
+      toast.error(e.message ?? String(e));
+    }
+  };
+
+  return (
+    <>
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0 pb-3">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Layers className="h-4 w-4" /> Padrões de tela
+            </CardTitle>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Alterne o conjunto de páginas visíveis sem religar uma a uma.
+            </p>
+          </div>
+          <Button size="sm" variant="outline" onClick={() => setModalSalvar(true)}>
+            <Save className="mr-2 h-3.5 w-3.5" /> Salvar conjunto atual
+          </Button>
+        </CardHeader>
+        <CardContent className="p-0">
+          {isLoading ? (
+            <div className="p-6 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>
+          ) : presets.length === 0 ? (
+            <p className="p-6 text-center text-sm text-muted-foreground">
+              Nenhum padrão salvo. Ajuste as páginas abaixo e use “Salvar conjunto atual”.
+            </p>
+          ) : (
+            <ul className="divide-y">
+              {presets.map((p) => (
+                <li key={p.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium">{p.nome}</p>
+                    {p.descricao && <p className="text-xs text-muted-foreground">{p.descricao}</p>}
+                    <p className="text-[11px] text-muted-foreground">
+                      {p.paths_desativados.length === 0
+                        ? "todas as páginas ligadas"
+                        : `${p.paths_desativados.length} página(s) desligada(s)`}
+                      {p.aplicado_em ? ` · aplicado em ${dateTime(p.aplicado_em)}` : ""}
+                    </p>
+                  </div>
+                  <Button size="sm" onClick={() => void aplicarPreset(p)} disabled={aplicar.isPending}>
+                    {aplicar.isPending ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Power className="mr-2 h-3.5 w-3.5" />}
+                    Aplicar
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-8 w-8 p-0" title="Excluir padrão"
+                    onClick={() => { if (confirm(`Excluir o padrão "${p.nome}"? As páginas ficam como estão.`)) excluir.mutate(p.id); }}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={modalSalvar} onOpenChange={setModalSalvar}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Save className="h-5 w-5" /> Salvar conjunto atual</DialogTitle>
+            <DialogClose />
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Guarda as páginas desativadas neste momento. Reaplicar depois devolve exatamente este menu.
+            </p>
+            <div>
+              <Label>Nome *</Label>
+              <Input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Operação enxuta" autoFocus />
+            </div>
+            <div>
+              <Label>Descrição</Label>
+              <Input value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Quando usar este padrão" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setModalSalvar(false)}>Cancelar</Button>
+            <Button onClick={() => void salvarAtual()} disabled={salvar.isPending || !nome.trim()}>
+              {salvar.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+// ====================================================================
+// FEATURE FLAGS PANEL (somente o administrador principal)
 // ====================================================================
 function FeatureFlagsPanel() {
   const { user } = useAuth();
@@ -235,6 +362,8 @@ function FeatureFlagsPanel() {
 
   return (
     <>
+      <PresetsPanel />
+
       {/* KPIs */}
       <div className="grid gap-4 sm:grid-cols-4">
         <Card>
@@ -357,7 +486,7 @@ function FeatureFlagsPanel() {
       <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-md p-3 flex gap-2 text-sm">
         <AlertTriangle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
         <p className="text-amber-900 dark:text-amber-200">
-          <strong>Atenção:</strong> ao desativar uma página, ela desaparece da sidebar de <strong>todos os usuários</strong> e o acesso direto pela URL é bloqueado.
+          <strong>Atenção:</strong> ao desativar uma página, ela desaparece da sidebar de <strong>todos os cargos — inclusive de outros administradores</strong> — e o acesso direto pela URL é bloqueado. Só você, como administrador principal, continua vendo em modo preview.
         </p>
       </div>
 

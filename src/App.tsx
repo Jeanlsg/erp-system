@@ -55,8 +55,8 @@ import { FaturamentoPage } from "@/pages/faturamento";
 import { ImportarNFePage } from "@/pages/compras.importar-nfe";
 import { RemessasPage } from "@/pages/remessas";
 import { PedidoPage, OrcamentoPage, OrdemServicoPage, ConsignacaoPage, LocacaoPage } from "@/pages/controle-comercial";
-import { IFoodPage, ExAppPedidosPage, TEFPage } from "@/pages/integracoes";
-import { MarketplaceIFoodPage } from "@/pages/marketplace-ifood";
+import { ExAppPedidosPage, TEFPage } from "@/pages/integracoes";
+// import { MarketplaceIFoodPage } from "@/pages/marketplace-ifood"; // desativado: cliente não usa iFood — reativar descomentando aqui e a rota
 import { GestaoHubPage } from "@/pages/gestao";
 import { TreinamentoPage } from "@/pages/treinamento";
 import { TransportadorasPage } from "@/pages/transportadoras";
@@ -99,7 +99,7 @@ export default function App() {
         <Route path="pdv" element={<PDVPage />} />
         <Route path="notas-fiscais" element={<NotasFiscaisPage />} />
         <Route path="pedidos-delivery" element={<PedidosDeliveryPage />} />
-        <Route path="ifood" element={<IFoodPage />} />
+        {/* <Route path="ifood" element={<IFoodPage />} /> — desativado: cliente não usa iFood; reativar descomentando aqui, o import e o item do menu */}
         <Route path="exapp-pedidos" element={<ExAppPedidosPage />} />
         {/* <Route path="gerador-boletos" element={<GeradorBoletosPage />} /> // desativado: sem provedor contratado — reativar quando houver */}
 
@@ -210,7 +210,7 @@ export default function App() {
         <Route path="faturamento" element={<FaturamentoPage />} />
 
         {/* ===== VENDAS PELA INTERNET ===== */}
-        <Route path="marketplace-ifood" element={<MarketplaceIFoodPage />} />
+        {/* <Route path="marketplace-ifood" element={<MarketplaceIFoodPage />} /> — desativado junto com iFood (esta rota só redirecionava para /ifood) */}
 
         {/* ===== CONFIGURAÇÕES ===== */}
         <Route path="config/sistema" element={<ConfigSistemaPage />} />

@@ -44,6 +44,8 @@ export interface User {
   nome: string;
   role: Role;
   ativo: boolean;
+  /** Dono do sistema: só ele vê página desativada e troca o conjunto de telas. */
+  admin_principal?: boolean;
 }
 
 export const roleLabels: Record<Role, string> = {
@@ -145,7 +147,7 @@ export async function login(
     // O id do erp_usuarios == auth.users.id (FK direta)
     const { data: perfil, error: perfilError } = await supabase
       .from("erp_usuarios")
-      .select("id, email, nome, role, ativo")
+      .select("id, email, nome, role, ativo, admin_principal")
       .eq("id", data.user.id)
       .single();
 
@@ -165,6 +167,7 @@ export async function login(
       nome: perfil.nome,
       role: perfil.role,
       ativo: perfil.ativo,
+      admin_principal: !!(perfil as any).admin_principal,
     };
     useAuthStore.getState().setUser(user);
     return { ok: true, user };

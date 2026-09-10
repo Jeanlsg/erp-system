@@ -3,8 +3,7 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ShieldOff, Settings, ArrowLeft, EyeOff } from "lucide-react";
-import { useFeatureFlags } from "@/lib/supabase-queries";
-import { useAuth } from "@/lib/store/auth-store";
+import { useFeatureFlags, useAdminPrincipal } from "@/lib/supabase-queries";
 import { date } from "@/lib/format";
 
 interface Props {
@@ -22,11 +21,13 @@ interface Props {
  */
 export function FeatureGuard({ path, children }: Props) {
   const { data: flags = [], isLoading } = useFeatureFlags();
-  const { user } = useAuth();
-  const isAdmin = user?.role === "admin";
+  const { data: ehPrincipal = false, isLoading: carregandoDono } = useAdminPrincipal();
+  // Página desligada some para TODOS os cargos — inclusive outros admins.
+  // Só o dono do sistema continua enxergando, em modo preview.
+  const isAdmin = ehPrincipal;
 
   // Enquanto carrega, permite acesso (fail-open)
-  if (isLoading) return <>{children}</>;
+  if (isLoading || carregandoDono) return <>{children}</>;
 
   const flag = flags.find((f) => f.path === path);
 
@@ -52,7 +53,7 @@ export function FeatureGuard({ path, children }: Props) {
               Página desativada — Modo Admin
             </p>
             <p className="text-xs text-yellow-800 dark:text-yellow-300">
-              Esta página está desativada para todos os usuários. Você (admin) está vendo em modo preview.
+              Esta página está desativada para todos os usuários. Você (administrador principal) está vendo em modo preview.
               {flag.motivo_desativacao && <span> Motivo: <em>{flag.motivo_desativacao}</em></span>}
               {flag.desativado_em && <span> · Em {date(flag.desativado_em)}</span>}
             </p>

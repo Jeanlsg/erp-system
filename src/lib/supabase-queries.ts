@@ -3568,6 +3568,91 @@ export function useUpdateOcorrencia() {
 // ========================================
 
 /** Busca todas as feature flags (cache global compartilhado por toda a UI). */
+/**
+ * Admin principal — o dono do sistema. Só ele enxerga página desativada e
+ * altera o conjunto de telas. Vem do banco a cada sessão em vez do estado
+ * persistido do login: quem foi promovido (ou rebaixado) não fica com o
+ * poder antigo guardado no navegador.
+ */
+export function useAdminPrincipal() {
+  return useQuery<boolean>({
+    queryKey: ["erp_admin_principal"],
+    staleTime: 60_000,
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return false;
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth?.user) return false;
+      const { data, error } = await supabase
+        .from("erp_usuarios").select("admin_principal").eq("id", auth.user.id).maybeSingle();
+      if (error) return false;
+      return !!data?.admin_principal;
+    },
+  });
+}
+
+export interface FlagPreset {
+  id: string;
+  nome: string;
+  descricao: string | null;
+  paths_desativados: string[];
+  aplicado_em: string | null;
+  updated_at: string;
+}
+
+export function useFlagPresets(habilitado = true) {
+  return useQuery<FlagPreset[]>({
+    queryKey: ["erp_flag_presets"],
+    enabled: habilitado,
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      const { data, error } = await supabase
+        .from("erp_flag_presets").select("*").order("nome");
+      if (error) throw error;
+      return (data ?? []) as FlagPreset[];
+    },
+  });
+}
+
+export function useSalvarPreset() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ nome, descricao }: { nome: string; descricao?: string }) => {
+      const { data, error } = await supabase.rpc("salvar_preset_flags", {
+        p_nome: nome, p_descricao: descricao ?? null,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["erp_flag_presets"] }),
+  });
+}
+
+export function useAplicarPreset() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase.rpc("aplicar_preset_flags", { p_preset_id: id });
+      if (error) throw error;
+      return data as { preset: string; desativadas: number; reativadas: number; ativas_agora: number };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["erp_feature_flags"] });
+      qc.invalidateQueries({ queryKey: ["erp_flag_presets"] });
+    },
+  });
+}
+
+export function useExcluirPreset() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("erp_flag_presets").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["erp_flag_presets"] }),
+  });
+}
+
 export function useFeatureFlags() {
   return useQuery<FeatureFlag[]>({
     queryKey: ['erp_feature_flags'],
