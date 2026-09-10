@@ -14,8 +14,13 @@ export function RelatoriosPage() {
 
   if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="Relatórios" />;
 
-  const receita = vendas.filter((v: any) => v.status === "finalizada").reduce((s: number, v: any) => s + Number(v.total), 0);
-  const ticketMedio = vendas.length > 0 ? receita / vendas.length : 0;
+  // Receita, contagem e ticket médio saem do MESMO conjunto: só vendas
+  // finalizadas. Antes a receita era das finalizadas mas o ticket dividia
+  // pelo total (com devolvidas e canceladas), então o indicador ficava
+  // sistematicamente abaixo do real — e plausível demais para alguém notar.
+  const finalizadas = vendas.filter((v: any) => v.status === "finalizada");
+  const receita = finalizadas.reduce((s: number, v: any) => s + Number(v.total), 0);
+  const ticketMedio = finalizadas.length > 0 ? receita / finalizadas.length : 0;
   const totalVencido = contasVencidas.reduce((s: number, c: any) => s + Number(c.valor), 0);
 
   return (
@@ -44,7 +49,7 @@ export function RelatoriosPage() {
                 <p className="text-xs uppercase text-muted-foreground">Vendas</p>
                 <ShoppingCart className="h-4 w-4 text-red-600" />
               </div>
-              <p className="text-2xl font-semibold mt-2">{vendas.length}</p>
+              <p className="text-2xl font-semibold mt-2">{finalizadas.length}</p>
             </CardContent>
           </Card>
           <Card>
