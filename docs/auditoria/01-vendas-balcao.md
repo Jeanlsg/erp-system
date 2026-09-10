@@ -138,7 +138,35 @@ Procurei o mesmo padrão em todo o código: **54 embeds** sem FK explícita, cru
 ### Correções de método (auditoria)
 - O primeiro teste de Devoluções clicou no primeiro `<li>` da página, que era um item do **menu lateral**, e navegou para o Dashboard — daí o falso "0 itens". Refeito com o seletor do próprio combobox: **18 vendas listadas, venda #16 carrega 2 itens**, botão de registrar bloqueado até marcar algo. Nenhum defeito do sistema.
 
+### Execução real em homologação (2ª rodada)
+
+A SEFAZ das duas lojas está em **ambiente de homologação** (`ambiente=homologacao`, sem CSC): a nota emitida não tem valor fiscal. Com isso, as funções antes marcadas ⏭️ foram executadas de verdade, com dados de teste.
+
+| Fluxo | Resultado | Status |
+|---|---|---|
+| Abrir caixa (CAIXA 001, troco R$ 100) | pede confirmação "Deseja realmente abrir o Caixa #1 com valor inicial R$ 100,00" → caixa abre e a tela de venda libera | ✅ |
+| Catálogo no PDV | 20 produtos clicáveis; clique adiciona ao carrinho (Água Mineral 500ml → Total R$ 3,00) | ✅ |
+| Formas de pagamento | Dinheiro, PIX, Crédito, Débito, Crediário, Boleto | ✅ |
+| Finalizar venda | modal com Itens, Subtotal, Total, Recebido, Troco, **CPF na nota (opcional)** e **Emitir NFC-e** | ✅ |
+| Venda gravada | venda **#20** R$ 3,00 finalizada, com baixa de estoque no kardex | ✅ |
+| **Emitir NFC-e (SEFAZ homologação)** | **nota #3 série 1 AUTORIZADA — cStat 100, protocolo 329260000149953**, chave `2926095383322600030065001…` | ✅ |
+| Sangria R$ 20 (motivo obrigatório) | registrada e vinculada ao caixa | ✅ |
+| Entrada extra R$ 50 (valor, motivo, forma) | registrada e vinculada ao caixa | ✅ |
+| Fechar caixa | resumo aparece e o caixa fecha com valor contado R$ 133 | ⚠️ **ver BUG-01-05** |
+
+*Registros criados nesta auditoria (todos de teste, ambiente de homologação): vendas #20 e #21 de R$ 3,00, NFC-e #3 (sem valor fiscal), 1 sangria de R$ 20, 1 entrada extra de R$ 50, caixa #1 aberto e fechado.*
+
+- **[BUG-01-05] Fechamento de caixa não soma vendas, sangrias nem entradas** · Severidade: **alta**
+  Passos: abrir caixa com R$ 100 → vender R$ 6,00 (2 vendas) → sangria R$ 20 → entrada extra R$ 50 → Fechar Caixa.
+  Esperado: "Vendas R$ 6,00 · Sangrias −R$ 20,00 · Entradas +R$ 50,00 · **Valor esperado em gaveta R$ 136,00**".
+  Obtido: "Vendas **R$ 0,00** · Sangrias **−R$ 0,00** · Entradas **+R$ 0,00** · Valor esperado **R$ 100,00**" — só o saldo inicial.
+  Verificado no banco: os lançamentos existem e estão todos ligados ao caixa correto (`f272a416…`): 2 vendas (R$ 6,00), 1 sangria (R$ 20), 1 entrada (R$ 50). O caixa gravou `total_vendas = 0,00`.
+  Causa: a tela lê as colunas `total_vendas`, `total_sangrias`, `total_entradas_extras` e `valor_troco` de `erp_caixa` ([pdv.tsx:127](../../src/pages/pdv.tsx#L127)), mas **nada alimenta essas colunas** — não há gatilho em `erp_vendas`, `erp_sangrias` nem `erp_entradas_extras` que as atualize; a única função que as menciona (`fn_criar_fechamento_automatico`) apenas copia o valor já zerado.
+  Impacto: **todo fechamento acusa quebra de caixa do tamanho do movimento do dia.** O operador confere a gaveta contra um número errado — é o tipo de defeito que gera desconfiança sobre o caixa e some no meio da rotina.
+  Correção sugerida: calcular os totais na fonte, somando `erp_vendas`, `erp_sangrias` e `erp_entradas_extras` pelo `caixa_id` — de preferência numa função/view no banco, para valer também na venda offline e em qualquer outro caminho, em vez de depender de a tela lembrar de atualizar contadores.
+
 ### Resumo da sessão
-6 páginas auditadas | 27 funções verificadas (20 ✅, 7 ⏭️ não executadas em produção) | **3 problemas reais, todos corrigidos** (1 crítico, 2 altos) + 1 falso positivo descartado
+6 páginas auditadas | **36 funções verificadas** (29 ✅, 1 ⚠️) | **4 problemas reais**: 3 corrigidos (1 crítico, 2 altos) + **1 aberto de severidade alta (BUG-01-05)** + 1 falso positivo descartado
 Páginas novas descobertas: nenhuma.
-Não testado em produção (registrado para janela de homologação ou autorização): emitir NF-e, inutilizar numeração, gravar sangria/entrada extra, abrir e fechar caixa, cancelar venda, registrar devolução.
+Executado de verdade (SEFAZ em homologação): abrir/fechar caixa, venda completa, **emissão de NFC-e autorizada**, sangria e entrada extra.
+Ainda não executado: inutilizar numeração, cancelar nota autorizada, registrar devolução e envio de nota por e-mail/WhatsApp (este último tem efeito externo real, independente do ambiente fiscal).
