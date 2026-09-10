@@ -21,14 +21,7 @@ const ThumbsDown = (props: any) => (
     <path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H17v12l-3.34 7A2 2 0 0 1 11.84 22c-.55 0-1.07-.22-1.45-.62-.39-.39-.6-.93-.55-1.48L10.3 18.12Z" />
   </svg>
 );
-import {
-  useAvaliacoes, useRecomendacoes, useCreateParceria,
-  useNotificacoes, useMarcarNotificacaoLida,
-  useConfiguracoesSefaz, useUpsertConfiguracaoSefaz,
-  useConfiguracoesGerais, useUpsertConfiguracao,
-  useOcorrencias, useCreateOcorrencia, useUpdateOcorrencia,
-  isSupabaseConfigured,
-} from "@/lib/supabase-queries";
+import { useAvaliacoes, useRecomendacoes, useCreateParceria, useNotificacoes, useMarcarNotificacaoLida, useConfiguracoesSefaz, useUpsertConfiguracaoSefaz, useConfiguracoesGerais, useUpsertConfiguracao, useOcorrencias, useCreateOcorrencia, useUpdateOcorrencia, isSupabaseConfigured, useLojas } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { useAuth } from "@/lib/store/auth-store";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
@@ -503,22 +496,46 @@ export function ConfiguracoesGeraisPage() {
 // ====================================================================
 export function ConfiguracoesSefazPage() {
   const { lojaId } = useAutoSelectLoja();
-  const { data: dados } = useConfiguracoesSefaz(lojaId ?? undefined);
+  const { data: dados, isLoading: carregandoSefaz, isSuccess } = useConfiguracoesSefaz(lojaId ?? undefined);
+  const { data: lojas = [] } = useLojas();
   const upsert = useUpsertConfiguracaoSefaz();
 
   const [form, setForm] = useState<any>(null);
 
   if (dados && !form) setForm(dados);
-  if (!dados && !form && lojaId) {
-    setForm({ loja_id: lojaId, ambiente: "homologacao", uf: "SP", serie_nfe: 1, serie_nfce: 1, numeracao_atual_nfe: 1, numeracao_atual_nfce: 1, timezone: "America/Sao_Paulo", timeout_segundos: 30 });
+  // O formulário padrão só entra quando a consulta TERMINOU e não existe
+  // configuração. Antes bastava `dados` estar indefinido — o que inclui o
+  // intervalo de carregamento — e salvar nesse instante criava uma segunda
+  // configuração para a loja, com UF "SP" fixa. Duas linhas quebram a
+  // leitura das edge functions fiscais e derrubam a emissão de nota.
+  if (isSuccess && !dados && !form && lojaId) {
+    const loja = lojas.find((l: any) => l.id === lojaId);
+    setForm({
+      loja_id: lojaId, ambiente: "homologacao",
+      uf: loja?.uf ?? "",          // a UF é da loja, não um padrão de outro estado
+      serie_nfe: 1, serie_nfce: 1, numeracao_atual_nfe: 1, numeracao_atual_nfce: 1,
+      timezone: "America/Sao_Paulo", timeout_segundos: 30,
+    });
   }
 
   if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="Configurações SEFAZ" />;
 
   const handleSalvar = async () => {
-    if (!form) return;
-    await upsert.mutateAsync(form);
-    toast.success("Configurações SEFAZ salvas.");
+    if (!form || carregandoSefaz) return;
+    if (!form.uf || form.uf.length !== 2) {
+      toast.error("Informe a UF da loja (2 letras) antes de salvar.");
+      return;
+    }
+    try {
+      await upsert.mutateAsync(form);
+      toast.success("Configurações SEFAZ salvas.");
+    } catch (e: any) {
+      toast.error(
+        /duplicate key|unique/i.test(e?.message ?? "")
+          ? "Esta loja já tem uma configuração SEFAZ — recarregue a página para editá-la."
+          : `Não foi possível salvar: ${e?.message ?? e}`,
+      );
+    }
   };
 
   return (
@@ -555,8 +572,9 @@ export function ConfiguracoesSefazPage() {
               <div><Label>CSC ID</Label><Input value={form.csc_id ?? ""} onChange={(e) => setForm({ ...form, csc_id: e.target.value })} /></div>
               <div><Label>CSC Token</Label><Input type="password" value={form.csc_token ?? ""} onChange={(e) => setForm({ ...form, csc_token: e.target.value })} /></div>
             </div>
-            <Button onClick={handleSalvar} disabled={upsert.isPending}>
-              {upsert.isPending ? "Salvando..." : "Salvar"}
+            <Button onClick={handleSalvar} disabled={upsert.isPending || carregandoSefaz || !form}
+              title={carregandoSefaz ? "Aguarde carregar a configuração da loja" : undefined}>
+              {carregandoSefaz ? "Carregando..." : upsert.isPending ? "Salvando..." : "Salvar"}
             </Button>
           </CardContent>
         </Card>
