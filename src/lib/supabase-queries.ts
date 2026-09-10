@@ -433,7 +433,7 @@ export function useVendas(filters?: { lojaId?: string; status?: string; dataInic
 
       const { data, error } = await query;
       if (error) throw error;
-      return (data ?? []) as any;
+      return (data ?? []).map(comTotaisReais) as any;
     },
   });
 }
@@ -1089,7 +1089,7 @@ export function useCaixas(lojaId?: string) {
     queryFn: async () => {
       if (!isSupabaseConfigured()) return [];
       let query = supabase
-        .from('erp_caixa')
+        .from('vw_caixa_resumo')
         .select(`
           *,
           loja:erp_lojas(id, nome, apelido),
@@ -1105,13 +1105,31 @@ export function useCaixas(lojaId?: string) {
   });
 }
 
+/**
+ * A view vw_caixa_resumo soma o movimento real do caixa (vendas, sangrias,
+ * entradas) — as colunas total_* da tabela nunca foram alimentadas e ficavam
+ * em zero, o que fazia o fechamento pedir só o saldo inicial de volta.
+ * Aqui os totais reais entram no lugar dos nomes que as telas já usam.
+ */
+function comTotaisReais(c: any) {
+  if (!c) return c;
+  return {
+    ...c,
+    total_vendas: Number(c.total_vendas_real ?? c.total_vendas ?? 0),
+    total_sangrias: Number(c.total_sangrias_real ?? c.total_sangrias ?? 0),
+    total_entradas_extras: Number(c.total_entradas_extras_real ?? c.total_entradas_extras ?? 0),
+    valor_troco: Number(c.valor_troco_real ?? c.valor_troco ?? 0),
+    valor_esperado_gaveta: Number(c.valor_esperado_gaveta ?? 0),
+  };
+}
+
 export function useCaixaAberto(usuarioId?: string) {
   return useQuery<Caixa | null>({
     queryKey: ['erp_caixa-aberto', usuarioId],
     queryFn: async () => {
       if (!isSupabaseConfigured() || !usuarioId) return null;
       const { data, error } = await supabase
-        .from('erp_caixa')
+        .from('vw_caixa_resumo')
         .select('*')
         .eq('usuario_id', usuarioId)
         .eq('status', 'aberto')
@@ -1119,7 +1137,7 @@ export function useCaixaAberto(usuarioId?: string) {
         .order('data_abertura', { ascending: false })
         .maybeSingle();
       if (error) throw error;
-      return data as any;
+      return comTotaisReais(data) as any;
     },
     enabled: !!usuarioId,
   });
@@ -1131,7 +1149,7 @@ export function useCaixaPorId(caixaId?: string) {
     queryFn: async () => {
       if (!isSupabaseConfigured() || !caixaId) return null;
       const { data, error } = await supabase
-        .from('erp_caixa')
+        .from('vw_caixa_resumo')
         .select(`
           *,
           loja:erp_lojas(*),
@@ -1140,7 +1158,7 @@ export function useCaixaPorId(caixaId?: string) {
         .eq('id', caixaId)
         .single();
       if (error) throw error;
-      return data as any;
+      return comTotaisReais(data) as any;
     },
     enabled: !!caixaId,
   });
