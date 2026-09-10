@@ -2157,7 +2157,13 @@ export function useCreateEntradaExtra() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_entradas-extras'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_entradas-extras'] });
+      // O caixa também muda: sem isto o "Valor Esperado em Gaveta" ficava
+      // sem a entrada até recarregar a página (useCreateSangria já fazia).
+      qc.invalidateQueries({ queryKey: ['erp_caixa'] });
+      qc.invalidateQueries({ queryKey: ['erp_caixa-aberto'] });
+    },
   });
 }
 
