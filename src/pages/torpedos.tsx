@@ -4,6 +4,7 @@ import { MessageSquare, Loader2 } from "lucide-react";
 import { useTorpedos, isSupabaseConfigured } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
+import { AvisoProvedor } from "@/components/aviso-provedor";
 import { brl } from "@/lib/format";
 
 export function TorpedosPage() {
@@ -20,6 +21,19 @@ export function TorpedosPage() {
         </h1>
         <p className="text-sm text-muted-foreground mt-1">{torpedos.length} campanha(s)</p>
       </div>
+      <AvisoProvedor
+        requisito="Envio de SMS depende de uma operadora de disparo contratada (gateway), que cobra por mensagem enviada. O sistema não tem como entregar SMS por conta própria."
+        comoAtivar={[
+          "Contrate um gateway de SMS e obtenha as credenciais de envio.",
+          "Passe as credenciais a quem cuida do sistema para cadastrar a integração.",
+        ]}
+        alternativas={[
+          { rotulo: "E-mail Marketing", rota: "/email-marketing" },
+          { rotulo: "Cartão Fidelidade", rota: "/cartao-fidelidade" },
+        ]}
+        observacao="Para falar com o cliente sem custo por mensagem, o WhatsApp da loja já está conectado e envia a nota fiscal automaticamente."
+      />
+
 
       <Card>
         <CardHeader><CardTitle>Campanhas SMS</CardTitle></CardHeader>

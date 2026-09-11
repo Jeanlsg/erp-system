@@ -4,6 +4,7 @@ import { Mail, Loader2 } from "lucide-react";
 import { useMalaDireta, isSupabaseConfigured } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
+import { AvisoProvedor } from "@/components/aviso-provedor";
 import { brl, date } from "@/lib/format";
 
 export function MalaDiretaPage() {
@@ -20,6 +21,16 @@ export function MalaDiretaPage() {
         </h1>
         <p className="text-sm text-muted-foreground mt-1">{campanhas.length} campanha(s)</p>
       </div>
+      <AvisoProvedor
+        requisito="Esta tela guarda campanhas impressas (etiqueta, carta, panfleto), que dependem de gráfica ou dos Correios. O envio por e-mail, esse sim, já funciona no sistema."
+        comoAtivar={[
+          "Para campanha impressa: exporte a lista de clientes e leve à gráfica ou aos Correios.",
+          "Para campanha por e-mail: use E-mail Marketing, que dispara pelo provedor já configurado.",
+        ]}
+        alternativas={[{ rotulo: "E-mail Marketing", rota: "/email-marketing" }]}
+        observacao="O envio de e-mail usa o Resend, cujo plano gratuito cobre cerca de 3.000 mensagens por mês (100 por dia) — suficiente para a base atual da loja."
+      />
+
 
       <Card>
         <CardHeader><CardTitle>Campanhas</CardTitle></CardHeader>

@@ -222,10 +222,10 @@ const sections: NavSection[] = [
           { title: "Crediário Próprio", url: "/crediario-proprio", icon: CreditCard },
           { title: "Crediário (com juros)", url: "/gestao/gerar-crediario", icon: CreditCard },
           { title: "Promissórias", url: "/promissoria", icon: ScrollText },
-          { title: "Recebimento Cheque", url: "/gestao/recebimento-cheque", icon: ScrollText },
-          { title: "Dinheiro", url: "/gestao/dinheiro", icon: DollarSign },
-          { title: "Cartão de Débito", url: "/gestao/cartao-debito", icon: CreditCard },
-          { title: "Cartão de Crédito", url: "/gestao/cartao-credito", icon: CreditCard },
+      // { title: "Recebimento Cheque", url: "/gestao/recebimento-cheque", icon: ScrollText }, // desativado: o mesmo dado já aparece em Relatórios Financeiros › aba Formas
+      // { title: "Dinheiro", url: "/gestao/dinheiro", icon: DollarSign }, // desativado: o mesmo dado já aparece em Relatórios Financeiros › aba Formas
+      // { title: "Cartão de Débito", url: "/gestao/cartao-debito", icon: CreditCard }, // desativado: o mesmo dado já aparece em Relatórios Financeiros › aba Formas
+      // { title: "Cartão de Crédito", url: "/gestao/cartao-credito", icon: CreditCard }, // desativado: o mesmo dado já aparece em Relatórios Financeiros › aba Formas
         ],
       },
       {

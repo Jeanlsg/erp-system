@@ -4,6 +4,7 @@ import { Barcode, Loader2 } from "lucide-react";
 import { useBoletos, isSupabaseConfigured } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
+import { AvisoProvedor } from "@/components/aviso-provedor";
 import { brl, date } from "@/lib/format";
 
 export function GeradorBoletosPage() {
@@ -19,12 +20,20 @@ export function GeradorBoletosPage() {
           <Barcode className="h-6 w-6" /> Gerador de Boletos
         </h1>
         <p className="text-sm text-muted-foreground mt-1">{boletos.length} boleto(s) emitido(s)</p>
-        <p className="text-xs text-muted-foreground mt-2 rounded-md border border-dashed px-3 py-2 max-w-2xl">
-          A emissão de boletos registrados exige convênio bancário (contrato com o banco + API de cobrança).
-          Enquanto o convênio não é contratado, use <b>Promissórias</b> ou o <b>Crediário Próprio</b> para
-          formalizar cobranças a prazo.
-        </p>
       </div>
+
+      <AvisoProvedor
+        requisito="Boleto registrado só existe com convênio bancário: é o banco que gera a linha digitável, registra o título e avisa quando o cliente paga. Sem esse contrato, nenhum boleto emitido aqui seria pagável."
+        comoAtivar={[
+          "Peça ao seu banco um convênio de cobrança registrada (carteira, agência/conta e código do cedente).",
+          "Contrate o acesso à API de cobrança do banco — é ela que registra o título e devolve o retorno.",
+          "Envie os dados a quem cuida do sistema para cadastrar a integração.",
+        ]}
+        alternativas={[
+          { rotulo: "Promissórias", rota: "/promissoria" },
+          { rotulo: "Crediário Próprio", rota: "/crediario-proprio" },
+        ]}
+      />
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Card><CardContent className="p-4"><p className="text-xs uppercase text-muted-foreground">Emitidos</p><p className="text-2xl font-semibold">{boletos.filter((b: any) => b.status === "emitido").length}</p></CardContent></Card>

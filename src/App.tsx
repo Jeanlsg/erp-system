@@ -66,10 +66,7 @@ import { ServicosPage } from "@/pages/servicos";
 import { NotFoundPage } from "@/pages/not-found";
 
 // ===== Novas páginas do MAPA_GESTAO_EMPRESARIAL.md =====
-import {
-  ConsultaChequePage, RecebimentoChequePage,
-  NegativarDevedoresPage, ParcelarDebitosPage, EncaminharProtestoPage,
-} from "@/pages/gestao-cobranca";
+import { ConsultaChequePage, NegativarDevedoresPage, ParcelarDebitosPage, EncaminharProtestoPage } from "@/pages/gestao-cobranca";
 
 import {
   AvaliacoesPage, RecomendacoesPage, NotificacoesPage,
@@ -78,13 +75,7 @@ import {
 } from "@/pages/gestao-config";
 import { NfeCertificadoPage } from "@/pages/nfe-certificado";
 
-import {
-  ConsultaPessoaFisicaPage, ConsultaPessoaJuridicaPage, DadosEmpresariaisPage,
-  CodigoBarrasPage, CartaoCreditoPage, CartaoDebitoPage, DinheiroPage,
-  LocalizarPessoasPage, ExclusaoInformacoesPage, DocumentosDemonstrativosPage,
-  PastaPrincipalPage, CadastroProdutosPage, GerarCrediarioPage,
-  PainelContadorPage, EmpresarialPage,
-} from "@/pages/gesta-final";
+import { ConsultaPessoaFisicaPage, ConsultaPessoaJuridicaPage, DadosEmpresariaisPage, CodigoBarrasPage, LocalizarPessoasPage, ExclusaoInformacoesPage, DocumentosDemonstrativosPage, PastaPrincipalPage, CadastroProdutosPage, GerarCrediarioPage, PainelContadorPage, EmpresarialPage } from "@/pages/gesta-final";
 
 export default function App() {
   return (
@@ -167,12 +158,13 @@ export default function App() {
 
         {/* Cheques */}
         <Route path="gestao/consulta-cheque" element={<ConsultaChequePage />} />
-        <Route path="gestao/recebimento-cheque" element={<RecebimentoChequePage />} />
+        {/* <Route path="gestao/recebimento-cheque" element={<RecebimentoChequePage />} /> — desativado: era apelido da mesma tela de Consulta de Cheques */}
 
         {/* Financeiro Avançado */}
-        <Route path="gestao/cartao-credito" element={<CartaoCreditoPage />} />
-        <Route path="gestao/cartao-debito" element={<CartaoDebitoPage />} />
-        <Route path="gestao/dinheiro" element={<DinheiroPage />} />
+        {/* <Route path="gestao/cartao-credito" element={<CartaoCreditoPage />} /> — desativado: o mesmo dado já aparece em Relatórios Financeiros › aba Formas */}
+        {/* <Route path="gestao/cartao-debito" element={<CartaoDebitoPage />} /> — desativado: o mesmo dado já aparece em Relatórios Financeiros › aba Formas */}
+        // removidos do menu: DinheiroPage, CartaoCreditoPage e CartaoDebitoPage repetiam Relatórios Financeiros › Formas; RecebimentoChequePage era apelido de ConsultaChequePage
+        {/* <Route path="gestao/dinheiro" element={<DinheiroPage />} /> — desativado: o mesmo dado já aparece em Relatórios Financeiros › aba Formas */}
 
         {/* Documentos / Código de Barras / Downloads */}
         <Route path="gestao/codigo-barras" element={<CodigoBarrasPage />} />
