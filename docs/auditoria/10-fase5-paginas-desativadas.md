@@ -81,6 +81,18 @@ Não é possível testar: falta o serviço, não o código. Em vez de mostrarem 
   Por que passou despercebido: as duas tabelas estão **vazias** (0 registros) e as telas, desligadas — ninguém chegou a usar.
   Correção sugerida: remover o filtro por loja nos dois hooks e ordenar `erp_transportadoras` por um campo existente (ou trazer o nome via `pessoa_id`).
 
+### [BUG-F5-01] — CORRIGIDO e verificado
+Migration 068 alinhou o banco à intenção das telas (faixa de CEP, bairros, valor mínimo, frete por peso; `pessoa_id` opcional) e os hooks pararam de filtrar por loja. Testado em produção: **Transportadora 0→1** e **Região 0→1**, cadastrando e listando, sem erros de rede.
+
+### [BUG-F5-02] Campos de dinheiro multiplicavam o valor por 100 · Severidade: **crítica** · CORRIGIDO
+Descoberto por acaso, ao digitar uma vírgula no teste da tela de Regiões.
+Passos: em qualquer campo de valor, digitar `149,90` — o formato natural no Brasil.
+Esperado: R$ 149,90. Obtido: o campo mostrava **`014990`** e o sistema gravava **R$ 14.990,00**.
+Causa: `input[type="number"]` descarta a vírgula; os dígitos restantes concatenam com o `0` inicial do campo. **Nenhum erro é exibido** — e o número resultante parece plausível, então passa despercebido.
+Alcance: **27 campos em 13 telas** — preço de venda e custo do produto, salário, juros, taxa de entrega, frete, seguro, caução, limite de crédito e o valor contado em gaveta no fechamento de caixa.
+Risco concreto: numa migração de produtos digitados à mão, a loja inteira sairia com preços cem vezes maiores; no fechamento, a conferência de caixa acusaria diferença absurda.
+Correção: componente `InputMoeda` (texto com teclado decimal) aceita vírgula e ponto, trata ponto como milhar quando há vírgula, recusa letra e devolve número ao formulário. Verificado ponta a ponta: digitado `149,90` → gravado `149.90`.
+
 ### Observações menores
 - **Solicitação de Parceria**: "Enviar Solicitação" nasce desabilitado. Verificado: é validação — ao preencher empresa e contato, **habilita**. Correto, apenas sem dica explicando.
 - **Agenda de Compromissos**: "Adicionar" desabilitado sem dica, mesmo padrão.
