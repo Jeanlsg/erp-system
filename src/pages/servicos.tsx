@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { InputMoeda } from "@/components/ui/input-moeda";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Wrench, Plus, Loader2, Pencil, Trash2 } from "lucide-react";
@@ -110,7 +111,7 @@ export function ServicosPage() {
             <div><Label>Nome *</Label><Input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} /></div>
             <div><Label>Descrição</Label><Input value={form.descricao} onChange={(e) => setForm({ ...form, descricao: e.target.value })} /></div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Valor (R$) *</Label><Input type="number" step="0.01" value={form.valor} onChange={(e) => setForm({ ...form, valor: e.target.value })} /></div>
+              <div><Label>Valor (R$) *</Label><InputMoeda value={form.valor} onChange={(v) => setForm({ ...form, valor: String(v) })} /></div>
               <div><Label>Comissão (%)</Label><Input type="number" step="0.1" value={form.comissao_percentual} onChange={(e) => setForm({ ...form, comissao_percentual: e.target.value })} /></div>
             </div>
           </div>

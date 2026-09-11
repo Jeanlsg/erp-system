@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { InputMoeda } from "@/components/ui/input-moeda";
 import { Label } from "@/components/ui/label";
 import { Truck, Plus, Loader2, Trash2 } from "lucide-react";
 import { useRegioesEntrega, useCreateRegiao, useDeleteRegiao, isSupabaseConfigured } from "@/lib/supabase-queries";
@@ -112,7 +113,7 @@ export function RegioesEntregaPage() {
             </div>
             <div><Label>Bairros (separados por vírgula)</Label><Input value={form.bairros} onChange={(e) => setForm({ ...form, bairros: e.target.value })} /></div>
             <div className="grid grid-cols-3 gap-3">
-              <div><Label>Taxa (R$)</Label><Input type="number" step="0.01" value={form.taxa} onChange={(e) => setForm({ ...form, taxa: e.target.value })} /></div>
+              <div><Label>Taxa (R$)</Label><InputMoeda value={form.taxa} onChange={(v) => setForm({ ...form, taxa: String(v) })} /></div>
               <div><Label>Pedido Mínimo</Label><Input type="number" step="0.01" value={form.valor_minimo} onChange={(e) => setForm({ ...form, valor_minimo: e.target.value })} /></div>
               <div><Label>Prazo (dias)</Label><Input type="number" value={form.prazo_dias} onChange={(e) => setForm({ ...form, prazo_dias: e.target.value })} /></div>
             </div>

@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { InputMoeda } from "@/components/ui/input-moeda";
 import { Label } from "@/components/ui/label";
 import { ComboboxBusca } from "@/components/ui/combobox-busca";
 import {
@@ -165,7 +166,7 @@ export function ConsultaChequePage() {
               <div><Label>Conta</Label><Input value={form.conta} onChange={(e) => setForm({ ...form, conta: e.target.value })} /></div>
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <div><Label>Valor *</Label><Input type="number" step="0.01" value={form.valor} onChange={(e) => setForm({ ...form, valor: e.target.value })} /></div>
+              <div><Label>Valor *</Label><InputMoeda value={form.valor} onChange={(v) => setForm({ ...form, valor: String(v) })} /></div>
               <div><Label>Emissão</Label><Input type="date" value={form.data_emissao} onChange={(e) => setForm({ ...form, data_emissao: e.target.value })} /></div>
               <div><Label>Vencimento</Label><Input type="date" value={form.data_vencimento} onChange={(e) => setForm({ ...form, data_vencimento: e.target.value })} /></div>
             </div>
@@ -318,7 +319,7 @@ export function NegativarDevedoresPage() {
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Valor Total</Label><Input type="number" step="0.01" value={form.valor_total} onChange={(e) => setForm({ ...form, valor_total: e.target.value })} /></div>
+              <div><Label>Valor Total</Label><InputMoeda value={form.valor_total} onChange={(v) => setForm({ ...form, valor_total: String(v) })} /></div>
               <div><Label>Data</Label><Input type="date" value={form.data_negativacao} onChange={(e) => setForm({ ...form, data_negativacao: e.target.value })} /></div>
             </div>
             <div><Label>Motivo</Label><Input value={form.motivo} onChange={(e) => setForm({ ...form, motivo: e.target.value })} placeholder="Ex: Inadimplência há 90+ dias" /></div>
@@ -465,10 +466,10 @@ export function ParcelarDebitosPage() {
             <div className="grid grid-cols-3 gap-3">
               <div><Label>Dívida Original</Label><Input type="number" step="0.01" value={form.divida_original} onChange={(e) => setForm({ ...form, divida_original: e.target.value })} /></div>
               <div><Label>Entrada</Label><Input type="number" step="0.01" value={form.valor_entrada} onChange={(e) => setForm({ ...form, valor_entrada: e.target.value })} /></div>
-              <div><Label>Valor Total c/ Juros</Label><Input type="number" step="0.01" value={form.valor_total} onChange={(e) => setForm({ ...form, valor_total: e.target.value })} /></div>
+              <div><Label>Valor Total c/ Juros</Label><InputMoeda value={form.valor_total} onChange={(v) => setForm({ ...form, valor_total: String(v) })} /></div>
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <div><Label>Juros Mensal %</Label><Input type="number" step="0.01" value={form.juros_mensal} onChange={(e) => setForm({ ...form, juros_mensal: e.target.value })} /></div>
+              <div><Label>Juros Mensal %</Label><InputMoeda value={form.juros_mensal} onChange={(v) => setForm({ ...form, juros_mensal: String(v) })} /></div>
               <div><Label>Nº Parcelas</Label><Input type="number" value={form.numero_parcelas} onChange={(e) => setForm({ ...form, numero_parcelas: e.target.value })} /></div>
               <div><Label>1ª Parcela</Label><Input type="date" value={form.data_primeira_parcela} onChange={(e) => setForm({ ...form, data_primeira_parcela: e.target.value })} /></div>
             </div>
@@ -606,14 +607,14 @@ export function EncaminharProtestoPage() {
                   <option value="nota">Nota</option>
                 </select>
               </div>
-              <div><Label>Valor *</Label><Input type="number" step="0.01" value={form.valor} onChange={(e) => setForm({ ...form, valor: e.target.value })} /></div>
+              <div><Label>Valor *</Label><InputMoeda value={form.valor} onChange={(v) => setForm({ ...form, valor: String(v) })} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Cartório</Label><Input value={form.cartorio} onChange={(e) => setForm({ ...form, cartorio: e.target.value })} /></div>
               <div><Label>Nº Protocolo</Label><Input value={form.numero_protocolo} onChange={(e) => setForm({ ...form, numero_protocolo: e.target.value })} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Custo Protesto</Label><Input type="number" step="0.01" value={form.custo_protesto} onChange={(e) => setForm({ ...form, custo_protesto: e.target.value })} /></div>
+              <div><Label>Custo Protesto</Label><InputMoeda value={form.custo_protesto} onChange={(v) => setForm({ ...form, custo_protesto: String(v) })} /></div>
               <div><Label>Data</Label><Input type="date" value={form.data_protesto} onChange={(e) => setForm({ ...form, data_protesto: e.target.value })} /></div>
             </div>
           </div>

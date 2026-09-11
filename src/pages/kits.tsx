@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { InputMoeda } from "@/components/ui/input-moeda";
 import { Label } from "@/components/ui/label";
 import { Package, Plus, Loader2, Pencil, Trash2, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
@@ -123,7 +124,7 @@ export function KitsPage() {
           <div className="space-y-3">
             <div><Label>Nome *</Label><Input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} /></div>
             <div><Label>Descrição</Label><Input value={form.descricao} onChange={(e) => setForm({ ...form, descricao: e.target.value })} /></div>
-            <div><Label>Preço do Kit (R$) *</Label><Input type="number" step="0.01" value={form.preco_kit} onChange={(e) => setForm({ ...form, preco_kit: e.target.value })} /></div>
+            <div><Label>Preço do Kit (R$) *</Label><InputMoeda value={form.preco_kit} onChange={(v) => setForm({ ...form, preco_kit: String(v) })} /></div>
 
             <div className="border rounded-md p-3 space-y-2">
               <Label>Produtos do kit</Label>

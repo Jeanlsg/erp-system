@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { InputMoeda } from "@/components/ui/input-moeda";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -1036,7 +1037,7 @@ export function PDVPage() {
           <div className="space-y-3 py-4">
             <div>
               <Label>Valor</Label>
-              <Input type="number" step="0.01" value={sangriaValor} onChange={(e) => setSangriaValor(e.target.value)} />
+              <InputMoeda value={sangriaValor} onChange={(v) => setSangriaValor(String(v))} />
             </div>
             <div>
               <Label>Motivo</Label>
@@ -1061,7 +1062,7 @@ export function PDVPage() {
           <div className="space-y-3 py-4">
             <div>
               <Label>Valor</Label>
-              <Input type="number" step="0.01" value={entradaValor} onChange={(e) => setEntradaValor(e.target.value)} />
+              <InputMoeda value={entradaValor} onChange={(v) => setEntradaValor(String(v))} />
             </div>
             <div>
               <Label>Motivo</Label>

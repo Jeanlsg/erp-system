@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { InputMoeda } from "@/components/ui/input-moeda";
 import { Label } from "@/components/ui/label";
 import { Package as PackageIcon, User, Building2, Search, Loader2, Plus, Printer, Barcode, CreditCard,
   DollarSign, Edit, Trash2, Shield,
@@ -182,7 +183,7 @@ export function ConsultaPessoaFisicaPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Profissão</Label><Input value={form.profissao} onChange={(e) => setForm({ ...form, profissao: e.target.value })} /></div>
-              <div><Label>Limite de Crédito</Label><Input type="number" step="0.01" value={form.limite_credito} onChange={(e) => setForm({ ...form, limite_credito: e.target.value })} /></div>
+              <div><Label>Limite de Crédito</Label><InputMoeda value={form.limite_credito} onChange={(v) => setForm({ ...form, limite_credito: String(v) })} /></div>
             </div>
           </div>
           <DialogFooter>
@@ -317,7 +318,7 @@ export function ConsultaPessoaJuridicaPage() {
             <div className="grid grid-cols-3 gap-3">
               <div><Label>Telefone</Label><Input value={form.telefone} onChange={(e) => setForm({ ...form, telefone: e.target.value })} /></div>
               <div><Label>Celular</Label><Input value={form.celular} onChange={(e) => setForm({ ...form, celular: e.target.value })} /></div>
-              <div><Label>Limite Crédito</Label><Input type="number" step="0.01" value={form.limite_credito} onChange={(e) => setForm({ ...form, limite_credito: e.target.value })} /></div>
+              <div><Label>Limite Crédito</Label><InputMoeda value={form.limite_credito} onChange={(v) => setForm({ ...form, limite_credito: String(v) })} /></div>
             </div>
           </div>
           <DialogFooter>
@@ -969,7 +970,7 @@ export function CadastroProdutosPage() {
               <div><Label>Nome *</Label><Input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} /></div>
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <div><Label>Custo</Label><Input type="number" step="0.01" value={form.preco_custo} onChange={(e) => setForm({ ...form, preco_custo: e.target.value })} /></div>
+              <div><Label>Custo</Label><InputMoeda value={form.preco_custo} onChange={(v) => setForm({ ...form, preco_custo: String(v) })} /></div>
               <div><Label>Venda</Label><Input type="number" step="0.01" value={form.preco_venda} onChange={(e) => setForm({ ...form, preco_venda: e.target.value })} /></div>
               <div><Label>Estoque Mín.</Label><Input type="number" value={form.estoque_minimo} onChange={(e) => setForm({ ...form, estoque_minimo: e.target.value })} /></div>
             </div>

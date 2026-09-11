@@ -19,6 +19,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { InputMoeda } from "@/components/ui/input-moeda";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -385,8 +386,8 @@ export function CrediarioProprioPage() {
               </div>
               <div>
                 <Label className="text-xs">Juros ao mês (%)</Label>
-                <Input type="number" step="0.01" min={0} value={juros}
-                  onChange={(e) => setJuros(e.target.value)} />
+                <InputMoeda value={juros}
+                  onChange={(v) => setJuros(String(v))} />
               </div>
               <div>
                 <Label className="text-xs">Tipo de juros</Label>

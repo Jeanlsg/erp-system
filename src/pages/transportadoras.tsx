@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { InputMoeda } from "@/components/ui/input-moeda";
 import { Label } from "@/components/ui/label";
 import { Truck, Plus, Search, Loader2, Trash2 } from "lucide-react";
 import { useTransportadoras, useCreateTransportadora, useDeleteTransportadora, isSupabaseConfigured } from "@/lib/supabase-queries";
@@ -114,8 +115,8 @@ export function TransportadorasPage() {
             <div><Label>CNPJ</Label><Input value={form.cnpj} onChange={(e) => setForm({ ...form, cnpj: e.target.value })} placeholder="00.000.000/0000-00" /></div>
             <div className="grid grid-cols-3 gap-3">
               <div><Label>Prazo (dias)</Label><Input type="number" value={form.prazo_entrega_dias} onChange={(e) => setForm({ ...form, prazo_entrega_dias: e.target.value })} /></div>
-              <div><Label>Valor Fixo</Label><Input type="number" step="0.01" value={form.valor_fixo} onChange={(e) => setForm({ ...form, valor_fixo: e.target.value })} /></div>
-              <div><Label>R$/Kg</Label><Input type="number" step="0.01" value={form.valor_kg} onChange={(e) => setForm({ ...form, valor_kg: e.target.value })} /></div>
+              <div><Label>Valor Fixo</Label><InputMoeda value={form.valor_fixo} onChange={(v) => setForm({ ...form, valor_fixo: String(v) })} /></div>
+              <div><Label>R$/Kg</Label><InputMoeda value={form.valor_kg} onChange={(v) => setForm({ ...form, valor_kg: String(v) })} /></div>
             </div>
           </div>
           <DialogFooter>

@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { InputMoeda } from "@/components/ui/input-moeda";
 import { Label } from "@/components/ui/label";
 import {
   Send, Plus, Loader2, ArrowRight, FileText, CheckCircle2,
@@ -511,20 +512,16 @@ export function RemessasPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Valor Frete</Label>
-                <Input
-                  type="number"
-                  step="0.01"
+                <InputMoeda
                   value={form.valor_frete}
-                  onChange={(e) => setForm({ ...form, valor_frete: e.target.value })}
+                  onChange={(v) => setForm({ ...form, valor_frete: String(v) })}
                 />
               </div>
               <div>
                 <Label>Valor Seguro</Label>
-                <Input
-                  type="number"
-                  step="0.01"
+                <InputMoeda
                   value={form.valor_seguro}
-                  onChange={(e) => setForm({ ...form, valor_seguro: e.target.value })}
+                  onChange={(v) => setForm({ ...form, valor_seguro: String(v) })}
                 />
               </div>
             </div>

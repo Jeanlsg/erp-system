@@ -18,6 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { InputMoeda } from "@/components/ui/input-moeda";
 import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -732,20 +733,16 @@ export function ProdutosEstoqueLotesPage() {
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <Label>Valor Custo</Label>
-                <Input
-                  type="number"
-                  step="0.01"
+                <InputMoeda
                   value={formProduto.preco_custo}
-                  onChange={(e) => setFormProduto({ ...formProduto, preco_custo: e.target.value })}
+                  onChange={(v) => setFormProduto({ ...formProduto, preco_custo: String(v) })}
                 />
               </div>
               <div>
                 <Label>Valor Venda</Label>
-                <Input
-                  type="number"
-                  step="0.01"
+                <InputMoeda
                   value={formProduto.preco_venda}
-                  onChange={(e) => setFormProduto({ ...formProduto, preco_venda: e.target.value })}
+                  onChange={(v) => setFormProduto({ ...formProduto, preco_venda: String(v) })}
                 />
               </div>
               <div>

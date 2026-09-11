@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { InputMoeda } from "@/components/ui/input-moeda";
 import { Label } from "@/components/ui/label";
 import { Building2, Plus, Search, Loader2, UserCheck, UserX, Mail, Phone } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -222,7 +223,7 @@ export function FuncionariosPage() {
               <div><Label>Telefone</Label><Input value={form.telefone} onChange={(e) => setForm({ ...form, telefone: e.target.value })} /></div>
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <div><Label>Salário</Label><Input type="number" step="0.01" value={form.salario} onChange={(e) => setForm({ ...form, salario: e.target.value })} /></div>
+              <div><Label>Salário</Label><InputMoeda value={form.salario} onChange={(v) => setForm({ ...form, salario: String(v) })} /></div>
               <div><Label>Comissão %</Label><Input type="number" step="0.01" value={form.comissao} onChange={(e) => setForm({ ...form, comissao: e.target.value })} /></div>
               <div>
                 <Label>Usuário do sistema</Label>

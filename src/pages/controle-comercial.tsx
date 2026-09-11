@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { InputMoeda } from "@/components/ui/input-moeda";
 import { Label } from "@/components/ui/label";
 import { ComboboxBusca } from "@/components/ui/combobox-busca";
 import { Badge } from "@/components/ui/badge";
@@ -371,8 +372,8 @@ export function OrdemServicoPage() {
             </div>
             <div><Label>Defeito relatado</Label><Input value={form.defeito} onChange={(e) => setForm({ ...form, defeito: e.target.value })} /></div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Valor serviços (R$)</Label><Input type="number" step="0.01" value={form.valor_servicos} onChange={(e) => setForm({ ...form, valor_servicos: e.target.value })} /></div>
-              <div><Label>Valor peças (R$)</Label><Input type="number" step="0.01" value={form.valor_pecas} onChange={(e) => setForm({ ...form, valor_pecas: e.target.value })} /></div>
+              <div><Label>Valor serviços (R$)</Label><InputMoeda value={form.valor_servicos} onChange={(v) => setForm({ ...form, valor_servicos: String(v) })} /></div>
+              <div><Label>Valor peças (R$)</Label><InputMoeda value={form.valor_pecas} onChange={(v) => setForm({ ...form, valor_pecas: String(v) })} /></div>
             </div>
           </div>
           <DialogFooter>
@@ -590,8 +591,8 @@ export function LocacaoPage() {
               <div><Label>Devolução prevista</Label><Input type="date" value={form.data_fim} onChange={(e) => setForm({ ...form, data_fim: e.target.value })} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Valor do período (R$) *</Label><Input type="number" step="0.01" value={form.valor} onChange={(e) => setForm({ ...form, valor: e.target.value })} /></div>
-              <div><Label>Caução (R$)</Label><Input type="number" step="0.01" value={form.caucao} onChange={(e) => setForm({ ...form, caucao: e.target.value })} /></div>
+              <div><Label>Valor do período (R$) *</Label><InputMoeda value={form.valor} onChange={(v) => setForm({ ...form, valor: String(v) })} /></div>
+              <div><Label>Caução (R$)</Label><InputMoeda value={form.caucao} onChange={(v) => setForm({ ...form, caucao: String(v) })} /></div>
             </div>
           </div>
           <DialogFooter>

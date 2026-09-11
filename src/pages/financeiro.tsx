@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { InputMoeda } from "@/components/ui/input-moeda";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -680,7 +681,7 @@ export function FinanceiroPage() {
           <div className="space-y-3">
             <div><Label>Descrição *</Label><Input value={formConta.descricao} onChange={(e) => setFormConta({ ...formConta, descricao: e.target.value })} /></div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Valor *</Label><Input type="number" step="0.01" value={formConta.valor} onChange={(e) => setFormConta({ ...formConta, valor: e.target.value })} /></div>
+              <div><Label>Valor *</Label><InputMoeda value={formConta.valor} onChange={(v) => setFormConta({ ...formConta, valor: String(v) })} /></div>
               <div><Label>Vencimento *</Label><Input type="date" value={formConta.data_vencimento} onChange={(e) => setFormConta({ ...formConta, data_vencimento: e.target.value })} /></div>
             </div>
             <div><Label>Categoria</Label><Input value={formConta.categoria} onChange={(e) => setFormConta({ ...formConta, categoria: e.target.value })} placeholder="Ex: Fornecedor, Aluguel" /></div>
