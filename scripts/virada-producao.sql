@@ -17,9 +17,10 @@
 -- chaves PIX e contas bancárias.
 --
 -- O QUE APAGA: todo o movimento de teste (vendas, notas, contas,
--- caixa, estoque, compras, devoluções, crediário, fidelidade…) e
--- os cadastros de exemplo (produtos, categorias, kits, pessoas,
--- funcionários, serviços).
+-- caixa, estoque, compras, devoluções, crediário, fidelidade…), os
+-- cadastros de exemplo (produtos, categorias, kits, pessoas,
+-- funcionários, serviços) e a conta temporária da auditoria
+-- (demo.admin@, já desativada desde 10/09/2026).
 -- ============================================================
 
 BEGIN;
@@ -76,6 +77,28 @@ RESTART IDENTITY;
 -- em produção recomeça do 1
 UPDATE erp.erp_configuracoes_sefaz SET numeracao_atual_nfce = 1, numeracao_atual_nfe = 1;
 
+-- ---- conta temporária da auditoria ----
+-- Já está desativada (ativo=false + ban no GoTrue) desde 10/09/2026, mas foi
+-- mantida até aqui porque as vendas e comissões de teste apontavam para ela.
+-- O TRUNCATE acima apagou esses registros, então agora ela sai sem arrastar
+-- histórico nenhum. Idempotente: se já não existir, não faz nada.
+--
+-- Antes de apagar, solta as duas referências que NÃO são truncadas acima
+-- (feature flags e presets de páginas são preservados de propósito). As duas
+-- são ON DELETE NO ACTION: se sobrasse uma linha apontando para a conta, o
+-- DELETE abortaria a virada inteira. Hoje estão em zero — isto é garantia.
+UPDATE erp.erp_feature_flags SET desativado_por = NULL
+ WHERE desativado_por = (SELECT id FROM erp.erp_usuarios
+                          WHERE email = 'demo.admin@lojaxlife.com.br');
+UPDATE erp.erp_flag_presets SET criado_por = NULL
+ WHERE criado_por = (SELECT id FROM erp.erp_usuarios
+                      WHERE email = 'demo.admin@lojaxlife.com.br');
+
+DELETE FROM auth.users
+ WHERE email = 'demo.admin@lojaxlife.com.br';
+DELETE FROM erp.erp_usuarios
+ WHERE email = 'demo.admin@lojaxlife.com.br';
+
 -- retrato depois: tudo que era teste deve estar em zero
 SELECT 'DEPOIS vendas='||(SELECT count(*) FROM erp.erp_vendas)
   ||' produtos='||(SELECT count(*) FROM erp.erp_produtos)
@@ -86,6 +109,8 @@ SELECT 'DEPOIS vendas='||(SELECT count(*) FROM erp.erp_vendas)
 -- o que FICOU (conferência manual):
 SELECT 'mantidos: lojas='||(SELECT count(*) FROM erp.erp_lojas)
   ||' usuarios='||(SELECT count(*) FROM erp.erp_usuarios)
+  ||' (conta_auditoria_restante='||(SELECT count(*) FROM erp.erp_usuarios
+       WHERE email = 'demo.admin@lojaxlife.com.br')||', deve ser 0)'
   ||' certificados='||(SELECT count(*) FROM erp.erp_certificados_digitais)
   ||' config_sefaz='||(SELECT count(*) FROM erp.erp_configuracoes_sefaz)
   ||' integracoes='||(SELECT count(*) FROM public.integrations);

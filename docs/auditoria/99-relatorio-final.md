@@ -114,7 +114,7 @@ Também apaguei `dashboard-layout.tsx`: um layout de menu que nunca foi importad
 1. Modal de **editar produto** tem título "Cadastrar Produto" — sugere que vai duplicar
 2. Card **"produtos abaixo do mínimo"** conta também os que estão exatamente no mínimo; o texto poderia dizer "no mínimo ou abaixo"
 3. Botões desabilitados **sem dica** em alguns pontos — paginação (`UX-03-01`), pagar comissão (`BUG-04-02`), "Adicionar" da agenda. O padrão bom já existe no Caixa, que explica o bloqueio em texto
-4. **108 rotas para 83 telas**: os apelidos herdados do sistema antigo funcionam, mas dobram a superfície de manutenção
+4. **116 rotas para 81 telas**: os apelidos herdados do sistema antigo funcionam (e é o que faz `/pedidos` e `/produtos` continuarem abrindo), mas cada um é mais uma coisa a manter
 
 ## 9. Manutenção — como manter isto vivo
 
@@ -145,7 +145,7 @@ Também apaguei `dashboard-layout.tsx`: um layout de menu que nunca foi importad
 
 O arquivo de senha (`~/.config/erp-xlife/conta-temporaria.txt`, sempre fora do repositório) foi apagado — a credencial não serve mais para nada. Nenhuma senha aparece no repositório, apenas o endereço de e-mail nos documentos da auditoria.
 
-Não apaguei o usuário: os registros que ele criou (vendas, NFC-e de homologação, movimentos de caixa) apontam para ele, e apagá-lo arrastaria esse histórico. Ele sai junto com os dados de teste, no script da virada.
+Não apaguei o usuário: os registros que ele criou (vendas, NFC-e de homologação, movimentos de caixa) apontam para ele, e apagá-lo arrastaria esse histórico. Ele sai junto com os dados de teste: **acrescentei a remoção ao `scripts/virada-producao.sql`**, depois do TRUNCATE que apaga as vendas e comissões que apontavam para ele, e soltando antes as duas referências que o script preserva de propósito (feature flags e presets) — sem isso, um `DELETE` com FK pendente abortaria a virada inteira.
 
 ## 11. Pendências desta auditoria
 
