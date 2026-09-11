@@ -163,15 +163,17 @@ Estes itens o robô não conseguiu acionar por serem `<Select>` do Radix ou bot�
 
 ## Problemas encontrados
 
-- **[BUG-03-01]** Severidade: a classificar · `/produtos-estoque-lotes` — 25: falha ao clicar: locator.click: Timeout 6000ms exceeded.
+**Nenhum bug nesta sessão.** As 5 ocorrências que o robô registrou foram investigadas à mão: 4 eram limitação da ferramenta e 1 é uma observação de interface, não defeito.
 
-- **[BUG-03-02]** Severidade: a classificar · `/produtos-estoque-lotes` — Anterior: desabilitado (sem dica visível)
+| # | Onde | O que o robô relatou | O que era de fato |
+|---|---|---|---|
+| ROBO-03-01 | `/produtos-estoque-lotes` | timeout no seletor "25" | é um `<Select>` do Radix, que renderiza como `[role=combobox]` e não aceita clique comum. **Funciona**: a paginação mostra "1 a 25 de 40" |
+| ROBO-03-02 | `/produtos-estoque-lotes` | timeout em "Próxima" | mesmo motivo. À mão, leva a "26 a 40 de 40" e desabilita no fim — **correto** |
+| ROBO-03-03 | `/estoque/movimentacoes` | timeout no filtro "Todos" | `<Select>` do Radix. **Funciona** |
+| ROBO-03-04 | `/estoque/inventario` | timeout em "Contagem" | `<Select>` do Radix. Presente e responde |
+| **UX-03-01** | `/produtos-estoque-lotes` | "Anterior" desabilitado sem dica | **observação válida**: o botão está corretamente desabilitado na primeira página, mas não diz por quê. Severidade informativa — o padrão bom já existe no Caixa, que explica o bloqueio. Registrado para o relatório final, não corrigido |
 
-- **[BUG-03-03]** Severidade: a classificar · `/produtos-estoque-lotes` — Próxima: falha ao clicar: locator.click: Timeout 6000ms exceeded.
-
-- **[BUG-03-04]** Severidade: a classificar · `/estoque/movimentacoes` — Todos: falha ao clicar: locator.click: Timeout 6000ms exceeded.
-
-- **[BUG-03-05]** Severidade: a classificar · `/estoque/inventario` — Contagem: falha ao clicar: locator.click: Timeout 6000ms exceeded.
+**Erro de método que isto expôs:** eu não sabia que o `<Select>` do Radix se apresenta como `[role=combobox]`. Antes disso, cliquei no primeiro `<li>` da página — que era um item do **menu lateral** — e navegei para fora da tela, gerando um falso "0 itens".
 
 ### Resumo da sessão
 7 páginas | 27 funções verificadas (19 ✅, 3 ⏭️ não executadas em produção, 5 ⚠️, 0 ❌) | 5 problema(s)

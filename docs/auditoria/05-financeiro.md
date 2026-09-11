@@ -96,7 +96,7 @@ Console e rede: sem erros JS e sem respostas 4xx/5xx.
 | Relatórios Financeiros · 10 abas | Fluxo, Vendas, Gráficos, Formas, Taxas, Pagas, À Pagar, Recebidas, À Receber, NF — todas trocam pela URL | ✅ |
 | Relatórios Financeiros · 7 relatórios do rodapé | Sangrias, Entradas Extra, Extrato de Serviços, Fechamento de Caixa, Vendas Excluídas, Contas Excluídas, Entradas Canceladas — todos abrem com dados | ✅ |
 
-*Os 4 timeouts que o robô registrou na Análise Gerencial eram limitação dele (botões de troca de visão); testados à mão, todos respondem.*
+*Os 4 timeouts que o robô registrou na Análise Gerencial eram limitação dele (botões de troca de visão); testados à mão, todos respondem — ver "Limitações do robô" adiante.*
 
 ### Conferência dos números contra o banco (loja Juazeiro, a selecionada)
 
@@ -110,13 +110,23 @@ Console e rede: sem erros JS e sem respostas 4xx/5xx.
 
 ## Problemas encontrados
 
-- **[BUG-05-01]** Severidade: a classificar · `/relatorios/analise` — Curva ABC: falha ao clicar: locator.click: Timeout 6000ms exceeded.
+### [BUG-05-01] Ticket médio dividido por vendas que não entraram na receita · Severidade: **média** · CORRIGIDO
 
-- **[BUG-05-02]** Severidade: a classificar · `/relatorios/analise` — Sugestão de compra: falha ao clicar: locator.click: Timeout 6000ms exceeded.
+**O que estava errado.** A tela mostrava **R$ 121,12**; o banco dá **R$ 126,89**. A receita do numerador contava só as vendas **finalizadas** (R$ 2.664,70, 21 vendas), mas o denominador contava **todas** as vendas — incluindo a devolvida. Dividir receita de 21 vendas por 22 dá um ticket sempre menor que o real.
 
-- **[BUG-05-03]** Severidade: a classificar · `/relatorios/analise` — Estoque parado: falha ao clicar: locator.click: Timeout 6000ms exceeded.
+**Por que passa praticamente despercebido.** O número não é absurdo: é plausível, só errado. Ninguém conferiria R$ 121,12 contra R$ 126,89 sem ir ao banco — e é exatamente esse tipo de erro que envenena uma decisão de preço ou de meta.
 
-- **[BUG-05-04]** Severidade: a classificar · `/relatorios/analise` — DRE: falha ao clicar: locator.click: Timeout 6000ms exceeded.
+**Correção.** O denominador passou a contar **apenas vendas finalizadas**, o mesmo critério do numerador (decisão do cliente: "mostra só as finalizadas").
+
+**Verificação.** Tela e banco passaram a bater em **R$ 126,89**. O cartão "Vendas" continua mostrando 22 de propósito — ele conta vendas registradas, não faturadas.
+
+## Limitações do robô (não são defeitos do sistema)
+
+Os 4 timeouts que o robô registrou na Análise Gerencial eram limitação dele, não do sistema. Ficam com prefixo `ROBO-` para não se confundirem com bugs:
+
+| # | Onde | O que o robô relatou | O que era de fato |
+|---|---|---|---|
+| ROBO-05-01 a 04 | `/relatorios/analise` | timeout em "Curva ABC", "Sugestão de compra", "Estoque parado" e "DRE" | são botões de **troca de visão** dentro da mesma tela, com seletor ambíguo para o Playwright. Testados à mão, **todos respondem** e trazem dados (a DRE com 5 linhas) |
 
 ### Resumo da sessão
 3 páginas | 29 funções verificadas (25 ✅, 0 ⏭️ não executadas em produção, 4 ⚠️, 0 ❌) | 4 problema(s)

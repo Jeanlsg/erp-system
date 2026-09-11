@@ -39,8 +39,8 @@ Nenhuma página nova foi descoberta depois da Fase 1.
 | 01 | **crítica** | Tela de Vendas nunca listou nada | 34 vendas no banco, tela dizia "Nenhuma venda encontrada" |
 | 02 | alta | Caixa e "Caixas em Aberto" vazios | 3 caixas no banco, nada aparecia |
 | 03 | alta | Remessas com a mesma falha | idem |
-| 05 | alta | Fechamento de caixa não somava o movimento | esperado em gaveta = só o saldo inicial; **todo fechamento acusaria quebra** |
-| 06 | média | Entrada extra não atualizava o esperado | valor gravado, tela desatualizada |
+| 01-05 | alta | Fechamento de caixa não somava o movimento | esperado em gaveta = só o saldo inicial; **todo fechamento acusaria quebra** |
+| 01-06 | média | Entrada extra não atualizava o esperado | valor gravado, tela desatualizada |
 | 04-01 | alta | Cadastrar funcionário **sem CPF** sempre falhava | erro cru do Postgres em inglês; zero registros com o marcador provam que nunca funcionou |
 | 05-01 | média | Ticket médio com denominador errado | R$ 121,12 em vez de R$ 126,89 — subestimado, e "plausível" demais para alguém notar |
 | 06-01 | alta | Salvar Configurações SEFAZ **duplicava** a configuração | com 2 linhas, a emissão de nota da loja parava com "configuração ausente" |
@@ -48,7 +48,17 @@ Nenhuma página nova foi descoberta depois da Fase 1.
 | F5-01 | média | Transportadoras e Regiões nunca listavam nem cadastravam | filtro por coluna inexistente; telas desalinhadas do banco |
 | **F5-02** | **crítica** | **Campos de dinheiro multiplicavam o valor por 100** | digitar `149,90` gravava **R$ 14.990,00**, sem erro nenhum — 27 campos em 13 telas |
 
-**11 bugs reais, 2 deles críticos.** Mais 1 falso positivo descartado após investigação (botões de Sangria/Entrada Extra, que estavam corretamente desabilitados sem caixa aberto).
+**11 bugs reais, 2 deles críticos** — todos corrigidos, no ar e verificados contra o banco.
+
+Os IDs acima são os mesmos dos documentos de sessão, onde cada um tem causa, correção e verificação. Além deles, os documentos registram:
+
+| Prefixo | Quantos | O que é |
+|---|---|---|
+| `BUG-04` | 1 | **falso positivo meu**, descartado após investigar: os botões de Sangria/Entrada Extra estavam corretamente desabilitados por não haver caixa aberto |
+| `ROBO-` | 14 | **limitações da minha ferramenta de teste**, não do sistema: `<Select>` do Radix que não aceita clique comum, seletores ambíguos (dois botões "Baixar" na mesma tela) e toasts lidos depois de desaparecerem. Cada um foi refeito à mão e **todos respondem** |
+| `UX-` | 2 | observações de interface, não defeitos — botões desabilitados que não dizem por quê (seção 8) |
+
+Soma: **28 ocorrências levantadas, todas triadas** — 11 bugs reais, 14 limitações da ferramenta, 2 observações de interface e 1 falso positivo. Nada ficou "a classificar".
 
 ### O que esses bugs têm em comum
 Sete dos onze **falhavam em silêncio**: a tela mostrava "sem registros", um número plausível ou nada — nunca um erro. É o tipo de defeito que sobrevive a qualquer inspeção visual e só aparece quando alguém executa o fluxo e confere o resultado contra o banco. Foi o que esta auditoria fez.
@@ -97,11 +107,13 @@ Telas que dependem de serviço externo mostravam a lista vazia como se estivesse
 
 Também apaguei `dashboard-layout.tsx`: um layout de menu que nunca foi importado por ninguém e era o único lugar do código que ainda linkava `/pedidos`.
 
+*Como verifiquei:* typecheck e build de produção limpos, nenhuma referência restante às telas apagadas em todo o `src/`, e o servidor rodando o commit `6ad26cd` com o container saudável. O que **não** fiz foi abrir as duas URLs logado para ver a tela renderizar — a conta da auditoria já estava desativada neste ponto, e não usei credencial do cliente para isso.
+
 ## 8. Melhorias de UX sugeridas (não urgentes)
 
 1. Modal de **editar produto** tem título "Cadastrar Produto" — sugere que vai duplicar
 2. Card **"produtos abaixo do mínimo"** conta também os que estão exatamente no mínimo; o texto poderia dizer "no mínimo ou abaixo"
-3. Botões desabilitados **sem dica** em alguns pontos (paginação, "Adicionar" da agenda, pagar comissão) — o padrão bom já existe no Caixa, que explica o bloqueio
+3. Botões desabilitados **sem dica** em alguns pontos — paginação (`UX-03-01`), pagar comissão (`BUG-04-02`), "Adicionar" da agenda. O padrão bom já existe no Caixa, que explica o bloqueio em texto
 4. **108 rotas para 83 telas**: os apelidos herdados do sistema antigo funcionam, mas dobram a superfície de manutenção
 
 ## 9. Manutenção — como manter isto vivo

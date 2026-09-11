@@ -112,25 +112,37 @@ Console e rede: sem erros JS e sem respostas 4xx/5xx.
 | **SPED · Gerar EFD ICMS/IPI** | arquivo gerado: **57 linhas, 1.179 bytes**, 1 saída, 1 produto; toast "57 linhas geradas · 1 saída(s) e 0 entrada(s)"; avisos apontam dados de exemplo ainda no cadastro da loja | ✅ |
 | **Notas Recebidas · Buscar novas notas** | recusa com a explicação correta: *"distribuição DF-e só funciona em produção — o Ambiente Nacional não devolve documentos de homologação"* | ✅ (limitação, não defeito) |
 | Certificado Digital · Novo Certificado | abre o upload do A1 | ✅ |
-| Configurações SEFAZ · Salvar | grava e confirma — **mas ver BUG-06-01** | ⚠️ |
+| Configurações SEFAZ · Salvar | grava e confirma, **mas duplicava a configuração da loja** — ver [BUG-06-01](#bug-06-01-salvar-configurações-sefaz-duplicava-a-configuração-da-loja--severidade-alta--corrigido) | ❌ → corrigido |
 
 > **Para o cliente:** a busca de notas recebidas da SEFAZ **não pode ser testada antes da virada para produção** — é limitação do Ambiente Nacional, que não devolve documentos de homologação. Só será exercitável depois do CSC e da troca de ambiente.
 
 ## Problemas encontrados
 
-- **[BUG-06-01]** Severidade: a classificar · `/fiscal/notas-recebidas` — Buscar novas notas: falha ao clicar: locator.click: Timeout 6000ms exceeded.
+### [BUG-06-01] Salvar Configurações SEFAZ duplicava a configuração da loja · Severidade: **alta** · CORRIGIDO
 
-- **[BUG-06-02]** Severidade: a classificar · `/fiscal/notas-recebidas` — Baixar: falha ao clicar: locator.click: Timeout 6000ms exceeded.
+**Como apareceu.** Salvei a tela de Configurações SEFAZ para testar o botão. Ele confirmou ("Configurações SEFAZ salvas.") e, em vez de atualizar a linha existente, **inseriu uma segunda** para a mesma loja — com UF `SP`, o valor padrão do formulário, não o `PE` real.
 
-- **[BUG-06-03]** Severidade: a classificar · `/fiscal/escrituracao` — EFD ICMS/IPI: falha ao clicar: locator.click: Timeout 6000ms exceeded.
+**Por que é grave.** `erp_configuracoes_sefaz` não tinha restrição de unicidade por loja. Com duas linhas, a consulta que busca a configuração passa a devolver duas e a emissão de nota da loja para com "configuração ausente". Ou seja: **usar o botão Salvar era suficiente para derrubar a emissão fiscal da loja.**
 
-- **[BUG-06-04]** Severidade: a classificar · `/fiscal/escrituracao` — Original: falha ao clicar: locator.click: Timeout 6000ms exceeded.
+**Agravante honesto:** isto aconteceu em produção, disparado pelo meu próprio teste. Restaurei o estado na hora (apaguei a linha duplicada, UF de volta para `PE`) e confirmei que a distribuição DF-e voltou a responder antes de seguir.
 
-- **[BUG-06-05]** Severidade: a classificar · `/fiscal/escrituracao` — Gerar: falha ao clicar: locator.click: Timeout 6000ms exceeded.
+**Correção.** `supabase/migrations/067_config_sefaz_unica.sql`: deduplica o que existia e cria `UNIQUE (loja_id)`. A tela passou a atualizar em vez de inserir.
 
-- **[BUG-06-06]** Severidade: a classificar · `/fiscal/escrituracao` — Baixar: falha ao clicar: locator.click: Timeout 6000ms exceeded.
+**Verificação.** Salvei três vezes seguidas: continua **uma única linha** por loja, com a UF correta, e a emissão segue funcionando.
+
+## Limitações do robô (não são defeitos do sistema)
+
+O robô registrou 6 falhas de clique nesta sessão. Investigadas uma a uma, **nenhuma era defeito do sistema** — eram limitações da minha própria ferramenta. Ficam registradas com prefixo `ROBO-` para não se confundirem com bugs:
+
+| # | Onde | O que o robô relatou | O que era de fato |
+|---|---|---|---|
+| ROBO-06-01 | `/fiscal/notas-recebidas` | timeout em "Buscar novas notas" | o botão **responde**: recusa com a explicação correta de que DF-e só funciona em produção. O robô lia o toast 25s depois do clique, quando o Sonner já o havia removido |
+| ROBO-06-02 | `/fiscal/notas-recebidas` | timeout em "Baixar" | havia **dois** botões "Baixar" na página; o seletor era ambíguo e o Playwright recusou o clique. Não é indisponibilidade |
+| ROBO-06-03 a 06 | `/fiscal/escrituracao` | timeout em "EFD ICMS/IPI", "Original", "Gerar", "Baixar" | a mesma ambiguidade de seletor. Testado à mão, o fluxo **gera o arquivo**: 57 linhas, 1.179 bytes (ver "Fluxos fiscais executados" acima) |
+
+**Erro de método que isto expôs:** eu lia o resultado 25 segundos depois de clicar, mas o toast desaparece em ~5. Passei a acompanhar a tela desde o instante do clique — foi assim que as funções "sem resposta" se revelaram funcionando.
 
 ### Resumo da sessão
-5 páginas | 13 funções verificadas (6 ✅, 1 ⏭️ não executadas em produção, 6 ⚠️, 0 ❌) | 6 problema(s)
+5 páginas | 13 funções verificadas | **1 bug real** (alto, corrigido) + 6 limitações do robô, nenhuma defeito do sistema
 Páginas novas descobertas: nenhuma.
 
