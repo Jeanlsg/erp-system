@@ -9,7 +9,6 @@ import { SetupPage } from "@/pages/setup";
 import { EquipamentosPage } from "@/pages/equipamentos";
 import { TutoriaisPage } from "@/pages/tutoriais";
 import { ComissoesPage } from "@/pages/comissoes";
-import { OrdersPage } from "@/pages/orders";
 import { CustomersPage } from "@/pages/customers";
 import { VisaoGeralPage } from "@/pages/visao-geral";
 import { FinanceiroPage } from "@/pages/financeiro";
@@ -75,7 +74,7 @@ import {
 } from "@/pages/gestao-config";
 import { NfeCertificadoPage } from "@/pages/nfe-certificado";
 
-import { ConsultaPessoaFisicaPage, ConsultaPessoaJuridicaPage, DadosEmpresariaisPage, CodigoBarrasPage, LocalizarPessoasPage, ExclusaoInformacoesPage, DocumentosDemonstrativosPage, PastaPrincipalPage, CadastroProdutosPage, GerarCrediarioPage, PainelContadorPage, EmpresarialPage } from "@/pages/gesta-final";
+import { ConsultaPessoaFisicaPage, ConsultaPessoaJuridicaPage, DadosEmpresariaisPage, CodigoBarrasPage, LocalizarPessoasPage, ExclusaoInformacoesPage, DocumentosDemonstrativosPage, PastaPrincipalPage, GerarCrediarioPage, PainelContadorPage, EmpresarialPage } from "@/pages/gesta-final";
 
 export default function App() {
   return (
@@ -129,7 +128,6 @@ export default function App() {
         <Route path="gestao/fornecedores" element={<FornecedoresPage />} />
         <Route path="gestao/funcionarios" element={<FuncionariosPage />} />
         <Route path="gestao/comissoes" element={<ComissoesPage />} />
-        <Route path="gestao/cadastro-produtos" element={<CadastroProdutosPage />} />
         <Route path="gestao/servicos" element={<ServicosPage />} />
         <Route path="gestao/transportadoras" element={<TransportadorasPage />} />
         <Route path="gestao/agenda-telefonica" element={<AgendaTelefonicaPage />} />
@@ -217,7 +215,7 @@ export default function App() {
         {/* ===== ROTAS LEGADO (compatibilidade) ===== */}
         <Route path="visao-geral" element={<VisaoGeralPage />} />
         <Route path="caixa" element={<CaixaPage />} />
-        <Route path="pedidos" element={<OrdersPage />} />
+        <Route path="pedidos" element={<VendasPage />} />
         <Route path="vendas" element={<VendasPage />} />
         <Route path="devolucoes" element={<DevolucoesPage />} />
         <Route path="kits" element={<KitsPage />} />
@@ -225,6 +223,7 @@ export default function App() {
         <Route path="gestao/lotes" element={<ProdutosEstoqueLotesPage />} />
         <Route path="produtos" element={<ProdutosEstoqueLotesPage />} />
         <Route path="produtos-estoque-lotes" element={<ProdutosEstoqueLotesPage />} />
+        <Route path="gestao/cadastro-produtos" element={<ProdutosEstoqueLotesPage />} />
         <Route path="estoque" element={<ProdutosEstoqueLotesPage />} />
         <Route path="estoque/movimentacoes" element={<EstoqueMovimentacoesPage />} />
         <Route path="estoque/inventario" element={<InventarioPage />} />

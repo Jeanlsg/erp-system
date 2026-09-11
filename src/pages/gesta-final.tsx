@@ -10,14 +10,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { InputMoeda } from "@/components/ui/input-moeda";
 import { Label } from "@/components/ui/label";
-import { Package as PackageIcon, User, Building2, Search, Loader2, Plus, Printer, Barcode, CreditCard,
+import { User, Building2, Search, Loader2, Plus, Printer, Barcode, CreditCard,
   DollarSign, Edit, Trash2, Shield,
   Briefcase, FileText, BarChart3,
   Download, Upload, Database,
 } from "lucide-react";
 import {
   useClientes, useCreatePessoa, useUpdatePessoa, useDeletePessoa,
-  useProdutos, useCreateProduto, useUpdateProduto,
+  useProdutos,
   useVendas, useContas, useSangriasPorPeriodo, useEntradasExtrasPorPeriodo,
   isSupabaseConfigured,
 } from "@/lib/supabase-queries";
@@ -871,122 +871,6 @@ export function DocumentosDemonstrativosPage() {
 export function PastaPrincipalPage() {
   // Reaproveita Documentos
   return <DocumentosPage />;
-}
-
-// ====================================================================
-// CADASTRO DE PRODUTOS (CRUD dedicado)
-// ====================================================================
-export function CadastroProdutosPage() {
-  const { lojaId } = useAutoSelectLoja();
-  const { data: produtos = [], isLoading } = useProdutos({ lojaId: lojaId ?? undefined });
-  const create = useCreateProduto();
-  const update = useUpdateProduto();
-
-  const [modal, setModal] = useState(false);
-  const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm] = useState({ sku: "", nome: "", preco_custo: "0", preco_venda: "0", unidade: "UN", estoque_minimo: "0", marca: "", codigo_barras: "" });
-
-  if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="Cadastro de Produtos" />;
-
-  const abrirEdicao = (p: any) => {
-    setEditId(p.id);
-    setForm({ sku: p.sku, nome: p.nome, preco_custo: String(p.preco_custo ?? 0), preco_venda: String(p.preco_venda ?? 0), unidade: p.unidade ?? "UN", estoque_minimo: String(p.estoque_minimo ?? 0), marca: p.marca ?? "", codigo_barras: p.codigo_barras ?? "" });
-    setModal(true);
-  };
-
-  const handleSalvar = async () => {
-    if (!form.sku || !form.nome) return;
-    const payload = {
-      sku: form.sku, nome: form.nome,
-      preco_custo: parseFloat(form.preco_custo) || 0,
-      preco_venda: parseFloat(form.preco_venda) || 0,
-      unidade: form.unidade, estoque_minimo: parseInt(form.estoque_minimo) || 0,
-      marca: form.marca || null, codigo_barras: form.codigo_barras || null,
-    };
-    if (editId) await update.mutateAsync({ id: editId, ...payload });
-    else await create.mutateAsync(payload);
-    setModal(false);
-    setEditId(null);
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
-            <PackageIcon className="h-6 w-6" /> Cadastro de Produtos
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">{produtos.length} produto(s)</p>
-        </div>
-        <Button onClick={() => { setEditId(null); setForm({ sku: "", nome: "", preco_custo: "0", preco_venda: "0", unidade: "UN", estoque_minimo: "0", marca: "", codigo_barras: "" }); setModal(true); }}>
-          <Plus className="mr-2 h-4 w-4" /> Novo Produto
-        </Button>
-      </div>
-
-      <Card>
-        <CardContent className="p-0">
-          {isLoading ? <div className="p-8 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></div> : (
-            <table className="w-full">
-              <thead className="border-b text-xs text-muted-foreground">
-                <tr>
-                  <th className="text-left p-3">SKU</th>
-                  <th className="text-left p-3">Nome</th>
-                  <th className="text-left p-3">Marca</th>
-                  <th className="text-right p-3">Custo</th>
-                  <th className="text-right p-3">Venda</th>
-                  <th className="text-right p-3">Margem</th>
-                  <th className="text-center p-3">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {produtos.map((p) => {
-                  const margem = Number(p.preco_custo) > 0 ? ((Number(p.preco_venda) - Number(p.preco_custo)) / Number(p.preco_custo)) * 100 : 0;
-                  return (
-                    <tr key={p.id} className="border-b hover:bg-accent">
-                      <td className="p-3 font-mono text-xs">{p.sku}</td>
-                      <td className="p-3 font-medium">{p.nome}</td>
-                      <td className="p-3 text-sm">{p.marca ?? "—"}</td>
-                      <td className="p-3 text-right tabular-nums text-red-600">{brl(p.preco_custo)}</td>
-                      <td className="p-3 text-right tabular-nums text-green-600 font-semibold">{brl(p.preco_venda)}</td>
-                      <td className="p-3 text-right tabular-nums">{margem.toFixed(1)}%</td>
-                      <td className="p-3 text-center">
-                        <Button size="sm" variant="ghost" onClick={() => abrirEdicao(p)}><Edit className="h-3 w-3" /></Button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </CardContent>
-      </Card>
-
-      <Dialog open={modal} onOpenChange={setModal}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>{editId ? "Editar" : "Novo"} Produto</DialogTitle><DialogClose /></DialogHeader>
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>SKU *</Label><Input value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} /></div>
-              <div><Label>Nome *</Label><Input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} /></div>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div><Label>Custo</Label><InputMoeda value={form.preco_custo} onChange={(v) => setForm({ ...form, preco_custo: String(v) })} /></div>
-              <div><Label>Venda</Label><Input type="number" step="0.01" value={form.preco_venda} onChange={(e) => setForm({ ...form, preco_venda: e.target.value })} /></div>
-              <div><Label>Estoque Mín.</Label><Input type="number" value={form.estoque_minimo} onChange={(e) => setForm({ ...form, estoque_minimo: e.target.value })} /></div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Marca</Label><Input value={form.marca} onChange={(e) => setForm({ ...form, marca: e.target.value })} /></div>
-              <div><Label>Cód. Barras (EAN)</Label><Input value={form.codigo_barras} onChange={(e) => setForm({ ...form, codigo_barras: e.target.value })} /></div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setModal(false)}>Cancelar</Button>
-            <Button onClick={handleSalvar} disabled={create.isPending || !form.sku || !form.nome}>{create.isPending ? "Salvando..." : "Salvar"}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
 }
 
 // ====================================================================

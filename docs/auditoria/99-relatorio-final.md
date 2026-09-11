@@ -10,13 +10,19 @@ Documentos por sessão: [01 contagem](01-contagem-paginas.md) · [01 balcão](01
 
 | | Aprovado na Fase 1 | Ao final |
 |---|---|---|
-| Total de páginas | 89 | **83** |
+| Total de páginas | 89 | **81** |
 | Ativas (no menu) | 46 | **42** |
 | Atrás de flag | 37 | 38 |
 | Só no código (comentadas) | 5 | 9 |
-| Ocultas/órfãs | 2 | 2 (marcadas para remoção) |
+| Ocultas/órfãs | 2 | **0** |
 
-A diferença vem de decisões tomadas durante o trabalho, não de erro de contagem: **iFood** (2 telas) saiu a pedido do cliente; **Dinheiro, Cartão de Crédito, Cartão de Débito e Recebimento Cheque** (4) foram removidos por duplicarem *Relatórios Financeiros › Formas*. Nenhuma página nova foi descoberta depois da Fase 1.
+A diferença vem de decisões tomadas durante o trabalho, não de erro de contagem:
+
+- **iFood** (2 telas) saiu a pedido do cliente — código comentado, reativável
+- **Dinheiro, Cartão de Crédito, Cartão de Débito, Recebimento Cheque** (4) saíram por duplicarem *Relatórios Financeiros › Formas*
+- **As 2 órfãs foram removidas** (detalhe na seção 7)
+
+Nenhuma página nova foi descoberta depois da Fase 1.
 
 ## 2. Cobertura
 
@@ -81,11 +87,15 @@ Telas que dependem de serviço externo mostravam a lista vazia como se estivesse
 
 | Página | Recomendação |
 |---|---|
-| `/pedidos`, `/gestao/cadastro-produtos` | **Remover** — versões antigas substituídas por Ciclo de Pedidos e Cadastro e Estoque (aprovado, pendente de execução) |
+| `/pedidos`, `/gestao/cadastro-produtos` | **Removidas** ✔ — eram versões antigas das telas que já estão no menu. As duas URLs continuam abrindo, agora apontando para a tela atual (alias de compatibilidade, o mesmo padrão que `/produtos` e `/lotes` já usavam), então nenhum link antigo quebra |
 | Controle Comercial (Pedido, Orçamento, OS, Consignação, Locação) | **Manter desligadas, prontas** — auditadas e funcionando; ligar quando a loja precisar |
 | Cobrança (protesto, negativação, parcelamento) | **Manter desligadas** — fazem sentido só com inadimplência relevante |
 | Consulta PF/PJ | **Manter desligadas** — são cadastro, não consulta a birô de crédito; o nome sugere outra coisa |
 | Transportadoras, Regiões de Entrega | **Ligar quando houver entrega própria** — agora funcionam |
+
+**Correção a uma anotação da Fase 1:** lá eu registrei que `/pedidos` seria substituída por "Ciclo de Pedidos". Ao remover, conferi o código: `orders.tsx` lia exatamente a mesma fonte que a tela **Vendas** (`useVendas`) — era uma versão anterior *dela*, e é para `/vendas` que a URL passou a apontar. `/gestao/cadastro-produtos` aponta para **Cadastro e Estoque**, como previsto.
+
+Também apaguei `dashboard-layout.tsx`: um layout de menu que nunca foi importado por ninguém e era o único lugar do código que ainda linkava `/pedidos`.
 
 ## 8. Melhorias de UX sugeridas (não urgentes)
 
@@ -113,11 +123,23 @@ Telas que dependem de serviço externo mostravam a lista vazia como se estivesse
 
 `demo.admin@lojaxlife.com.br` — criada em 10/09/2026 10:37, papel admin (não principal), usada em toda a auditoria. Senha guardada fora do repositório.
 
-**Status: a desativar ao encerrar** (ver seção 11).
+**Status: DESATIVADA** ✔ — em 10/09/2026:
+
+| Camada | Ação | Verificação |
+|---|---|---|
+| Aplicação | `ativo = false` em `erp_usuarios` | login recusa com "Usuário desativado" |
+| Autenticação (GoTrue) | `banned_until = 2099-12-31` | a API responde `user_banned` **mesmo com a senha correta** |
+| Sessões | 75 sessões e 75 refresh tokens apagados | nenhuma sessão ativa resta |
+
+O arquivo de senha (`~/.config/erp-xlife/conta-temporaria.txt`, sempre fora do repositório) foi apagado — a credencial não serve mais para nada. Nenhuma senha aparece no repositório, apenas o endereço de e-mail nos documentos da auditoria.
+
+Não apaguei o usuário: os registros que ele criou (vendas, NFC-e de homologação, movimentos de caixa) apontam para ele, e apagá-lo arrastaria esse histórico. Ele sai junto com os dados de teste, no script da virada.
 
 ## 11. Pendências desta auditoria
 
-- [ ] **Desativar a conta temporária** — último passo, após a leitura deste relatório
-- [ ] Remover as 2 páginas órfãs (aprovado)
-- [ ] Dados de teste criados durante a auditoria (vendas #20–22, NFC-e #3 sem valor fiscal, sangrias, entradas, caixas, "Vendedor Auditoria" e sua comissão) — saem no script da virada, `scripts/virada-producao.sql`
+- [x] **Conta temporária desativada** — seção 10
+- [x] **2 páginas órfãs removidas** — seção 7
+- [ ] Dados de teste criados durante a auditoria (vendas #20–22, NFC-e #3 sem valor fiscal, sangrias, entradas, caixas, "Vendedor Auditoria" e sua comissão) — saem no script da virada, `scripts/virada-producao.sql`, junto com o usuário temporário
+
+Nada mais desta auditoria está em aberto. O que falta para o go-live não é código, é informação do cliente: CSC de produção, planilha de produtos, dados do contador para o SPED e a lista de funcionários.
 
