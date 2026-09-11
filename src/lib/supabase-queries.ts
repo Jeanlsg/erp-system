@@ -2232,8 +2232,10 @@ export function useRegioesEntrega(lojaId?: string) {
     queryKey: ['erp_regioes_entrega', lojaId],
     queryFn: async () => {
       if (!isSupabaseConfigured()) return [];
-      let query = supabase.from('erp_regioes_entrega').select('*').eq('ativo', true).order('nome');
-      if (lojaId) query = query.eq('loja_id', lojaId);
+      // Região de entrega é cadastro global: a tabela não tem loja_id, e
+      // filtrar por ele fazia o PostgREST rejeitar a consulta inteira (400)
+      // — a tela mostrava "sem registros" como se não houvesse cadastro.
+      const query = supabase.from('erp_regioes_entrega').select('*').eq('ativo', true).order('nome');
       const { data, error } = await query;
       if (error) throw error;
       return data ?? [];
@@ -2272,8 +2274,8 @@ export function useTransportadoras(lojaId?: string) {
     queryKey: ['erp_transportadoras', lojaId],
     queryFn: async () => {
       if (!isSupabaseConfigured()) return [];
-      let query = supabase.from('erp_transportadoras').select('*').eq('ativo', true).order('nome');
-      if (lojaId) query = query.eq('loja_id', lojaId);
+      // Mesma história das regiões: cadastro global, sem loja_id.
+      const query = supabase.from('erp_transportadoras').select('*').eq('ativo', true).order('nome');
       const { data, error } = await query;
       if (error) throw error;
       return data ?? [];

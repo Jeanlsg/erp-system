@@ -32,7 +32,7 @@ export function RegioesEntregaPage() {
   const handleCriar = async () => {
     if (!form.nome) return;
     await create.mutateAsync({
-      loja_id: lojaId ?? null,
+      // sem loja_id: região de entrega é cadastro global
       nome: form.nome,
       cep_inicio: form.cep_inicio || null,
       cep_fim: form.cep_fim || null,

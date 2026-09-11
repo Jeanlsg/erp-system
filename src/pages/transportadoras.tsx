@@ -37,7 +37,7 @@ export function TransportadorasPage() {
   const handleCriar = async () => {
     if (!form.nome) return;
     await create.mutateAsync({
-      loja_id: lojaId ?? null,
+      // sem loja_id: transportadora é cadastro global, atende todas as lojas
       nome: form.nome,
       cnpj: form.cnpj || null,
       prazo_entrega_dias: parseInt(form.prazo_entrega_dias) || null,
