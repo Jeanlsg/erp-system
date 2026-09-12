@@ -5,10 +5,12 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { Truck, Plus, Search, Phone, Mail, Loader2, Pencil, Trash2 } from "lucide-react";
+import { Truck, Plus, Search, Phone, Mail, Loader2, Pencil, Trash2, FileSpreadsheet } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { useFornecedores, useCreatePessoa, useUpdatePessoa, useDeletePessoa, isSupabaseConfigured } from "@/lib/supabase-queries";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
+import { ImportarPessoasDialog } from "@/components/importar-pessoas";
+import { toast } from "sonner";
 import type { Pessoa } from "@/types/database";
 
 const FORM_VAZIO = { tipo: "juridica" as "fisica" | "juridica", nome_razao: "", nome_fantasia: "", cpf_cnpj: "", email: "", telefone: "" };
@@ -23,6 +25,7 @@ export function FornecedoresPage() {
   const [modalAberto, setModalAberto] = useState(false);
   const [editando, setEditando] = useState<Pessoa | null>(null);
   const [form, setForm] = useState(FORM_VAZIO);
+  const [importando, setImportando] = useState(false);
 
   const abrirNovo = () => { setEditando(null); setForm(FORM_VAZIO); setModalAberto(true); };
   const abrirEdicao = (p: Pessoa) => {
@@ -36,9 +39,23 @@ export function FornecedoresPage() {
       tipo: form.tipo, nome_razao: form.nome_razao, nome_fantasia: form.nome_fantasia || null,
       cpf_cnpj: form.cpf_cnpj || null, email: form.email || null, telefone: form.telefone || null,
     };
-    if (editando) await update.mutateAsync({ id: editando.id, ...payload } as any);
-    else await create.mutateAsync({ ...payload, ativo: true } as any);
-    setModalAberto(false);
+    try {
+      if (editando) {
+        await update.mutateAsync({ id: editando.id, ...payload } as any);
+        toast.success("Fornecedor atualizado.");
+      } else {
+        // eh_cliente é false aqui de propósito: a coluna nasce true por
+        // padrão, e sem isto todo fornecedor apareceria também em Clientes —
+        // que era exatamente o defeito que as duas flags vieram corrigir.
+        await create.mutateAsync({
+          ...payload, ativo: true, eh_fornecedor: true, eh_cliente: false,
+        } as any);
+        toast.success("Fornecedor cadastrado.");
+      }
+      setModalAberto(false);
+    } catch (e: any) {
+      toast.error(`Não foi possível salvar: ${e.message ?? e}`);
+    }
   };
   const salvando = create.isPending || update.isPending;
 
@@ -76,9 +93,14 @@ export function FornecedoresPage() {
             {pessoas.length} fornecedor(es) cadastrado(s)
           </p>
         </div>
-        <Button onClick={abrirNovo}>
-          <Plus className="mr-2 h-4 w-4" /> Novo Fornecedor
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setImportando(true)}>
+            <FileSpreadsheet className="mr-2 h-4 w-4" /> Importar planilha
+          </Button>
+          <Button onClick={abrirNovo}>
+            <Plus className="mr-2 h-4 w-4" /> Novo Fornecedor
+          </Button>
+        </div>
       </div>
 
       <div className="flex items-center gap-2">
@@ -203,6 +225,7 @@ export function FornecedoresPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ImportarPessoasDialog open={importando} onOpenChange={setImportando} papel="fornecedor" />
     </div>
   );
 }

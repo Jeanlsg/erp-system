@@ -562,6 +562,7 @@ export function useClientesCompras() {
         .from("vw_clientes_compras")
         .select("*")
         .eq("ativo", true)
+        .eq("eh_cliente", true)
         .order("nome_razao");
       if (error) throw error;
       return (data ?? []) as ClienteCompras[];
@@ -585,6 +586,7 @@ export function useClientes() {
         .from("erp_pessoas")
         .select("*")
         .eq("ativo", true)
+        .eq("eh_cliente", true)
         .order("nome_razao");
       if (error) throw error;
       return data ?? [];
@@ -773,6 +775,7 @@ export function useFornecedores() {
         .from('erp_pessoas')
         .select('*')
         .eq('ativo', true)
+        .eq('eh_fornecedor', true)
         .order('nome_razao');
       if (error) throw error;
       return data ?? [];
@@ -2501,6 +2504,7 @@ export function useCreatePessoa() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['erp_clientes'] });
+      qc.invalidateQueries({ queryKey: ['erp_clientes_compras'] });
       qc.invalidateQueries({ queryKey: ['erp_fornecedores'] });
     },
   });

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Users, Plus, Search, Loader2, Pencil, Trash2 } from "lucide-react";
+import { Users, Plus, Search, Loader2, Pencil, Trash2, FileSpreadsheet } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,7 @@ import { useClientesCompras, useCreatePessoa, useUpdatePessoa, useDeletePessoa, 
 import { brl, date } from "@/lib/format";
 import { toast } from "sonner";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
+import { ImportarPessoasDialog } from "@/components/importar-pessoas";
 import type { Pessoa } from "@/types/database";
 
 const FORM_VAZIO = { tipo: "fisica" as "fisica" | "juridica", nome_razao: "", cpf_cnpj: "", email: "", telefone: "", celular: "" };
@@ -24,6 +25,7 @@ export function CustomersPage() {
   const [modalAberto, setModalAberto] = useState(false);
   const [editando, setEditando] = useState<Pessoa | null>(null);
   const [form, setForm] = useState(FORM_VAZIO);
+  const [importando, setImportando] = useState(false);
 
   if (!isSupabaseConfigured()) {
     return <SupabaseNotConfigured title="Clientes" />;
@@ -96,7 +98,9 @@ export function CustomersPage() {
         await update.mutateAsync({ id: editando.id, ...payload } as any);
         toast.success("Cliente atualizado.");
       } else {
-        await create.mutateAsync({ ...payload, ativo: true } as any);
+        // cadastrado nesta tela é cliente; o papel de fornecedor se ganha na
+        // tela de Fornecedores, e uma pessoa pode ser os dois
+        await create.mutateAsync({ ...payload, ativo: true, eh_cliente: true } as any);
         toast.success("Cliente cadastrado.");
       }
       setModalAberto(false);
@@ -118,9 +122,14 @@ export function CustomersPage() {
             {clientes.length} cliente(s) cadastrado(s)
           </p>
         </div>
-        <Button onClick={abrirNovo}>
-          <Plus className="mr-2 h-4 w-4" /> Novo Cliente
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setImportando(true)}>
+            <FileSpreadsheet className="mr-2 h-4 w-4" /> Importar planilha
+          </Button>
+          <Button onClick={abrirNovo}>
+            <Plus className="mr-2 h-4 w-4" /> Novo Cliente
+          </Button>
+        </div>
       </div>
 
       <div className="relative max-w-sm">
@@ -230,6 +239,7 @@ export function CustomersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ImportarPessoasDialog open={importando} onOpenChange={setImportando} papel="cliente" />
     </div>
   );
 }

@@ -21,11 +21,15 @@ import {
 } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
 import { brl } from "@/lib/format";
+import {
+  parseCSV, parseNumeroBR, semAcento, baixarModeloCSV,
+  interpretarPlanilha, type LinhaImportacao,
+} from "@/lib/importar-csv";
 
 // ---------- parse ----------
-
-const semAcento = (s: string) =>
-  s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+// A maquinaria de CSV (separador, acento, número e data em formato
+// brasileiro) vive em @/lib/importar-csv, compartilhada com as
+// importações de pessoas e de contas: uma correção lá vale para as três.
 
 /** cabeçalho da planilha → campo do produto */
 const ALIASES: Record<string, string> = {
@@ -43,65 +47,12 @@ const ALIASES: Record<string, string> = {
   validade_dias: "duracao_dias", duracao_dias: "duracao_dias", "validade em dias": "duracao_dias",
 };
 
-function parseNumeroBR(v: string): number | null {
-  const s = v.trim().replace(/^R\$\s*/i, "");
-  if (!s) return null;
-  // 1.234,56 → 1234.56 ; 12,5 → 12.5 ; 12.5 fica 12.5
-  const n = s.includes(",") ? Number(s.replace(/\./g, "").replace(",", ".")) : Number(s);
-  return Number.isFinite(n) ? n : null;
-}
-
-/** CSV com aspas, separador ; ou , detectado pelo cabeçalho */
-function parseCSV(texto: string): string[][] {
-  const limpo = texto.replace(/^\uFEFF/, "");
-  const primeira = limpo.split(/\r?\n/, 1)[0] ?? "";
-  const sep = (primeira.match(/;/g)?.length ?? 0) >= (primeira.match(/,/g)?.length ?? 0) ? ";" : ",";
-  const linhas: string[][] = [];
-  let campo = "", linha: string[] = [], aspas = false;
-  for (let i = 0; i < limpo.length; i++) {
-    const ch = limpo[i];
-    if (aspas) {
-      if (ch === '"') {
-        if (limpo[i + 1] === '"') { campo += '"'; i++; } else aspas = false;
-      } else campo += ch;
-    } else if (ch === '"') aspas = true;
-    else if (ch === sep) { linha.push(campo); campo = ""; }
-    else if (ch === "\n" || ch === "\r") {
-      if (ch === "\r" && limpo[i + 1] === "\n") i++;
-      linha.push(campo); campo = "";
-      if (linha.some((c) => c.trim() !== "")) linhas.push(linha);
-      linha = [];
-    } else campo += ch;
-  }
-  linha.push(campo);
-  if (linha.some((c) => c.trim() !== "")) linhas.push(linha);
-  return linhas;
-}
-
-interface LinhaImportacao {
-  linha: number;             // nº na planilha (para o relatório de erro)
-  dados: Record<string, string>;
-  erros: string[];
-}
-
-function interpretar(linhas: string[][]): { itens: LinhaImportacao[]; semNome: boolean } {
-  if (linhas.length < 2) return { itens: [], semNome: true };
-  const mapa = linhas[0].map((h) => ALIASES[semAcento(h)] ?? null);
-  if (!mapa.includes("nome")) return { itens: [], semNome: true };
-  const itens: LinhaImportacao[] = [];
-  for (let i = 1; i < linhas.length; i++) {
-    const dados: Record<string, string> = {};
-    linhas[i].forEach((c, j) => {
-      const campo = mapa[j];
-      if (campo && c.trim() !== "") dados[campo] = c.trim();
-    });
-    const erros: string[] = [];
-    if (!dados.nome) erros.push("sem nome");
-    const venda = parseNumeroBR(dados.preco_venda ?? "");
-    if (venda === null || venda <= 0) erros.push("preço de venda ausente ou inválido");
-    itens.push({ linha: i + 1, dados, erros });
-  }
-  return { itens, semNome: false };
+function validar(d: Record<string, string>): string[] {
+  const erros: string[] = [];
+  if (!d.nome) erros.push("sem nome");
+  const venda = parseNumeroBR(d.preco_venda ?? "");
+  if (venda === null || venda <= 0) erros.push("preço de venda ausente ou inválido");
+  return erros;
 }
 
 const MODELO_CSV =
@@ -136,20 +87,15 @@ export function ImportarProdutosDialog({ open, onOpenChange, lojas, lojaIdInicia
     setResultado(null);
     setNomeArquivo(arquivo.name);
     const texto = await arquivo.text();
-    const { itens: parsed, semNome } = interpretar(parseCSV(texto));
-    if (semNome) {
+    const { itens: parsed, planilhaInvalida } = interpretarPlanilha(
+      parseCSV(texto), ALIASES, "nome", validar,
+    );
+    if (planilhaInvalida) {
       toast.error("Planilha sem coluna de nome do produto — baixe o modelo para ver o formato.");
       setItens([]);
       return;
     }
     setItens(parsed);
-  };
-
-  const baixarModelo = () => {
-    const a = document.createElement("a");
-    a.href = "data:text/csv;charset=utf-8," + encodeURIComponent(MODELO_CSV);
-    a.download = "modelo-importacao-produtos.csv";
-    a.click();
   };
 
   const importar = async () => {
@@ -283,7 +229,7 @@ export function ImportarProdutosDialog({ open, onOpenChange, lojas, lojaIdInicia
             <Button variant="outline" onClick={() => inputRef.current?.click()}>
               <Upload className="mr-2 h-4 w-4" /> Escolher arquivo
             </Button>
-            <Button variant="ghost" onClick={baixarModelo}>
+            <Button variant="ghost" onClick={() => baixarModeloCSV(MODELO_CSV, "modelo-importacao-produtos.csv")}>
               <Download className="mr-2 h-4 w-4" /> Baixar modelo
             </Button>
           </div>

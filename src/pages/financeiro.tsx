@@ -11,18 +11,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Wallet, Plus, Download, Loader2, Calendar, BarChart3, ShoppingCart,
   FileText, DollarSign, Receipt, Banknote, ClipboardList,
-  TrendingUp, TrendingDown, Search,
+  TrendingUp, TrendingDown, Search, FileSpreadsheet,
 } from "lucide-react";
 import { brl, num, pct, date, dateTime } from "@/lib/format";
 import {
   useFluxoCaixaKpis, useFormasRecebimento, useTopProdutosVendidos,
   useTaxasCartao, useSangriasPorPeriodo, useEntradasExtrasPorPeriodo,
   useVendasPorPeriodo, useContas, useNotasFiscais, useVendas,
-  useCreateConta, isSupabaseConfigured,
+  useCreateConta, useLojas, isSupabaseConfigured,
 } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
+import { ImportarContasDialog } from "@/components/importar-contas";
 import { chart } from "@/lib/chart";
 import { supabase } from "@/lib/supabase";
 
@@ -30,6 +31,7 @@ type AbaAtiva = "fluxo" | "vendas" | "graficos" | "formas" | "taxas" | "pagas" |
 
 export function FinanceiroPage() {
   const { lojaId } = useAutoSelectLoja();
+  const { data: lojas = [] } = useLojas();
   const [searchParams, setSearchParams] = useSearchParams();
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -54,6 +56,9 @@ export function FinanceiroPage() {
   const primeiroDia = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
   const [dataInicio, setDataInicio] = useState(primeiroDia.toISOString().slice(0, 10));
   const [dataFim, setDataFim] = useState(hoje.toISOString().slice(0, 10));
+  // Importação do saldo em aberto vindo do sistema anterior. O tipo segue a
+  // aba: em "À Pagar" importa contas a pagar, em "À Receber" contas a receber.
+  const [importarContas, setImportarContas] = useState<"receber" | "pagar" | null>(null);
 
   // ── Relatórios dos botões de ação ──
   // Antes, sete destes botões só abriam um alert com o próprio nome. Cada um
@@ -262,6 +267,15 @@ export function FinanceiroPage() {
           </h1>
           <p className="text-sm text-muted-foreground mt-1">Fluxo de caixa e movimentações</p>
         </div>
+        {(aba === "apagar" || aba === "areceber") && (
+          <Button
+            variant="outline"
+            onClick={() => setImportarContas(aba === "apagar" ? "pagar" : "receber")}
+          >
+            <FileSpreadsheet className="mr-2 h-4 w-4" />
+            Importar {aba === "apagar" ? "contas a pagar" : "contas a receber"}
+          </Button>
+        )}
       </div>
 
       {/* FILTRO PERÍODO */}
@@ -795,6 +809,14 @@ export function FinanceiroPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <ImportarContasDialog
+        open={importarContas !== null}
+        onOpenChange={(v) => { if (!v) setImportarContas(null); }}
+        tipo={importarContas ?? "receber"}
+        lojas={lojas}
+        lojaIdInicial={lojaId}
+      />
     </div>
   );
 }
