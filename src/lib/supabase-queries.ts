@@ -613,6 +613,11 @@ export function useContas(filters?: {
   /** vários status de uma vez — "em aberto" é `pendente` E `vencido` */
   statusIn?: string[];
   lojaId?: string;
+  /** recorta por período. Sem isto os títulos "no Período" eram só enfeite. */
+  dataInicio?: string;
+  dataFim?: string;
+  /** qual data o período recorta: quando a conta venceu ou quando foi paga */
+  campoData?: "vencimento" | "pagamento";
 }) {
   return useQuery<Conta[]>({
     queryKey: ["erp_contas", filters],
@@ -631,6 +636,9 @@ export function useContas(filters?: {
       if (filters?.statusIn?.length) query = query.in("status", filters.statusIn);
       else if (filters?.status) query = query.eq("status", filters.status);
       if (filters?.lojaId) query = query.eq("loja_id", filters.lojaId);
+      const campo = filters?.campoData === "pagamento" ? "data_pagamento" : "data_vencimento";
+      if (filters?.dataInicio) query = query.gte(campo, filters.dataInicio);
+      if (filters?.dataFim) query = query.lte(campo, filters.dataFim);
 
       const { data, error } = await query;
       if (error) throw error;

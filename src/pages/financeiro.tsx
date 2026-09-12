@@ -1,8 +1,9 @@
 import { useState, useMemo } from "react";
+import { toast } from "sonner";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { InputMoeda } from "@/components/ui/input-moeda";
@@ -18,7 +19,7 @@ import {
   useFluxoCaixaKpis, useFormasRecebimento, useTopProdutosVendidos,
   useTaxasCartao, useSangriasPorPeriodo, useEntradasExtrasPorPeriodo,
   useVendasPorPeriodo, useContas, useNotasFiscais, useVendas,
-  useCreateConta, useLojas, isSupabaseConfigured,
+  useCreateConta, useBaixarConta, useLojas, isSupabaseConfigured,
 } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
@@ -39,6 +40,7 @@ type AbaAtiva = "fluxo" | "vendas" | "graficos" | "formas" | "taxas" | "pagas" |
 export function FinanceiroPage() {
   const { lojaId } = useAutoSelectLoja();
   const { data: lojas = [] } = useLojas();
+  const baixar = useBaixarConta();
   const [searchParams, setSearchParams] = useSearchParams();
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -167,11 +169,19 @@ export function FinanceiroPage() {
   const vendasPorDia = useVendasPorPeriodo(lojaId ?? undefined, dataInicio, dataFim);
 
   // Hooks para as abas de Contas
-  const { data: contasPagas = [] } = useContas({ lojaId: lojaId ?? undefined, tipo: "pagar", status: "pago" });
+  // "no Período" agora recorta de verdade, pela data do PAGAMENTO — antes o
+  // subtotal era de todo o histórico e não mudava ao trocar o filtro no topo.
+  const { data: contasPagas = [] } = useContas({
+    lojaId: lojaId ?? undefined, tipo: "pagar", status: "pago",
+    dataInicio, dataFim, campoData: "pagamento",
+  });
   // "em aberto" = pendente + vencido. Filtrar só por pendente escondia
   // exatamente as contas atrasadas, que são o motivo de abrir esta tela.
   const { data: contasAPagar = [] } = useContas({ lojaId: lojaId ?? undefined, tipo: "pagar", statusIn: ["pendente", "vencido"] });
-  const { data: contasRecebidas = [] } = useContas({ lojaId: lojaId ?? undefined, tipo: "receber", status: "pago" });
+  const { data: contasRecebidas = [] } = useContas({
+    lojaId: lojaId ?? undefined, tipo: "receber", status: "pago",
+    dataInicio, dataFim, campoData: "pagamento",
+  });
   const { data: contasAReceber = [] } = useContas({ lojaId: lojaId ?? undefined, tipo: "receber", statusIn: ["pendente", "vencido"] });
 
   // Aba Vendas
@@ -255,6 +265,60 @@ export function FinanceiroPage() {
   );
 
   /**
+   * Dar baixa numa conta em aberto.
+   *
+   * O hook useBaixarConta e a RPC baixar_conta existiam, e nenhuma tela os
+   * usava: dava para criar conta a pagar/receber e nunca quitá-la pelo
+   * sistema. A conta ficava pendente para sempre e o painel de inadimplência
+   * nunca se limpava.
+   */
+  const handleBaixar = async (c: any) => {
+    const hoje = new Date().toISOString().slice(0, 10);
+    const valorTxt = prompt(
+      `Dar baixa em "${c.descricao}"\n\n` +
+      `Valor da conta: ${brl(c.valor)}\n` +
+      "Informe o valor efetivamente recebido/pago:",
+      String(Number(c.valor).toFixed(2)),
+    );
+    if (valorTxt === null) return;
+    const valor = Number(String(valorTxt).replace(/\./g, "").replace(",", "."));
+    if (!Number.isFinite(valor) || valor <= 0) {
+      toast.error("Valor inválido.");
+      return;
+    }
+    // A RPC fecha a conta como PAGA qualquer que seja o valor — não gera saldo
+    // residual nem nova parcela. Dizer isso antes evita o operador achar que
+    // a diferença vai continuar sendo cobrada.
+    if (valor < Number(c.valor)) {
+      const falta = Number(c.valor) - valor;
+      const ok = confirm(
+        `Atenção: ${brl(valor)} é MENOS que o valor da conta (${brl(c.valor)}).\n\n` +
+        `A conta será fechada como PAGA e a diferença de ${brl(falta)} fica registrada ` +
+        "como desconto/abatimento — o sistema NÃO cria uma nova conta pelo que faltou.\n\n" +
+        "Se a intenção é receber o resto depois, cancele aqui e lance a diferença como " +
+        "outra conta antes de dar a baixa.\n\nFechar a conta assim mesmo?"
+      );
+      if (!ok) return;
+    }
+    const data = prompt("Data do pagamento (aaaa-mm-dd):", hoje);
+    if (data === null) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data.trim())) {
+      toast.error("Data inválida — use aaaa-mm-dd.");
+      return;
+    }
+    try {
+      await baixar.mutateAsync({ contaId: c.id, valor, data: data.trim() });
+      toast.success(
+        valor >= Number(c.valor)
+          ? "Conta baixada."
+          : `Conta fechada com ${brl(valor)} — diferença de ${brl(Number(c.valor) - valor)} registrada como abatimento.`,
+      );
+    } catch (e: any) {
+      toast.error(`Não foi possível baixar: ${e.message ?? e}`);
+    }
+  };
+
+  /**
    * Lista as contas e fecha com o subtotal.
    *
    * Antes havia só a linha de subtotal: as quatro abas de contas traziam as
@@ -278,12 +342,13 @@ export function FinanceiroPage() {
               <th className="text-right p-3">Valor</th>
               {!emAberto && <th className="text-right p-3">Pago</th>}
               <th className="text-center p-3">Situação</th>
+              {emAberto && <th className="text-center p-3">Ação</th>}
             </tr>
           </thead>
           <tbody>
             {contas.length === 0 ? (
               <tr>
-                <td colSpan={emAberto ? 7 : 8} className="p-8 text-center text-muted-foreground">
+                <td colSpan={emAberto ? 8 : 8} className="p-8 text-center text-muted-foreground">
                   Nenhuma conta neste grupo.
                 </td>
               </tr>
@@ -307,6 +372,14 @@ export function FinanceiroPage() {
                       {c.status === "pago" ? "Pago" : c.status === "vencido" || atrasada ? "Vencida" : "Pendente"}
                     </Badge>
                   </td>
+                  {emAberto && (
+                    <td className="p-3 text-center">
+                      <Button size="sm" variant="outline" disabled={baixar.isPending}
+                        onClick={() => void handleBaixar(c)}>
+                        Dar baixa
+                      </Button>
+                    </td>
+                  )}
                 </tr>
               );
             })}
@@ -681,7 +754,7 @@ export function FinanceiroPage() {
         {/* ===== ABA À PAGAR ===== */}
         <TabsContent value="apagar">
           <Card>
-            <CardHeader><CardTitle>Contas à Pagar (Pendentes)</CardTitle></CardHeader>
+            <CardHeader><CardTitle>Contas à Pagar em aberto</CardTitle><CardDescription>Todas as pendentes e vencidas, independentemente do período selecionado acima.</CardDescription></CardHeader>
             <CardContent className="p-0">
               <TabelaContas titulo="Sub Total — À Pagar" contas={contasAPagar} total={totalAPagar} cor="text-red-600" emAberto />
             </CardContent>
@@ -701,7 +774,7 @@ export function FinanceiroPage() {
         {/* ===== ABA À RECEBER ===== */}
         <TabsContent value="areceber">
           <Card>
-            <CardHeader><CardTitle>Contas à Receber (Pendentes)</CardTitle></CardHeader>
+            <CardHeader><CardTitle>Contas à Receber em aberto</CardTitle><CardDescription>Todas as pendentes e vencidas, independentemente do período selecionado acima.</CardDescription></CardHeader>
             <CardContent className="p-0">
               <TabelaContas titulo="Sub Total — À Receber" contas={contasAReceber} total={totalAReceber} cor="text-green-600" emAberto />
             </CardContent>
