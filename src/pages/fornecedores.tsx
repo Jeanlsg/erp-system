@@ -7,7 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Truck, Plus, Search, Phone, Mail, Loader2, Pencil, Trash2, FileSpreadsheet } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
-import { useFornecedores, useCreatePessoa, useUpdatePessoa, useDeletePessoa, isSupabaseConfigured } from "@/lib/supabase-queries";
+import { useFornecedores, useCreatePessoa, useUpdatePessoa, useRemoverPapelPessoa, isSupabaseConfigured } from "@/lib/supabase-queries";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { ImportarPessoasDialog } from "@/components/importar-pessoas";
 import { toast } from "sonner";
@@ -19,7 +19,7 @@ export function FornecedoresPage() {
   const { data: pessoas = [], isLoading } = useFornecedores();
   const create = useCreatePessoa();
   const update = useUpdatePessoa();
-  const del = useDeletePessoa();
+  const removerPapel = useRemoverPapelPessoa();
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [modalAberto, setModalAberto] = useState(false);
@@ -57,6 +57,21 @@ export function FornecedoresPage() {
       toast.error(`Não foi possível salvar: ${e.message ?? e}`);
     }
   };
+  const handleRemover = async (p: any) => {
+    const ok = confirm(
+      `Remover "${p.nome_razao}" da lista de fornecedores?\n\n` +
+      "O cadastro NÃO é apagado: ele só deixa de aparecer aqui. Se a mesma " +
+      "pessoa também for cliente, continua na tela de Clientes com o histórico intacto."
+    );
+    if (!ok) return;
+    try {
+      await removerPapel.mutateAsync({ id: p.id, papel: "fornecedor" });
+      toast.success("Removido da lista de fornecedores.");
+    } catch (e: any) {
+      toast.error(`Não foi possível remover: ${e.message ?? e}`);
+    }
+  };
+
   const salvando = create.isPending || update.isPending;
 
   if (!isSupabaseConfigured()) {
@@ -182,8 +197,8 @@ export function FornecedoresPage() {
                         <Button variant="ghost" size="icon" onClick={() => abrirEdicao(p)} title="Editar">
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" title="Excluir"
-                          onClick={() => { if (confirm(`Excluir o fornecedor "${p.nome_razao}"?`)) del.mutate(p.id); }}>
+                        <Button variant="ghost" size="icon" title="Remover da lista de fornecedores"
+                          onClick={() => void handleRemover(p)}>
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </td>

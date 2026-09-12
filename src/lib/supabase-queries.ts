@@ -246,17 +246,27 @@ export function useProdutosComEstoque(lojaId?: string) {
       if (produtosRes.error) throw produtosRes.error;
       if (estoqueRes.error) throw estoqueRes.error;
 
+      // dois índices do mesmo dado: por loja (quando há loja escolhida) e por
+      // produto (quando não há, e o consumidor quer o saldo somado das lojas)
       const estoqueMap: Record<string, Record<string, number>> = {};
+      const porProduto: Record<string, Record<string, number>> = {};
       for (const e of estoqueRes.data ?? []) {
         if (!estoqueMap[e.loja_id]) estoqueMap[e.loja_id] = {};
         estoqueMap[e.loja_id][e.produto_id] = e.quantidade;
+        if (!porProduto[e.produto_id]) porProduto[e.produto_id] = {};
+        porProduto[e.produto_id][e.loja_id] = e.quantidade;
       }
 
       return (produtosRes.data ?? []).map((p: any) => ({
         ...p,
+        // Sem loja escolhida, isto era `estoqueMap[p.id] ? estoqueMap : {}` —
+        // procurava um id de PRODUTO num mapa indexado por LOJA, então dava
+        // sempre {}. Consequência na Visão Geral: "0" produtos com estoque
+        // baixo, todo o catálogo contado como esgotado e R$ 0,00 de estoque,
+        // exibidos como se fossem a verdade.
         estoque_por_loja: lojaId
           ? { [lojaId]: estoqueMap[lojaId]?.[p.id] ?? 0 }
-          : estoqueMap[p.id] ? estoqueMap : {},
+          : porProduto[p.id] ?? {},
       }));
     },
   });
@@ -1088,7 +1098,9 @@ export function useMarcarNotificacaoLida() {
         .eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_feature_flags'] }),
+    // era 'erp_feature_flags' — a notificação continuava aparecendo como
+    // não lida até a próxima recarga da página
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_notificacoes'] }),
   });
 }
 
@@ -2535,15 +2547,55 @@ export function useUpdatePessoa() {
   });
 }
 
-export function useDeletePessoa() {
+/**
+ * Inativa a pessoa. NÃO apaga.
+ *
+ * O DELETE físico era impossível justamente para quem importa: erp_vendas e
+ * erp_contas referenciam erp_pessoas com ON DELETE RESTRICT, então o banco
+ * recusava apagar qualquer cliente que já tivesse comprado — e o botão, que
+ * se chamava "Inativar", não tinha tratamento de erro: o usuário confirmava e
+ * nada acontecia, sem mensagem. Verificado no banco: o DELETE volta com
+ * foreign_key_violation.
+ *
+ * Para apagar de fato o dado pessoal existe o caminho certo, com rastro legal:
+ * a fila de Exclusão LGPD, que anonimiza e preserva a nota fiscal.
+ */
+export function useInativarPessoa() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('erp_pessoas').delete().eq('id', id);
+      const { error } = await supabase
+        .from('erp_pessoas').update({ ativo: false }).eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['erp_clientes'] });
+      qc.invalidateQueries({ queryKey: ['erp_clientes_compras'] });
+      qc.invalidateQueries({ queryKey: ['erp_fornecedores'] });
+    },
+  });
+}
+
+/**
+ * Remove apenas o PAPEL, não a pessoa.
+ *
+ * Na tela de Fornecedores, "Excluir" apagava a pessoa inteira — inclusive
+ * quando ela também era cliente com histórico de compras. Tirar o papel deixa
+ * o cadastro intacto e só o remove daquela lista.
+ */
+export function useRemoverPapelPessoa() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, papel }: { id: string; papel: 'cliente' | 'fornecedor' }) => {
+      const { error } = await supabase
+        .from('erp_pessoas')
+        .update(papel === 'cliente' ? { eh_cliente: false } : { eh_fornecedor: false })
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_clientes'] });
+      qc.invalidateQueries({ queryKey: ['erp_clientes_compras'] });
       qc.invalidateQueries({ queryKey: ['erp_fornecedores'] });
     },
   });
@@ -2755,7 +2807,12 @@ export function useUpsertDadosEmpresariais() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (item: any) => {
-      const { data, error } = await supabase.from('erp_dados_empresariais').upsert(item).select().single();
+      // onConflict na loja: sem isto, um payload sem `id` virava INSERT e a
+      // loja acumulava linhas (migration 072 criou o UNIQUE que sustenta isto)
+      const { data, error } = await supabase
+        .from('erp_dados_empresariais')
+        .upsert(item, { onConflict: 'loja_id' })
+        .select().single();
       if (error) throw error;
       return data;
     },
@@ -3518,6 +3575,69 @@ export function useUpsertConfiguracao() {
       return data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_configuracoes_gerais'] }),
+  });
+}
+
+// ========================================
+// LGPD — solicitações de exclusão (Art. 18)
+// ========================================
+export function useSolicitacoesLgpd() {
+  return useQuery<any[]>({
+    queryKey: ["erp_lgpd_solicitacoes"],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      const { data, error } = await supabase
+        .from("erp_lgpd_solicitacoes")
+        .select("*, solicitante:erp_usuarios!erp_lgpd_solicitacoes_solicitado_por_fkey(nome), atendente:erp_usuarios!erp_lgpd_solicitacoes_atendido_por_fkey(nome)")
+        .order("solicitado_em", { ascending: false })
+        .limit(500);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useRegistrarSolicitacaoLgpd() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (pessoaId: string) => {
+      const { data, error } = await supabase.rpc("registrar_solicitacao_lgpd", { p_pessoa_id: pessoaId });
+      if (error) throw error;
+      return data as any;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["erp_lgpd_solicitacoes"] }),
+  });
+}
+
+export function useAtenderSolicitacaoLgpd() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (solicitacaoId: string) => {
+      const { data, error } = await supabase.rpc("atender_solicitacao_lgpd", { p_solicitacao_id: solicitacaoId });
+      if (error) throw error;
+      return data as any;
+    },
+    onSuccess: () => {
+      // a anonimização mexe na pessoa: as listas de clientes precisam relê-la
+      qc.invalidateQueries({ queryKey: ["erp_lgpd_solicitacoes"] });
+      qc.invalidateQueries({ queryKey: ["erp_clientes"] });
+      qc.invalidateQueries({ queryKey: ["erp_clientes_compras"] });
+      qc.invalidateQueries({ queryKey: ["erp_fornecedores"] });
+    },
+  });
+}
+
+export function useRecusarSolicitacaoLgpd() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, motivo }: { id: string; motivo: string }) => {
+      const { data, error } = await supabase.rpc("recusar_solicitacao_lgpd", {
+        p_solicitacao_id: id, p_motivo: motivo,
+      });
+      if (error) throw error;
+      return data as any;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["erp_lgpd_solicitacoes"] }),
   });
 }
 

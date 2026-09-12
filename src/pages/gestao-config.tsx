@@ -501,14 +501,26 @@ export function ConfiguracoesSefazPage() {
   const upsert = useUpsertConfiguracaoSefaz();
 
   const [form, setForm] = useState<any>(null);
+  // de qual loja é o formulário que está na tela
+  const [formLoja, setFormLoja] = useState<string | null>(null);
 
-  if (dados && !form) setForm(dados);
-  // O formulário padrão só entra quando a consulta TERMINOU e não existe
-  // configuração. Antes bastava `dados` estar indefinido — o que inclui o
-  // intervalo de carregamento — e salvar nesse instante criava uma segunda
-  // configuração para a loja, com UF "SP" fixa. Duas linhas quebram a
-  // leitura das edge functions fiscais e derrubam a emissão de nota.
-  if (isSuccess && !dados && !form && lojaId) {
+  // Trocar de loja no cabeçalho NÃO remonta esta página: o seletor só muda
+  // estado zustand e o <Outlet/> não tem key. Sem zerar aqui, o formulário
+  // continuava com a linha da loja anterior — com o id e o loja_id DELA — e a
+  // tela mostrava UF, série, numeração e CSC de uma loja sob o nome da outra.
+  // O Salvar então gravava na loja errada, em silêncio, numa configuração
+  // fiscal. É o pior tipo de erro: não falha, acerta o alvo errado.
+  if (lojaId && formLoja !== lojaId) {
+    setFormLoja(lojaId);
+    setForm(null);
+  } else if (dados && !form) {
+    setForm(dados);
+  } else if (isSuccess && !dados && !form && lojaId) {
+    // O formulário padrão só entra quando a consulta TERMINOU e não existe
+    // configuração. Antes bastava `dados` estar indefinido — o que inclui o
+    // intervalo de carregamento — e salvar nesse instante criava uma segunda
+    // configuração para a loja, com UF "SP" fixa. Duas linhas quebram a
+    // leitura das edge functions fiscais e derrubam a emissão de nota.
     const loja = lojas.find((l: any) => l.id === lojaId);
     setForm({
       loja_id: lojaId, ambiente: "homologacao",
@@ -524,6 +536,11 @@ export function ConfiguracoesSefazPage() {
     if (!form || carregandoSefaz) return;
     if (!form.uf || form.uf.length !== 2) {
       toast.error("Informe a UF da loja (2 letras) antes de salvar.");
+      return;
+    }
+    // rede de segurança contra gravar configuração fiscal na loja errada
+    if (form.loja_id !== lojaId) {
+      toast.error("A tela está com a configuração de outra loja. Recarregue a página.");
       return;
     }
     try {

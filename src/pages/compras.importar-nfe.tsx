@@ -65,9 +65,24 @@ export function ImportarNFePage() {
       if (digitos.length === 44) {
         q = q.eq("chave_acesso", digitos);
       } else {
-        // número exato OU número embutido na chave: 25 posições + série(3) + nNF(9)
+        // Número exato OU número embutido na chave de acesso.
+        //
+        // A chave tem 44 dígitos: cUF(2) AAMM(4) CNPJ(14) mod(2) série(3)
+        // nNF(9) tpEmis(1) cNF(8) cDV(1). Antes do nNF vêm 2+4+14+2+3 = 25
+        // dígitos — é a mesma posição que o render desta tela usa em
+        // `chave_acesso.slice(25, 34)` e que a edge function usa em
+        // `daChave()`. A máscara aqui dizia 28 (somava a série duas vezes),
+        // então o LIKE nunca casava e a busca por número só funcionava
+        // quando o campo `numero` estava preenchido. Justamente a nota que
+        // chega como RESUMO grava numero = 0 — o caso que este fallback
+        // existe para cobrir.
+        //
+        // A SEFAZ não tem consulta por número: a distribuição DF-e aceita só
+        // NSU ou chave de 44 dígitos. Por isso esta busca é local, sobre o
+        // que já foi baixado do canal.
+        const ANTES_DO_NUMERO = 25;
         const pad = digitos.padStart(9, "0");
-        q = q.or(`numero.eq.${digitos},chave_acesso.like.${"_".repeat(28)}${pad}*`);
+        q = q.or(`numero.eq.${digitos},chave_acesso.like.${"_".repeat(ANTES_DO_NUMERO)}${pad}*`);
       }
       const { data, error } = await q;
       if (error) throw error;

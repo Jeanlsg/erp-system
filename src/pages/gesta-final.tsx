@@ -11,12 +11,12 @@ import { Input } from "@/components/ui/input";
 import { InputMoeda } from "@/components/ui/input-moeda";
 import { Label } from "@/components/ui/label";
 import { User, Building2, Search, Loader2, Plus, Printer, Barcode, CreditCard,
-  DollarSign, Edit, Trash2, Shield,
+  DollarSign, Edit, Trash2,
   Briefcase, FileText, BarChart3,
   Download, Upload, Database,
 } from "lucide-react";
 import {
-  useClientes, useCreatePessoa, useUpdatePessoa, useDeletePessoa,
+  useClientes, useCreatePessoa, useUpdatePessoa, useInativarPessoa,
   useProdutos,
   useVendas, useContas, useSangriasPorPeriodo, useEntradasExtrasPorPeriodo,
   isSupabaseConfigured,
@@ -43,7 +43,7 @@ export function ConsultaPessoaFisicaPage() {
   const { data: pessoas = [], isLoading } = useClientes();
   const create = useCreatePessoa();
   const update = useUpdatePessoa();
-  const del = useDeletePessoa();
+  const del = useInativarPessoa();
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -137,7 +137,7 @@ export function ConsultaPessoaFisicaPage() {
                     <td className="p-3 text-center">
                       <div className="flex gap-1 justify-center">
                         <Button size="sm" variant="ghost" onClick={() => abrirEdicao(p)}><Edit className="h-3 w-3" /></Button>
-                        <Button size="sm" variant="ghost" onClick={() => { if (confirm("Excluir?")) del.mutate(p.id); }}><Trash2 className="h-3 w-3 text-destructive" /></Button>
+                        <Button size="sm" variant="ghost" onClick={() => { if (confirm(`Inativar "${p.nome_razao}"? O cadastro e o histórico são preservados.`)) del.mutate(p.id); }}><Trash2 className="h-3 w-3 text-destructive" /></Button>
                       </div>
                     </td>
                   </tr>
@@ -203,7 +203,7 @@ export function ConsultaPessoaJuridicaPage() {
   const { data: pessoas = [], isLoading } = useClientes();
   const create = useCreatePessoa();
   const update = useUpdatePessoa();
-  const del = useDeletePessoa();
+  const del = useInativarPessoa();
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -292,7 +292,7 @@ export function ConsultaPessoaJuridicaPage() {
                     <td className="p-3 text-center">
                       <div className="flex gap-1 justify-center">
                         <Button size="sm" variant="ghost" onClick={() => abrirEdicao(p)}><Edit className="h-3 w-3" /></Button>
-                        <Button size="sm" variant="ghost" onClick={() => { if (confirm("Excluir?")) del.mutate(p.id); }}><Trash2 className="h-3 w-3 text-destructive" /></Button>
+                        <Button size="sm" variant="ghost" onClick={() => { if (confirm(`Inativar "${p.nome_razao}"? O cadastro e o histórico são preservados.`)) del.mutate(p.id); }}><Trash2 className="h-3 w-3 text-destructive" /></Button>
                       </div>
                     </td>
                   </tr>
@@ -721,75 +721,9 @@ export function LocalizarPessoasPage() {
   );
 }
 
-// ====================================================================
-// EXCLUSÃO DE INFORMAÇÕES (LGPD)
-// ====================================================================
-export function ExclusaoInformacoesPage() {
-  const [search, setSearch] = useState("");
-  const { data: pessoas = [] } = useClientes();
-
-  if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="Exclusão de Informações" />;
-
-  const handleSolicitarExclusao = (pessoa: any) => {
-    if (!confirm(`Solicitar exclusão dos dados de ${pessoa.nome_razao}? Esta ação é definitiva (LGPD).`)) return;
-    toast.success(`Solicitação de exclusão registrada para ${pessoa.nome_razao}. Conforme LGPD Art. 18, o prazo para atendimento é de 15 dias.`);
-  };
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
-          <Shield className="h-6 w-6" /> Exclusão de Informações (LGPD)
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">Solicitações de exclusão de dados pessoais conforme Lei 13.709/2018</p>
-      </div>
-
-      <Card>
-        <CardContent className="p-4 bg-yellow-50 dark:bg-yellow-950/20 border-yellow-500">
-          <p className="text-sm font-semibold">⚠ Conforme LGPD Art. 18</p>
-          <p className="text-xs text-muted-foreground mt-1">O titular dos dados tem direito à eliminação de seus dados pessoais. O prazo de atendimento é de até 15 dias.</p>
-        </CardContent>
-      </Card>
-
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input placeholder="Buscar pessoa..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
-      </div>
-
-      <Card>
-        <CardContent className="p-0">
-          <table className="w-full">
-            <thead className="border-b text-xs text-muted-foreground">
-              <tr>
-                <th className="text-left p-3">Nome</th>
-                <th className="text-left p-3">CPF/CNPJ</th>
-                <th className="text-left p-3">Email</th>
-                <th className="text-center p-3">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pessoas
-                .filter((p) => !search || p.nome_razao.toLowerCase().includes(search.toLowerCase()))
-                .slice(0, 30)
-                .map((p) => (
-                  <tr key={p.id} className="border-b hover:bg-accent">
-                    <td className="p-3 font-medium">{p.nome_razao}</td>
-                    <td className="p-3 font-mono text-xs">{p.cpf_cnpj}</td>
-                    <td className="p-3 text-sm">{p.email ?? "—"}</td>
-                    <td className="p-3 text-center">
-                      <Button size="sm" variant="destructive" onClick={() => handleSolicitarExclusao(p)}>
-                        <Trash2 className="h-3 w-3 mr-1" /> Solicitar Exclusão
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
+// A tela de Exclusão LGPD saiu daqui para src/pages/lgpd.tsx quando ganhou
+// fila de pedidos de verdade: a versão que ficava neste arquivo apenas
+// confirmava em verde sem gravar nada.
 
 // ====================================================================
 // DOCUMENTOS DEMONSTRATIVOS (DRE / Balanço)

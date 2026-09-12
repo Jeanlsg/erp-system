@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
-import { useClientesCompras, useCreatePessoa, useUpdatePessoa, useDeletePessoa, chaveTelefone, isSupabaseConfigured } from "@/lib/supabase-queries";
+import { useClientesCompras, useCreatePessoa, useUpdatePessoa, useInativarPessoa, chaveTelefone, isSupabaseConfigured } from "@/lib/supabase-queries";
 import { brl, date } from "@/lib/format";
 import { toast } from "sonner";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
@@ -20,7 +20,7 @@ export function CustomersPage() {
   const { data: clientes = [], isLoading } = useClientesCompras();
   const create = useCreatePessoa();
   const update = useUpdatePessoa();
-  const del = useDeletePessoa();
+  const inativar = useInativarPessoa();
   const [search, setSearch] = useState("");
   const [modalAberto, setModalAberto] = useState(false);
   const [editando, setEditando] = useState<Pessoa | null>(null);
@@ -106,6 +106,23 @@ export function CustomersPage() {
       setModalAberto(false);
     } catch (e: any) {
       toast.error(`Não foi possível salvar: ${e.message ?? e}`);
+    }
+  };
+
+  const handleInativar = async (c: any) => {
+    const ok = confirm(
+      `Inativar o cliente "${c.nome_razao}"?\n\n` +
+      "Ele sai das listas e do PDV, mas o cadastro e o histórico de compras " +
+      "continuam no sistema — a nota fiscal emitida tem guarda obrigatória de 5 anos.\n\n" +
+      "Para apagar os dados pessoais de verdade, use Exclusão LGPD: lá o pedido " +
+      "fica registrado com prazo e o titular é anonimizado sem perder a nota."
+    );
+    if (!ok) return;
+    try {
+      await inativar.mutateAsync(c.id);
+      toast.success("Cliente inativado.");
+    } catch (e: any) {
+      toast.error(`Não foi possível inativar: ${e.message ?? e}`);
     }
   };
 
@@ -198,7 +215,7 @@ export function CustomersPage() {
                           variant="ghost"
                           size="icon"
                           title="Inativar"
-                          onClick={() => { if (confirm(`Inativar o cliente "${c.nome_razao}"?`)) del.mutate(c.id); }}
+                          onClick={() => void handleInativar(c)}
                         >
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>

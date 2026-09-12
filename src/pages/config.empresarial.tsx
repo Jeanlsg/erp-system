@@ -11,15 +11,26 @@ import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 
 export function ConfigEmpresarialPage() {
   const { lojaId } = useAutoSelectLoja();
-  const { data: dados } = useDadosEmpresariais(lojaId ?? undefined);
+  const { data: dados, isSuccess } = useDadosEmpresariais(lojaId ?? undefined);
   const upsert = useUpsertDadosEmpresariais();
   const [form, setForm] = useState<any>(null);
+  // de qual loja é o formulário que está na tela
+  const [formLoja, setFormLoja] = useState<string | null>(null);
 
-  // Hidrata form quando dados chegam
-  if (dados && !form) {
+  // Trocar de loja no cabeçalho NÃO remonta esta página (o <Outlet/> não tem
+  // key), então sem zerar aqui o formulário continuaria com a linha da loja
+  // anterior — inclusive o loja_id dela — e o Salvar gravaria na loja errada.
+  if (lojaId && formLoja !== lojaId) {
+    setFormLoja(lojaId);
+    setForm(null);
+  } else if (dados && !form) {
     setForm(dados);
-  }
-  if (!dados && form === null && lojaId) {
+  } else if (isSuccess && !dados && !form && lojaId) {
+    // O padrão vazio só entra quando a consulta TERMINOU e não há registro.
+    // Antes bastava `dados` estar indefinido — o que inclui o intervalo de
+    // carregamento — e o formulário nascia vazio e SEM id; o Salvar então
+    // inseria em vez de atualizar. Foi assim que Juazeiro ficou com duas
+    // linhas, uma delas completamente vazia. Ver migration 072.
     setForm({ loja_id: lojaId, razao_social: "", cnpj: "" });
   }
 
@@ -27,8 +38,18 @@ export function ConfigEmpresarialPage() {
 
   const handleSalvar = async () => {
     if (!form || !form.loja_id) return;
-    await upsert.mutateAsync(form);
-    toast.success("Dados salvos.");
+    // rede de segurança: se por qualquer motivo o formulário for de outra
+    // loja, não grava na loja errada — manda recarregar
+    if (form.loja_id !== lojaId) {
+      toast.error("A tela está com os dados de outra loja. Recarregue a página.");
+      return;
+    }
+    try {
+      await upsert.mutateAsync(form);
+      toast.success("Dados salvos.");
+    } catch (e: any) {
+      toast.error(`Não foi possível salvar: ${e?.message ?? e}`);
+    }
   };
 
   return (

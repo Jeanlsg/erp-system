@@ -55,8 +55,20 @@ export function VisaoGeralPage() {
   }, [periodo]);
 
   const vendasFiltradas = useMemo(() => {
-    return vendas.filter((v) => lojasAtivas.includes(v.loja_id) && new Date(v.data_venda).getTime() >= desde);
+    return vendas.filter((v) =>
+      lojasAtivas.includes(v.loja_id) &&
+      new Date(v.data_venda).getTime() >= desde &&
+      // Faturamento e lucro contam só o que faturou. Antes somava TODAS as
+      // situações, inclusive cancelada e devolvida — a devolução entrava como
+      // receita, e o número ficava plausível e errado, do mesmo jeito que o
+      // ticket médio do relatório financeiro.
+      v.status === "finalizada",
+    );
   }, [vendas, lojasAtivas, desde]);
+
+  // useVendas traz no máximo 200 vendas, as mais recentes. Sem dizer isso,
+  // "Todo o período" daria a impressão de somar o histórico inteiro.
+  const podeEstarTruncado = periodo === "all" && vendas.length >= 200;
 
   const kpis = useMemo(() => {
     const total = vendasFiltradas.reduce((s, v) => s + Number(v.total), 0);
@@ -171,11 +183,18 @@ export function VisaoGeralPage() {
       </Card>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Kpi label="Faturamento" value={brl(kpis.total)} hint={`${num(kpis.qtd)} vendas · ticket ${brl(kpis.ticket)}`} icon={TrendingUp} />
+        <Kpi label="Faturamento" value={brl(kpis.total)} hint={`${num(kpis.qtd)} venda(s) finalizada(s) · ticket ${brl(kpis.ticket)}`} icon={TrendingUp} />
         <Kpi label="Lucro bruto" value={brl(kpis.lucro)} hint={`Margem ${pct(kpis.margem)}`} icon={Receipt} />
         <Kpi label="Estoque baixo" value={num(totalBaixo)} hint={`${num(totalEsgotado)} esgotados`} icon={PackageX} tone="destructive" />
         <Kpi label="Valor em estoque" value={brl(valorEstoque)} hint="custo total" icon={AlertTriangle} tone="warning" />
       </div>
+
+      {podeEstarTruncado && (
+        <p className="text-xs text-muted-foreground">
+          Faturamento e lucro consideram as 200 vendas mais recentes — é o teto da consulta.
+          Para o histórico completo, use Relatórios Financeiros com o período desejado.
+        </p>
+      )}
 
       {vazio ? (
         <Card><CardContent className="p-12 text-center text-sm text-muted-foreground">Nenhuma venda no período/lojas selecionadas.</CardContent></Card>

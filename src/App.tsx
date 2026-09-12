@@ -18,6 +18,7 @@ import { AgendaPage } from "@/pages/agenda";
 // Páginas principais implementadas
 import { FuncionariosPage } from "@/pages/funcionarios";
 import { ProdutosEstoqueLotesPage } from "@/pages/produtos-estoque-lotes";
+import { ExclusaoInformacoesPage } from "@/pages/lgpd";
 import { EstoqueMovimentacoesPage } from "@/pages/estoque-movimentacoes";
 import { InventarioPage } from "@/pages/inventario";
 import { DocumentosPage } from "@/pages/documentos";
@@ -74,7 +75,7 @@ import {
 } from "@/pages/gestao-config";
 import { NfeCertificadoPage } from "@/pages/nfe-certificado";
 
-import { ConsultaPessoaFisicaPage, ConsultaPessoaJuridicaPage, DadosEmpresariaisPage, CodigoBarrasPage, LocalizarPessoasPage, ExclusaoInformacoesPage, DocumentosDemonstrativosPage, PastaPrincipalPage, GerarCrediarioPage, PainelContadorPage, EmpresarialPage } from "@/pages/gesta-final";
+import { ConsultaPessoaFisicaPage, ConsultaPessoaJuridicaPage, DadosEmpresariaisPage, CodigoBarrasPage, LocalizarPessoasPage, DocumentosDemonstrativosPage, PastaPrincipalPage, GerarCrediarioPage, PainelContadorPage, EmpresarialPage } from "@/pages/gesta-final";
 
 export default function App() {
   return (
