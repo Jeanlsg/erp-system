@@ -27,6 +27,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AvisoAmbienteHomologacao } from "@/components/aviso-ambiente-homologacao";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 import {
@@ -179,6 +180,11 @@ export function FiscalDfePage() {
           Toda NF-e emitida contra o CNPJ da loja, direto do canal oficial — sem depender de o fornecedor mandar o XML.
         </p>
       </div>
+
+      {/* Em homologação esta tela NUNCA traz nota: o Ambiente Nacional não
+          devolve documentos de homologação. Sem o aviso, os zeros e o
+          "Última consulta: nunca" pareciam "ainda não chegou nota". */}
+      <AvisoAmbienteHomologacao lojaId={lojaAtual} />
 
       {lojas.length > 1 && (
         <div className="w-72">

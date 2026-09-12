@@ -858,6 +858,20 @@ export function UsuariosPage() {
             <DialogClose />
           </DialogHeader>
 
+          {/* O que estas permissões realmente controlam. Até agora elas eram
+              gravadas e nunca lidas: a tela confirmava "salvas" e nada mudava.
+              Agora o can() as respeita — mas o alcance é a navegação, e dizer
+              isso evita a ilusão de que são barreira de banco. */}
+          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs dark:border-amber-900 dark:bg-amber-950/20">
+            <p className="font-medium">O que isto controla</p>
+            <p className="mt-1 text-muted-foreground">
+              Quais itens de menu e botões o usuário vê. O acesso ao banco é governado pelo
+              <b> cargo</b> ({roleLabels[roleSelecionado]}) nas regras do Supabase — tirar um item
+              daqui esconde o caminho, não vira uma trava de servidor. Para restringir de verdade
+              o que alguém pode gravar, mude o cargo.
+            </p>
+          </div>
+
           {/* Toggle: Padrão vs Custom */}
           <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
             <input

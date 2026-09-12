@@ -46,6 +46,15 @@ export interface User {
   ativo: boolean;
   /** Dono do sistema: só ele vê página desativada e troca o conjunto de telas. */
   admin_principal?: boolean;
+  /**
+   * Permissões customizadas deste usuário, gravadas na tela Usuários e
+   * Permissões. Vazio ou ausente = usa o padrão do papel.
+   *
+   * Antes este campo era gravado e NUNCA lido: a tela confirmava "Permissões
+   * customizadas salvas" e o comportamento continuava o do papel — desmarcar
+   * "venda.cancelar" de um gerente não mudava nada.
+   */
+  permissoes?: Record<string, boolean> | null;
 }
 
 export const roleLabels: Record<Role, string> = {
@@ -113,6 +122,13 @@ export const useAuthStore = create<AuthState>()(
       can: (permission) => {
         const { user } = get();
         if (!user) return false;
+        // Customização por usuário vence o padrão do papel. A tela inicializa
+        // os checkboxes com as permissões do papel e o admin desmarca o que
+        // quer tirar — então um objeto não vazio JÁ É o conjunto efetivo.
+        const custom = user.permissoes;
+        if (custom && Object.keys(custom).length > 0) {
+          return custom[permission] === true;
+        }
         return ROLE_PERMISSIONS[user.role]?.includes(permission) ?? false;
       },
       canAny: (permissions) => {
@@ -147,7 +163,7 @@ export async function login(
     // O id do erp_usuarios == auth.users.id (FK direta)
     const { data: perfil, error: perfilError } = await supabase
       .from("erp_usuarios")
-      .select("id, email, nome, role, ativo, admin_principal")
+      .select("id, email, nome, role, ativo, admin_principal, permissoes")
       .eq("id", data.user.id)
       .single();
 
@@ -168,6 +184,7 @@ export async function login(
       role: perfil.role,
       ativo: perfil.ativo,
       admin_principal: !!(perfil as any).admin_principal,
+      permissoes: ((perfil as any).permissoes ?? null) as Record<string, boolean> | null,
     };
     useAuthStore.getState().setUser(user);
     return { ok: true, user };

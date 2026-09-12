@@ -4022,6 +4022,82 @@ export function useCreateCompra() {
   });
 }
 
+/**
+ * Recebe a compra DE VERDADE: dá entrada no estoque e gera as contas a pagar.
+ *
+ * O botão "Receber" chamava useUpdateCompraStatus, que só fazia
+ * `update({status:'recebida'})` — um UPDATE de uma coluna. O operador via a
+ * linha virar "recebida" e concluía que a mercadoria tinha entrado; o estoque
+ * não se movia e nenhuma conta a pagar nascia, sem aviso nenhum. As RPCs que
+ * fazem isso existiam e eram usadas só pelo fluxo de importação de NF-e.
+ *
+ * Ordem importa: estoque e contas ANTES do status. Se algo falhar, a compra
+ * continua "pendente" e pode ser recebida de novo — é melhor repetir a
+ * tentativa do que ficar marcada como recebida sem ter entrado nada.
+ */
+export function useReceberCompra() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (compraId: string) => {
+      const { data: compra, error: cErr } = await supabase
+        .from('erp_compras')
+        .select('id, loja_id, status, itens:erp_compra_itens(produto_id, quantidade, preco_custo)')
+        .eq('id', compraId)
+        .single();
+      if (cErr) throw cErr;
+      if (compra.status === 'recebida') {
+        throw new Error('Esta compra já foi recebida.');
+      }
+      const itens = (compra.itens ?? []) as any[];
+      if (itens.length === 0) {
+        throw new Error('Compra sem itens — nada para dar entrada no estoque.');
+      }
+
+      // 1) estoque: a RPC escritura o kardex e recalcula o custo médio
+      const { error: estErr } = await supabase
+        .schema('erp')
+        .rpc('creditar_estoque_atomico', {
+          p_loja_id: compra.loja_id,
+          p_itens: itens.map((i) => ({
+            produto_id: i.produto_id,
+            quantidade: i.quantidade,
+            custo_unitario: i.preco_custo ?? null,
+          })),
+          p_origem: 'compra',
+          p_documento_id: compra.id,
+        });
+      if (estErr) throw new Error(`Entrada no estoque falhou: ${estErr.message}`);
+
+      // 2) contas a pagar. Sem duplicatas de NF-e, a RPC cai na parcela única
+      //    no prazo padrão da loja — que é o certo para compra lançada à mão.
+      const { data: parcelas, error: contasErr } = await supabase
+        .schema('erp')
+        .rpc('gerar_contas_pagar_compra', { p_compra_id: compra.id, p_duplicatas: null });
+      if (contasErr) {
+        throw new Error(
+          `Estoque creditado, mas falhou ao gerar contas a pagar: ${contasErr.message}. ` +
+          'A compra segue pendente — lance a conta à mão ou tente receber de novo.',
+        );
+      }
+
+      // 3) só agora o status
+      const { error: stErr } = await supabase
+        .from('erp_compras').update({ status: 'recebida' }).eq('id', compra.id);
+      if (stErr) throw stErr;
+
+      return { itens: itens.length, contas_geradas: Number(parcelas ?? 0) };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_compras'] });
+      qc.invalidateQueries({ queryKey: ['erp_produtos'] });
+      qc.invalidateQueries({ queryKey: ['erp_produtos_completo'] });
+      qc.invalidateQueries({ queryKey: ['erp_estoque'] });
+      qc.invalidateQueries({ queryKey: ['erp_estoque_movimentacoes'] });
+      qc.invalidateQueries({ queryKey: ['erp_contas'] });
+    },
+  });
+}
+
 export function useUpdateCompraStatus() {
   const qc = useQueryClient();
   return useMutation({

@@ -2,9 +2,10 @@
 // Páginas extras de Gestão Empresarial (parte 2)
 // ============================================================
 
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,8 +22,9 @@ const ThumbsDown = (props: any) => (
     <path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H17v12l-3.34 7A2 2 0 0 1 11.84 22c-.55 0-1.07-.22-1.45-.62-.39-.39-.6-.93-.55-1.48L10.3 18.12Z" />
   </svg>
 );
-import { useAvaliacoes, useRecomendacoes, useCreateParceria, useNotificacoes, useMarcarNotificacaoLida, useConfiguracoesSefaz, useUpsertConfiguracaoSefaz, useConfiguracoesGerais, useUpsertConfiguracao, useOcorrencias, useCreateOcorrencia, useUpdateOcorrencia, isSupabaseConfigured, useLojas } from "@/lib/supabase-queries";
+import { useAvaliacoes, useRecomendacoes, useCreateParceria, useConfiguracoesSefaz, useUpsertConfiguracaoSefaz, useConfiguracoesGerais, useUpsertConfiguracao, useOcorrencias, useCreateOcorrencia, useUpdateOcorrencia, isSupabaseConfigured, useLojas } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
+import { useNotificacoesHeader } from "@/lib/hooks/use-notificacoes-header";
 import { useAuth } from "@/lib/store/auth-store";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { date, dateTime, brl } from "@/lib/format";
@@ -169,14 +171,36 @@ export function RecomendacoesPage() {
 // ====================================================================
 // NOTIFICAÇÕES
 // ====================================================================
+/**
+ * Notificações — os mesmos avisos do sino do cabeçalho.
+ *
+ * Esta tela lia a tabela `erp_notificacoes`, que NUNCA tem linha: a única
+ * mutation que insere nela (`useCreateNotificacao`) não é chamada por nenhuma
+ * tela, edge function ou trigger. O resultado era "0 não lida(s) de 0 total" e
+ * "Nenhuma notificação" — o operador concluía que não havia aviso nenhum,
+ * enquanto o sino do cabeçalho mostrava estoque baixo, contas vencidas e
+ * certificado vencendo por um caminho totalmente separado.
+ *
+ * A correção é ler a mesma fonte do sino (useNotificacoesHeader), que calcula
+ * os avisos a partir dos dados reais. Assim a tela diz a verdade hoje, sem
+ * depender de alguém passar a popular a tabela.
+ */
 export function NotificacoesPage() {
-  const { user } = useAuth();
-  const { data: notificacoes = [], isLoading } = useNotificacoes(user?.id);
-  const marcar = useMarcarNotificacaoLida();
+  const { lojaId } = useAutoSelectLoja();
+  const { data: avisos, isLoading } = useNotificacoesHeader(lojaId);
 
   if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="Notificações" />;
 
-  const naoLidas = notificacoes.filter((n: any) => !n.lida).length;
+  const GRUPOS: { chave: "contas_vencidas" | "estoque_baixo" | "lotes_vencendo" | "cert_vencendo" | "aniversariantes" | "ocorrencias"; titulo: string; descricao: string }[] = [
+    { chave: "contas_vencidas", titulo: "Contas vencidas", descricao: "a pagar ou a receber com vencimento no passado" },
+    { chave: "estoque_baixo",   titulo: "Estoque baixo",   descricao: "produtos no mínimo ou abaixo dele" },
+    { chave: "lotes_vencendo",  titulo: "Lotes vencendo",  descricao: "validade próxima — vender ou recolher" },
+    { chave: "cert_vencendo",   titulo: "Certificado digital vencendo", descricao: "sem certificado válido a emissão para" },
+    { chave: "aniversariantes", titulo: "Aniversariantes", descricao: "clientes do mês — oportunidade de contato" },
+    { chave: "ocorrencias",     titulo: "Ocorrências em aberto", descricao: "pendências registradas" },
+  ];
+
+  const total = avisos?.total ?? 0;
 
   return (
     <div className="space-y-6">
@@ -184,34 +208,62 @@ export function NotificacoesPage() {
         <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
           <Bell className="h-6 w-6" /> Notificações
         </h1>
-        <p className="text-sm text-muted-foreground mt-1">{naoLidas} não lida(s) de {notificacoes.length} total</p>
+        <p className="text-sm text-muted-foreground mt-1">
+          {isLoading ? "apurando…" : total === 0
+            ? "Nada pedindo atenção agora — e isto foi conferido contra os dados, não é tela vazia."
+            : `${total} aviso(s) pedindo atenção`}
+        </p>
       </div>
 
-      <Card>
-        <CardContent className="p-0">
-          {isLoading ? <div className="p-8 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></div> : notificacoes.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground">Nenhuma notificação</div>
-          ) : (
-            <div className="divide-y">
-              {notificacoes.map((n: any) => (
-                <div key={n.id} className={`p-4 flex items-start gap-3 ${!n.lida ? "bg-red-50 dark:bg-red-950/20" : ""}`}>
-                  <div className={`mt-1 h-2 w-2 rounded-full ${!n.lida ? "bg-red-600" : "bg-transparent"}`} />
-                  <div className="flex-1">
-                    <p className="font-medium">{n.titulo}</p>
-                    <p className="text-sm text-muted-foreground">{n.mensagem}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{dateTime(n.created_at)}</p>
+      {isLoading ? (
+        <Card><CardContent className="p-8 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></CardContent></Card>
+      ) : (
+        <div className="space-y-4">
+          {GRUPOS.map((g) => {
+            const grupo = avisos?.[g.chave];
+            if (!grupo || grupo.count === 0) return null;
+            return (
+              <Card key={String(g.chave)}>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    {g.titulo}
+                    <Badge variant="destructive">{grupo.count}</Badge>
+                  </CardTitle>
+                  <CardDescription>{g.descricao}</CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="divide-y">
+                    {grupo.itens.slice(0, 20).map((i: any) => (
+                      <Link key={i.id} to={i.link}
+                        className="flex items-center justify-between gap-3 p-3 hover:bg-accent">
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">{i.titulo}</p>
+                          {i.subtitulo && <p className="truncate text-sm text-muted-foreground">{i.subtitulo}</p>}
+                        </div>
+                        {i.valor && <span className="shrink-0 tabular-nums text-sm">{i.valor}</span>}
+                      </Link>
+                    ))}
                   </div>
-                  {!n.lida && (
-                    <Button size="sm" variant="ghost" onClick={() => marcar.mutate(n.id)}>
-                      <CheckCircle className="h-4 w-4" />
-                    </Button>
+                  {grupo.itens.length > 20 && (
+                    <p className="p-3 text-xs text-muted-foreground">
+                      Mostrando 20 de {grupo.itens.length}.
+                    </p>
                   )}
-                </div>
-              ))}
-            </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+
+          {total === 0 && (
+            <Card>
+              <CardContent className="p-8 text-center text-sm text-muted-foreground">
+                Sem contas vencidas, sem estoque abaixo do mínimo, sem lote perto da validade
+                e com certificado em dia. Os mesmos avisos aparecem no sino do cabeçalho.
+              </CardContent>
+            </Card>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      )}
     </div>
   );
 }

@@ -9,9 +9,9 @@ const FAQ: { categoria: string; perguntas: { p: string; r: string; link?: { to: 
     categoria: "Vendas e PDV",
     perguntas: [
       { p: "Como registrar uma venda?", r: "Abra o PDV, bipe ou busque os produtos, escolha a forma de pagamento e finalize. A venda baixa o estoque automaticamente.", link: { to: "/pdv", label: "Abrir PDV" } },
-      { p: "Como abrir e fechar o caixa?", r: "Em Caixa, clique em Abrir Caixa informando o valor de troco inicial. Ao final do turno, use Fechar Caixa — o sistema calcula o fechamento com sangrias e entradas.", link: { to: "/caixa", label: "Ir para Caixa" } },
+      { p: "Como abrir e fechar o caixa?", r: "Abrir e Fechar Caixa ficam no PDV, não na tela Caixa. No PDV, clique em Abrir Caixa informando o troco inicial; ao final do turno, use Fechar Caixa — o sistema soma vendas, sangrias e entradas e mostra a diferença. A tela Caixa serve para acompanhar o movimento e lançar Sangria e Entrada Extra.", link: { to: "/pdv", label: "Ir para o PDV" } },
       { p: "Como registrar uma devolução?", r: "Em Devoluções, clique em Registrar Devolução, selecione a venda finalizada e confirme. Você pode estornar os itens ao estoque na mesma tela.", link: { to: "/devolucoes", label: "Devoluções" } },
-      { p: "Como fazer uma pré-venda ou orçamento?", r: "Use o menu Controle Comercial: a Pré-venda registra o interesse do cliente e o Orçamento gera propostas com validade e itens.", link: { to: "/controle-comercial/orcamento", label: "Orçamentos" } },
+      { p: "Como fazer uma pré-venda ou orçamento?", r: "Essas telas existem e estão prontas, mas vêm DESLIGADAS nesta instalação — por isso não aparecem no menu. Quem liga é o administrador principal, em Configurações do Sistema › Páginas do sistema. Enquanto isso, registre a venda direto no PDV.", link: { to: "/pdv", label: "Ir para o PDV" } },
     ],
   },
   {
@@ -28,7 +28,7 @@ const FAQ: { categoria: string; perguntas: { p: string; r: string; link?: { to: 
     perguntas: [
       { p: "Como lançar contas a pagar/receber?", r: "Em Relatórios Financeiros, use o botão Incluir Contas P/R, ou navegue nas abas À Pagar / À Receber.", link: { to: "/financeiro?aba=apagar", label: "Contas" } },
       { p: "Como gerar carnê ou promissória?", r: "No menu Financeiro estão Crediário Próprio (carnê com parcelas) e Promissórias (documento formal para assinatura). Boleto registrado depende de convênio bancário ainda não contratado.", link: { to: "/promissoria", label: "Promissórias" } },
-      { p: "Como negativar ou protestar um devedor?", r: "No menu Cobrança: Negativar Devedores registra a negativação; Encaminhar Protesto gera o título para cartório.", link: { to: "/gestao/negativar-devedores", label: "Cobrança" } },
+      { p: "Como negativar ou protestar um devedor?", r: "As telas de Cobrança existem, mas vêm DESLIGADAS nesta instalação: fazem sentido quando houver inadimplência relevante. Quem liga é o administrador principal, em Configurações do Sistema › Páginas do sistema. Para ver quem está devendo hoje, use Contas a Receber.", link: { to: "/financeiro?aba=areceber", label: "Contas a Receber" } },
     ],
   },
   {

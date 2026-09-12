@@ -13,6 +13,7 @@
 import { useMemo, useState } from "react";
 import {
   Bike, CircleDollarSign, Loader2, PackageCheck, PackageOpen, Phone, XCircle,
+  Info,
 } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -102,6 +103,33 @@ export function PedidosDeliveryPage() {
           {cancelados > 0 && ` · ${cancelados} cancelado(s) hoje fora do quadro.`}
         </p>
       </div>
+
+      {/* A esteira funciona, mas nenhuma tela do ERP cria pedido de ENTREGA com
+          endereço e taxa. O único lugar que insere em erp_pedidos é a Pré-venda,
+          que grava endereço vazio e conclui com status 'concluido' — que não é
+          nenhuma das 4 colunas, então o pedido desaparece do quadro. As duas
+          fontes que alimentariam isto de verdade (iFood e ExApp/WhatsApp) não
+          têm webhook nem edge function escrevendo em erp_pedidos. Sem este
+          aviso, o quadro vazio parece "não há pedido hoje". */}
+      {!isLoading && pedidos.length === 0 && (
+        <Card className="border-amber-300 bg-amber-50 dark:bg-amber-950/20">
+          <CardContent className="flex items-start gap-3 py-4 text-sm">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+            <div className="space-y-1">
+              <p className="font-medium">O quadro está vazio porque ainda não existe origem de pedido.</p>
+              <p className="text-muted-foreground">
+                Hoje nenhuma tela do sistema cria pedido de entrega com endereço e taxa. As duas
+                fontes previstas — iFood e ExApp/WhatsApp — dependem de integração contratada e de
+                um recebedor de pedidos que ainda não existe.
+              </p>
+              <p className="text-muted-foreground">
+                Para entrega própria no balcão: registre a venda no <b>PDV</b> e combine a entrega
+                pelo WhatsApp da loja, que já está conectado.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {isLoading ? (
         <div className="flex items-center gap-2 py-10 text-muted-foreground">

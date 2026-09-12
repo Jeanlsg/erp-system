@@ -776,6 +776,9 @@ function FeatureFlagsPanel() {
 const CHAVES_OCULTAS = new Set(["chave_cripto_certificado"]);
 
 function ConfigTecnicasPanel() {
+  // a aba de páginas só existe para o administrador principal; mandar os
+  // outros usuários para uma aba que eles não têm é pior que não dizer nada
+  const { data: ehPrincipal = false } = useAdminPrincipal();
   const { data: configs = [], refetch } = useQuery<any[]>({
     queryKey: ["erp_configuracoes_sistema"],
     queryFn: async () => {
@@ -799,10 +802,15 @@ function ConfigTecnicasPanel() {
 
   return (
     <>
-      <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-md p-3 text-sm flex gap-2">
-        <Eye className="h-4 w-4 text-red-600 flex-shrink-0 mt-0.5" />
-        <p className="text-red-900 dark:text-red-200">
-          Para ativar/desativar páginas no sistema, use a aba <strong>Feature Flags</strong> acima.
+      <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-md p-3 text-sm flex gap-2">
+        <Eye className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+        <p className="text-amber-900 dark:text-amber-200">
+          Estes são parâmetros técnicos, não as páginas do menu.{" "}
+          {ehPrincipal ? (
+            <>Para ligar ou desligar páginas, use a aba <strong>Páginas do sistema</strong> acima.</>
+          ) : (
+            <>Ligar e desligar páginas é exclusivo do <strong>administrador principal</strong>.</>
+          )}
         </p>
       </div>
 

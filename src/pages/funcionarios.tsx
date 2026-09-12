@@ -5,10 +5,10 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { InputMoeda } from "@/components/ui/input-moeda";
 import { Label } from "@/components/ui/label";
-import { Building2, Plus, Search, Loader2, UserCheck, UserX, Mail, Phone } from "lucide-react";
+import { Building2, Plus, Search, Loader2, UserCheck, UserX, Mail, Phone, Pencil, UserMinus, RotateCcw } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { useFuncionarios, useCreateFuncionario, isSupabaseConfigured } from "@/lib/supabase-queries";
+import { useFuncionarios, useCreateFuncionario, useUpdateFuncionario, isSupabaseConfigured } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
@@ -19,6 +19,7 @@ export function FuncionariosPage() {
   const { lojaId } = useAutoSelectLoja();
   const { data: funcionarios = [], isLoading } = useFuncionarios(lojaId ?? undefined);
   const create = useCreateFuncionario();
+  const update = useUpdateFuncionario();
   // Usuários do sistema, para ligar o funcionário ao login: é esse vínculo
   // que faz a venda no PDV já sair com o vendedor certo (e a comissão).
   const { data: usuarios = [] } = useQuery<any[]>({
@@ -31,6 +32,12 @@ export function FuncionariosPage() {
   });
   const [search, setSearch] = useState("");
   const [modalAberto, setModalAberto] = useState(false);
+  // Manter o funcionário estava morto: não havia Editar nem Demitir, e os
+  // hooks existiam sem consumidor. Três becos sem saída: comissão errada
+  // virava dinheiro errado sem como corrigir; o card "Inativos" e a coluna
+  // Status dependem de data_demissao, que nenhum caminho de tela preenchia;
+  // e demitir só por acesso ao banco.
+  const [editando, setEditando] = useState<any | null>(null);
   const [form, setForm] = useState({
     nome: "",
     cpf: "",
@@ -54,6 +61,77 @@ export function FuncionariosPage() {
 
   const ativos = funcionarios.filter((f: any) => !f.data_demissao);
   const inativos = funcionarios.filter((f: any) => f.data_demissao);
+
+  const abrirEdicao = (f: any) => {
+    setEditando(f);
+    setForm({
+      nome: f.pessoa?.nome_razao ?? "",
+      cpf: f.cpf ?? f.pessoa?.cpf_cnpj ?? "",
+      cargo: f.cargo ?? "",
+      departamento: f.departamento ?? "",
+      salario: f.salario != null ? String(f.salario) : "",
+      data_admissao: f.data_admissao ?? new Date().toISOString().slice(0, 10),
+      email: f.pessoa?.email ?? "",
+      telefone: f.pessoa?.telefone ?? "",
+      comissao: String(f.comissao_percentual ?? 0),
+      usuario_id: f.usuario_id ?? "",
+    });
+    setModalAberto(true);
+  };
+
+  const handleSalvarEdicao = async () => {
+    if (!editando) return;
+    if (!form.nome) { toast.error("Informe o nome do funcionário."); return; }
+    try {
+      // só os campos que vivem em erp_funcionarios; nome, e-mail e telefone
+      // pertencem a erp_pessoas e se editam na tela de Clientes
+      await update.mutateAsync({
+        id: editando.id,
+        cargo: form.cargo || null,
+        departamento: form.departamento || null,
+        salario: form.salario ? Number(form.salario) : null,
+        data_admissao: form.data_admissao || null,
+        comissao_percentual: Number(form.comissao) || 0,
+        usuario_id: form.usuario_id || null,
+      });
+      toast.success("Funcionário atualizado.");
+      setModalAberto(false);
+      setEditando(null);
+    } catch (e: any) {
+      toast.error(`Não foi possível salvar: ${e.message ?? e}`);
+    }
+  };
+
+  const handleDemitir = async (f: any) => {
+    const hoje = new Date().toISOString().slice(0, 10);
+    const data = prompt(
+      `Registrar demissão de "${f.pessoa?.nome_razao ?? "funcionário"}".\n\n` +
+      "Data da demissão (aaaa-mm-dd). O cadastro e o histórico de comissões são preservados;\n" +
+      "ele só deixa de contar como ativo e sai da lista de vendedores do PDV.",
+      hoje,
+    );
+    if (data === null) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data.trim())) {
+      toast.error("Data inválida — use o formato aaaa-mm-dd.");
+      return;
+    }
+    try {
+      await update.mutateAsync({ id: f.id, data_demissao: data.trim() });
+      toast.success("Demissão registrada.");
+    } catch (e: any) {
+      toast.error(`Não foi possível registrar: ${e.message ?? e}`);
+    }
+  };
+
+  const handleReadmitir = async (f: any) => {
+    if (!confirm(`Reverter a demissão de "${f.pessoa?.nome_razao ?? "funcionário"}"?`)) return;
+    try {
+      await update.mutateAsync({ id: f.id, data_demissao: null });
+      toast.success("Demissão revertida — funcionário ativo novamente.");
+    } catch (e: any) {
+      toast.error(`Não foi possível reverter: ${e.message ?? e}`);
+    }
+  };
 
   const handleCriar = async () => {
     if (!form.nome) {
@@ -122,7 +200,7 @@ export function FuncionariosPage() {
             {funcionarios.length} funcionário(s) · {ativos.length} ativos
           </p>
         </div>
-        <Button onClick={() => setModalAberto(true)}>
+        <Button onClick={() => { setEditando(null); setModalAberto(true); }}>
           <Plus className="mr-2 h-4 w-4" /> Novo Funcionário
         </Button>
       </div>
@@ -178,7 +256,9 @@ export function FuncionariosPage() {
                   <th className="text-left p-3">Contato</th>
                   <th className="text-right p-3">Salário</th>
                   <th className="text-left p-3">Admissão</th>
+                  <th className="text-center p-3">Comissão</th>
                   <th className="text-center p-3">Status</th>
+                  <th className="text-center p-3">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -193,10 +273,32 @@ export function FuncionariosPage() {
                     </td>
                     <td className="p-3 text-right tabular-nums">{f.salario ? brl(f.salario) : "—"}</td>
                     <td className="p-3 text-sm">{f.data_admissao ? date(f.data_admissao) : "—"}</td>
+                    <td className="p-3 text-center tabular-nums text-sm">
+                      {Number(f.comissao_percentual ?? 0) > 0 ? `${Number(f.comissao_percentual)}%` : "—"}
+                    </td>
                     <td className="p-3 text-center">
                       <Badge variant={f.data_demissao ? "outline" : "default"}>
-                        {f.data_demissao ? "Inativo" : "Ativo"}
+                        {f.data_demissao ? `Demitido em ${date(f.data_demissao)}` : "Ativo"}
                       </Badge>
+                    </td>
+                    <td className="p-3">
+                      <div className="flex justify-center gap-1">
+                        <Button variant="ghost" size="icon" title="Editar"
+                          onClick={() => abrirEdicao(f)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        {f.data_demissao ? (
+                          <Button variant="ghost" size="icon" title="Reverter demissão"
+                            onClick={() => void handleReadmitir(f)}>
+                            <RotateCcw className="h-4 w-4" />
+                          </Button>
+                        ) : (
+                          <Button variant="ghost" size="icon" title="Registrar demissão"
+                            onClick={() => void handleDemitir(f)}>
+                            <UserMinus className="h-4 w-4 text-destructive" />
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -206,9 +308,9 @@ export function FuncionariosPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={modalAberto} onOpenChange={setModalAberto}>
+      <Dialog open={modalAberto} onOpenChange={(v) => { setModalAberto(v); if (!v) setEditando(null); }}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Novo Funcionário</DialogTitle><DialogClose /></DialogHeader>
+          <DialogHeader><DialogTitle>{editando ? `Editar ${editando.pessoa?.nome_razao ?? "funcionário"}` : "Novo Funcionário"}</DialogTitle><DialogClose /></DialogHeader>
           <div className="space-y-3 max-h-[70vh] overflow-y-auto">
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Nome *</Label><Input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} /></div>
@@ -238,7 +340,13 @@ export function FuncionariosPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setModalAberto(false)}>Cancelar</Button>
-            <Button onClick={handleCriar} disabled={create.isPending || !form.nome}>{create.isPending ? "Salvando..." : "Cadastrar"}</Button>
+            <Button
+              onClick={() => void (editando ? handleSalvarEdicao() : handleCriar())}
+              disabled={create.isPending || update.isPending || !form.nome}>
+              {create.isPending || update.isPending
+                ? "Salvando..."
+                : editando ? "Salvar alterações" : "Cadastrar"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

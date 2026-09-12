@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Briefcase, Users, Truck, Building2, Package, Calendar, FileText, Mail } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useFeatureFlags } from "@/lib/supabase-queries";
 
 const links = [
   { title: "Clientes", url: "/gestao/clientes", icon: Users, desc: "Cadastro de clientes PF/PJ" },
@@ -15,6 +16,15 @@ const links = [
 ];
 
 export function GestaoHubPage() {
+  // O menu lateral esconde página desativada, mas este hub não lia as flags:
+  // dos 9 cartões, 5 levavam a telas desligadas e caíam na parede "Página
+  // desativada". Um atalho que não abre é pior que atalho nenhum.
+  const { data: flags = [] } = useFeatureFlags();
+  const desativadas = new Set(
+    flags.filter((f: any) => !f.ativo).map((f: any) => f.path),
+  );
+  const visiveis = links.filter((l) => !desativadas.has(l.url));
+
   return (
     <div className="space-y-6">
       <div>
@@ -25,7 +35,7 @@ export function GestaoHubPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {links.map((l) => {
+        {visiveis.map((l) => {
           const Icon = l.icon;
           return (
             <Link to={l.url} key={l.url}>

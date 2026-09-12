@@ -8,9 +8,10 @@ import { ComboboxBusca } from "@/components/ui/combobox-busca";
 import { ShoppingCart, Loader2, Plus, Upload, X, Check } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import {
-  useCompras, useFornecedores, useProdutos, useCreateCompra, useUpdateCompraStatus, isSupabaseConfigured,
+  useCompras, useFornecedores, useProdutos, useCreateCompra, useReceberCompra, isSupabaseConfigured,
 } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
+import { toast } from "sonner";
 import { useAuth } from "@/lib/store/auth-store";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { brl, date } from "@/lib/format";
@@ -25,13 +26,34 @@ export function ComprasPage() {
   const { data: fornecedores = [] } = useFornecedores();
   const { data: produtos = [] } = useProdutos({ lojaId: lojaId ?? undefined });
   const createCompra = useCreateCompra();
-  const updateStatus = useUpdateCompraStatus();
+  const receber = useReceberCompra();
 
   const [modalAberto, setModalAberto] = useState(false);
   const [fornecedorId, setFornecedorId] = useState("");
   const [observacoes, setObservacoes] = useState("");
   const [itens, setItens] = useState<ItemForm[]>([]);
   const [novoProduto, setNovoProduto] = useState("");
+
+  const handleReceber = async (c: any) => {
+    const qtdItens = (c.itens ?? []).length;
+    const ok = confirm(
+      `Receber a compra #${c.numero_pedido ?? c.id.slice(0, 8)}?\n\n` +
+      `O que acontece:\n` +
+      `• entrada de ${qtdItens} item(ns) no estoque da loja, com o kardex escriturado\n` +
+      `• recálculo do custo médio de cada produto pelo custo da compra\n` +
+      `• criação da conta a pagar no prazo padrão da loja\n\n` +
+      "Continuar?"
+    );
+    if (!ok) return;
+    try {
+      const r = await receber.mutateAsync(c.id);
+      toast.success(
+        `Compra recebida: ${r.itens} item(ns) no estoque e ${r.contas_geradas} conta(s) a pagar gerada(s).`,
+      );
+    } catch (e: any) {
+      toast.error(`Não foi possível receber: ${e.message ?? e}`);
+    }
+  };
   const [novoCusto, setNovoCusto] = useState("");
   const [novaQtd, setNovaQtd] = useState("1");
 
@@ -105,8 +127,9 @@ export function ComprasPage() {
                     <td className="p-3 text-center"><Badge variant={c.status === "recebida" ? "default" : "outline"}>{c.status ?? "—"}</Badge></td>
                     <td className="p-3 text-center">
                       {c.status === "pendente" && (
-                        <Button variant="ghost" size="sm" title="Marcar como recebida"
-                          onClick={() => updateStatus.mutate({ id: c.id, status: "recebida" })}>
+                        <Button variant="ghost" size="sm" disabled={receber.isPending}
+                          title="Dar entrada no estoque e gerar as contas a pagar"
+                          onClick={() => void handleReceber(c)}>
                           <Check className="h-4 w-4 mr-1" /> Receber
                         </Button>
                       )}

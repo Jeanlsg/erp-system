@@ -24,6 +24,7 @@ import {
   isSupabaseConfigured,
 } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
+import { AvisoAmbienteHomologacao } from "@/components/aviso-ambiente-homologacao";
 import { useAuth } from "@/lib/store/auth-store";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { brl, date } from "@/lib/format";
@@ -278,13 +279,28 @@ export function RemessasPage() {
             <Send className="h-6 w-6" /> Remessas entre Filiais
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Transferência de produtos entre lojas com emissão de NFe
+            Transferência de produtos entre lojas — a mercadoria só se move
+            depois que a NF-e é <b>autorizada pela SEFAZ</b>
           </p>
         </div>
         <Button onClick={() => { resetForm(); setModal(true); }}>
           <Plus className="h-4 w-4 mr-2" /> Nova Remessa
         </Button>
       </div>
+
+      {/* Marcar trânsito e Receber só aparecem depois de `nf_emitida`, e o único
+          caminho que muda o status para isso é a edge function de emissão, quando
+          a SEFAZ autoriza. Ou seja: sem NF-e autorizada, nenhuma mercadoria se
+          move — nem o débito na origem, nem o crédito no destino. Em homologação
+          a nota sai autorizada mas sem valor fiscal, então o aviso é necessário. */}
+      <AvisoAmbienteHomologacao
+        lojaId={lojaId}
+        oQueNaoFunciona={
+          "A mercadoria só é debitada na origem e creditada no destino depois que a NF-e " +
+          "de transferência é autorizada. Em homologação a autorização acontece, mas a nota " +
+          "não tem valor fiscal — serve para testar o fluxo, não para movimentar estoque de verdade."
+        }
+      />
 
       {/* KPIs */}
       <div className="grid gap-4 sm:grid-cols-3">
