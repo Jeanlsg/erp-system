@@ -27,6 +27,13 @@ import { ImportarContasDialog } from "@/components/importar-contas";
 import { chart } from "@/lib/chart";
 import { supabase } from "@/lib/supabase";
 
+/** enum do banco → o que o lojista chama */
+const FORMA_ROTULO: Record<string, string> = {
+  dinheiro: "Dinheiro", pix: "PIX", cartao_credito: "Crédito", cartao_debito: "Débito",
+  crediario: "Crediário", boleto: "Boleto", promissoria: "Promissória",
+  cheque: "Cheque", transferencia: "Transferência",
+};
+
 type AbaAtiva = "fluxo" | "vendas" | "graficos" | "formas" | "taxas" | "pagas" | "apagar" | "recebidas" | "areceber" | "nf";
 
 export function FinanceiroPage() {
@@ -161,9 +168,11 @@ export function FinanceiroPage() {
 
   // Hooks para as abas de Contas
   const { data: contasPagas = [] } = useContas({ lojaId: lojaId ?? undefined, tipo: "pagar", status: "pago" });
-  const { data: contasAPagar = [] } = useContas({ lojaId: lojaId ?? undefined, tipo: "pagar", status: "pendente" });
+  // "em aberto" = pendente + vencido. Filtrar só por pendente escondia
+  // exatamente as contas atrasadas, que são o motivo de abrir esta tela.
+  const { data: contasAPagar = [] } = useContas({ lojaId: lojaId ?? undefined, tipo: "pagar", statusIn: ["pendente", "vencido"] });
   const { data: contasRecebidas = [] } = useContas({ lojaId: lojaId ?? undefined, tipo: "receber", status: "pago" });
-  const { data: contasAReceber = [] } = useContas({ lojaId: lojaId ?? undefined, tipo: "receber", status: "pendente" });
+  const { data: contasAReceber = [] } = useContas({ lojaId: lojaId ?? undefined, tipo: "receber", statusIn: ["pendente", "vencido"] });
 
   // Aba Vendas
   const { data: vendas = [] } = useVendas({ lojaId: lojaId ?? undefined, dataInicio, dataFim });
@@ -245,16 +254,75 @@ export function FinanceiroPage() {
     </Button>
   );
 
-  const TabelaSubTotal = ({ titulo, total, cor = "text-foreground" }: any) => (
-    <table className="w-full">
-      <thead className="border-b text-xs text-muted-foreground">
-        <tr><th className="text-left p-3">Sub Total</th><th className="text-right p-3">Valor</th></tr>
-      </thead>
-      <tbody>
-        <tr><td className="p-3 font-medium">{titulo}</td><td className={`p-3 text-right tabular-nums font-semibold ${cor}`}>{brl(total)}</td></tr>
-      </tbody>
-    </table>
-  );
+  /**
+   * Lista as contas e fecha com o subtotal.
+   *
+   * Antes havia só a linha de subtotal: as quatro abas de contas traziam as
+   * 500 contas do banco e mostravam apenas a soma. O item de menu "Contas a
+   * Pagar/Receber" aponta para a aba `?aba=apagar`, e não existe outra tela
+   * que liste contas — então era impossível ver o que se deve, a quem e
+   * quando vence, ou dar baixa.
+   */
+  const TabelaContas = ({ titulo, contas, total, cor = "text-foreground", emAberto = false }: any) => {
+    const hoje = new Date().toISOString().slice(0, 10);
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="border-b text-xs text-muted-foreground">
+            <tr>
+              <th className="text-left p-3">Vencimento</th>
+              <th className="text-left p-3">Descrição</th>
+              <th className="text-left p-3">Pessoa</th>
+              <th className="text-center p-3">Parcela</th>
+              <th className="text-left p-3">Forma</th>
+              <th className="text-right p-3">Valor</th>
+              {!emAberto && <th className="text-right p-3">Pago</th>}
+              <th className="text-center p-3">Situação</th>
+            </tr>
+          </thead>
+          <tbody>
+            {contas.length === 0 ? (
+              <tr>
+                <td colSpan={emAberto ? 7 : 8} className="p-8 text-center text-muted-foreground">
+                  Nenhuma conta neste grupo.
+                </td>
+              </tr>
+            ) : contas.map((c: any) => {
+              const atrasada = emAberto && c.data_vencimento < hoje;
+              return (
+                <tr key={c.id} className="border-b hover:bg-accent/50">
+                  <td className={`p-3 text-sm tabular-nums ${atrasada ? "text-red-600 font-medium" : ""}`}>
+                    {date(c.data_vencimento)}
+                  </td>
+                  <td className="p-3 text-sm">{c.descricao}</td>
+                  <td className="p-3 text-sm">{c.pessoa?.nome_razao ?? "—"}</td>
+                  <td className="p-3 text-center text-sm tabular-nums">
+                    {(c.parcela_total ?? 1) > 1 ? `${c.parcela_numero ?? 1}/${c.parcela_total}` : "—"}
+                  </td>
+                  <td className="p-3 text-sm">{c.forma_pagamento ? FORMA_ROTULO[c.forma_pagamento] ?? c.forma_pagamento : "—"}</td>
+                  <td className="p-3 text-right tabular-nums">{brl(c.valor)}</td>
+                  {!emAberto && <td className="p-3 text-right tabular-nums">{brl(c.valor_pago ?? 0)}</td>}
+                  <td className="p-3 text-center">
+                    <Badge variant={c.status === "pago" ? "default" : c.status === "vencido" || atrasada ? "destructive" : "outline"}>
+                      {c.status === "pago" ? "Pago" : c.status === "vencido" || atrasada ? "Vencida" : "Pendente"}
+                    </Badge>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot className="border-t-2">
+            <tr>
+              <td colSpan={emAberto ? 5 : 6} className="p-3 font-medium">
+                {titulo} — {contas.length} conta(s)
+              </td>
+              <td className={`p-3 text-right tabular-nums font-semibold ${cor}`} colSpan={2}>{brl(total)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    );
+  };
 
   // ===== Render =====
   return (
@@ -605,7 +673,7 @@ export function FinanceiroPage() {
           <Card>
             <CardHeader><CardTitle>Contas Pagas no Período</CardTitle></CardHeader>
             <CardContent className="p-0">
-              <TabelaSubTotal titulo="Sub Total — Contas Pagas" total={totalPagas} cor="text-green-600" />
+              <TabelaContas titulo="Sub Total — Contas Pagas" contas={contasPagas} total={totalPagas} cor="text-green-600" />
             </CardContent>
           </Card>
         </TabsContent>
@@ -615,7 +683,7 @@ export function FinanceiroPage() {
           <Card>
             <CardHeader><CardTitle>Contas à Pagar (Pendentes)</CardTitle></CardHeader>
             <CardContent className="p-0">
-              <TabelaSubTotal titulo="Sub Total — À Pagar" total={totalAPagar} cor="text-red-600" />
+              <TabelaContas titulo="Sub Total — À Pagar" contas={contasAPagar} total={totalAPagar} cor="text-red-600" emAberto />
             </CardContent>
           </Card>
         </TabsContent>
@@ -625,7 +693,7 @@ export function FinanceiroPage() {
           <Card>
             <CardHeader><CardTitle>Contas Recebidas no Período</CardTitle></CardHeader>
             <CardContent className="p-0">
-              <TabelaSubTotal titulo="Sub Total — Contas Recebidas" total={totalRecebidas} cor="text-green-600" />
+              <TabelaContas titulo="Sub Total — Contas Recebidas" contas={contasRecebidas} total={totalRecebidas} cor="text-green-600" />
             </CardContent>
           </Card>
         </TabsContent>
@@ -635,7 +703,7 @@ export function FinanceiroPage() {
           <Card>
             <CardHeader><CardTitle>Contas à Receber (Pendentes)</CardTitle></CardHeader>
             <CardContent className="p-0">
-              <TabelaSubTotal titulo="Sub Total — À Receber" total={totalAReceber} cor="text-green-600" />
+              <TabelaContas titulo="Sub Total — À Receber" contas={contasAReceber} total={totalAReceber} cor="text-green-600" emAberto />
             </CardContent>
           </Card>
         </TabsContent>

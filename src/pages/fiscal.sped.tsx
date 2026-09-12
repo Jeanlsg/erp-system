@@ -22,6 +22,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useLojas, useSpedArquivos, useGerarSped, baixarSped } from "@/lib/supabase-queries";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
+import { DadosContabilistaCard } from "@/components/dados-contabilista";
 import { dateTime } from "@/lib/format";
 import { toast } from "sonner";
 
@@ -120,12 +121,14 @@ export function FiscalSpedPage() {
         </CardContent>
       </Card>
 
+      <DadosContabilistaCard />
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Gerar arquivo</CardTitle>
           <CardDescription>
-            Perfil, regime e dados do contabilista vêm de Configurações do sistema — dependem do
-            enquadramento definido pelo contador.
+            Perfil e regime vêm de Configurações do sistema e dependem do enquadramento
+            definido pelo contador. Os dados do contabilista se preenchem no card acima.
           </CardDescription>
         </CardHeader>
         <CardContent>

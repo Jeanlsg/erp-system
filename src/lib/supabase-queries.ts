@@ -597,7 +597,13 @@ export function useClientes() {
 // ========================================
 // CONTAS
 // ========================================
-export function useContas(filters?: { tipo?: "pagar" | "receber"; status?: string; lojaId?: string }) {
+export function useContas(filters?: {
+  tipo?: "pagar" | "receber";
+  status?: string;
+  /** vários status de uma vez — "em aberto" é `pendente` E `vencido` */
+  statusIn?: string[];
+  lojaId?: string;
+}) {
   return useQuery<Conta[]>({
     queryKey: ["erp_contas", filters],
     queryFn: async () => {
@@ -609,7 +615,11 @@ export function useContas(filters?: { tipo?: "pagar" | "receber"; status?: strin
         .limit(500);
 
       if (filters?.tipo) query = query.eq("tipo", filters.tipo);
-      if (filters?.status) query = query.eq("status", filters.status);
+      // `status: "pendente"` sozinho esconde as vencidas, que são um status
+      // próprio no enum — e justamente as que mais importam numa tela de
+      // contas a pagar/receber. Daí o statusIn.
+      if (filters?.statusIn?.length) query = query.in("status", filters.statusIn);
+      else if (filters?.status) query = query.eq("status", filters.status);
       if (filters?.lojaId) query = query.eq("loja_id", filters.lojaId);
 
       const { data, error } = await query;
