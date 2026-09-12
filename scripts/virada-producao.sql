@@ -1,10 +1,19 @@
 -- ============================================================
 -- VIRADA PARA PRODUÇÃO — limpa dados de teste/exemplo.
 --
--- RODAR UMA ÚNICA VEZ, na entrega, DEPOIS de um backup:
---   docker exec $(docker ps -qf name=supabase-db) \
---     pg_dump -U supabase_admin -d postgres -n erp -Fc \
---     > /opt/backups/pre-virada-$(date +%Y%m%d).dump
+-- RODAR UMA ÚNICA VEZ, na entrega, DEPOIS de um backup COMPLETO:
+--   /opt/backups/backup-diario.sh      # gera o trio globals+postgres+_supabase
+--
+-- E ENSAIE ANTES, num clone — leva 2 minutos e já pegou erro uma vez:
+--   DB=$(docker ps -qf name=supabase-db | head -1)
+--   docker exec $DB psql -U supabase_admin -d postgres -qc 'CREATE DATABASE ensaio;'
+--   docker exec -i $DB pg_restore -U supabase_admin -d ensaio --no-owner --no-acl \
+--     < /opt/backups/postgres-$(date +%Y%m%d).dump
+--   docker exec -i $DB psql -U supabase_admin -d ensaio -v ON_ERROR_STOP=1 < virada-producao.sql
+--   docker exec $DB psql -U supabase_admin -d postgres -qc 'DROP DATABASE ensaio;'
+--   # (restaurar num banco de outro nome dá 6 erros de pg_cron — são esperados)
+--
+-- Procedimento de restauração: scripts/RESTAURAR-BACKUP.md
 --
 -- Execução:
 --   docker exec -i $(docker ps -qf name=supabase-db) \
