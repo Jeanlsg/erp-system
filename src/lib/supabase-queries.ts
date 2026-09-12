@@ -1133,7 +1133,14 @@ export function useCaixas(lojaId?: string) {
       if (lojaId) query = query.eq('loja_id', lojaId);
       const { data, error } = await query;
       if (error) throw error;
-      return (data ?? []) as any;
+      // As colunas total_vendas/total_sangrias/total_entradas_extras da tabela
+      // nunca são preenchidas — ficam em 0 até o fechamento. Quem tem o número
+      // certo são os campos *_real da view. useCaixaAberto e useCaixaPorId já
+      // faziam esta tradução; esta lista ficou de fora, então o card "Caixa
+      // Atual" e o "Histórico de Caixas" mostravam R$ 0,00 de vendas ao lado
+      // de um cartão dizendo "Vendas hoje R$ 209,80" — a mesma tela se
+      // contradizendo. É o resto do BUG-01-05 da auditoria.
+      return (data ?? []).map(comTotaisReais) as any;
     },
   });
 }
