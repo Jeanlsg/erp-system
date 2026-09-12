@@ -41,46 +41,62 @@ SELECT 'ANTES  vendas='||(SELECT count(*) FROM erp.erp_vendas)
   ||' contas='||(SELECT count(*) FROM erp.erp_contas)
   ||' notas='||(SELECT count(*) FROM erp.erp_notas_fiscais);
 
--- ---- movimento + cadastros de exemplo, numa truncada só ----
--- (tudo que se referencia mutuamente precisa estar na mesma lista)
-TRUNCATE
-  -- fiscal
-  erp.erp_notas_fiscais, erp.erp_nfe_eventos, erp.erp_nota_envios,
-  erp.erp_inutilizacoes, erp.erp_nfe_entrada, erp.erp_nfe_entrada_itens,
-  erp.erp_dfe_consultas, erp.erp_dfe_nsu, erp.erp_sped_arquivos,
-  -- vendas e devoluções
-  erp.erp_vendas, erp.erp_venda_itens, erp.erp_venda_taxas,
-  erp.erp_devolucoes, erp.erp_devolucao_itens,
-  erp.erp_orcamentos, erp.erp_orcamento_itens, erp.erp_pedidos,
-  -- financeiro / caixa
-  erp.erp_contas, erp.erp_caixa, erp.erp_caixa_movimentacoes,
-  erp.erp_sangrias, erp.erp_entradas_extras, erp.erp_fechamentos_caixa,
-  erp.erp_cheques, erp.erp_boletos, erp.erp_promissorias,
-  erp.erp_parcelamentos, erp.erp_parcelamento_contas, erp.erp_parcelamento_parcelas,
-  erp.erp_crediario_parcelas, erp.erp_crediario_parcela_itens,
-  erp.erp_comissoes, erp.erp_negativacoes, erp.erp_protestos,
-  -- estoque
-  erp.erp_estoque, erp.erp_estoque_movimentacoes, erp.erp_lotes,
-  erp.erp_inventarios, erp.erp_inventario_itens,
-  erp.erp_compras, erp.erp_compra_itens,
-  erp.erp_consignacoes, erp.erp_consignacao_itens,
-  erp.erp_remessas, erp.erp_remessa_itens,
-  -- fidelidade / crm
-  erp.erp_cartao_fidelidade, erp.erp_cartao_fidelidade_movimentacoes,
-  erp.erp_crm_sync,
-  -- marketing / diversos de teste
-  erp.erp_email_marketing, erp.erp_mala_direta, erp.erp_torpedos,
-  erp.erp_ocorrencias, erp.erp_locacoes, erp.erp_ordens_servico,
-  erp.erp_avaliacoes, erp.erp_recomendacoes, erp.erp_notificacoes,
-  erp.erp_agenda_compromissos, erp.erp_agenda_telefonica,
-  erp.erp_documentos, erp.erp_downloads, erp.erp_auditoria,
-  erp.erp_veiculos, erp.erp_veiculo_abastecimentos, erp.erp_veiculo_manutencoes,
-  -- cadastros de exemplo
-  erp.erp_produtos, erp.erp_categorias, erp.erp_kits, erp.erp_kit_itens,
-  erp.erp_pessoas, erp.erp_funcionarios, erp.erp_servicos,
-  erp.erp_transportadoras, erp.erp_parcerias,
-  erp.erp_tabelas_preco, erp.erp_tabela_preco_itens
-RESTART IDENTITY;
+-- ---- o que vai ser apagado: UMA lista, usada pela conferência e pelo TRUNCATE ----
+-- Manter em dois lugares apodrece. A lista vive aqui, a conferência abaixo usa
+-- ela para detectar tabela nova que aponte para alguma destas, e o TRUNCATE é
+-- montado a partir dela.
+CREATE TEMP TABLE a_truncar(tabela text PRIMARY KEY);
+INSERT INTO a_truncar(tabela) VALUES
+  ('erp_notas_fiscais'), ('erp_nfe_eventos'), ('erp_nota_envios'), ('erp_inutilizacoes'),
+  ('erp_nfe_entrada'), ('erp_nfe_entrada_itens'), ('erp_dfe_consultas'), ('erp_dfe_nsu'),
+  ('erp_sped_arquivos'), ('erp_vendas'), ('erp_venda_itens'), ('erp_venda_taxas'),
+  ('erp_devolucoes'), ('erp_devolucao_itens'), ('erp_orcamentos'), ('erp_orcamento_itens'),
+  ('erp_pedidos'), ('erp_contas'), ('erp_caixa'), ('erp_caixa_movimentacoes'),
+  ('erp_sangrias'), ('erp_entradas_extras'), ('erp_fechamentos_caixa'), ('erp_cheques'),
+  ('erp_boletos'), ('erp_promissorias'), ('erp_parcelamentos'), ('erp_parcelamento_contas'),
+  ('erp_parcelamento_parcelas'), ('erp_crediario_parcelas'), ('erp_crediario_parcela_itens'), ('erp_comissoes'),
+  ('erp_negativacoes'), ('erp_protestos'), ('erp_estoque'), ('erp_estoque_movimentacoes'),
+  ('erp_lotes'), ('erp_inventarios'), ('erp_inventario_itens'), ('erp_compras'),
+  ('erp_compra_itens'), ('erp_consignacoes'), ('erp_consignacao_itens'), ('erp_remessas'),
+  ('erp_remessa_itens'), ('erp_cartao_fidelidade'), ('erp_cartao_fidelidade_movimentacoes'), ('erp_crm_sync'),
+  ('erp_lgpd_solicitacoes'), ('erp_email_marketing'), ('erp_mala_direta'), ('erp_torpedos'),
+  ('erp_ocorrencias'), ('erp_locacoes'), ('erp_ordens_servico'), ('erp_avaliacoes'),
+  ('erp_recomendacoes'), ('erp_notificacoes'), ('erp_agenda_compromissos'), ('erp_agenda_telefonica'),
+  ('erp_documentos'), ('erp_downloads'), ('erp_auditoria'), ('erp_veiculos'),
+  ('erp_veiculo_abastecimentos'), ('erp_veiculo_manutencoes'), ('erp_produtos'), ('erp_categorias'),
+  ('erp_kits'), ('erp_kit_itens'), ('erp_pessoas'), ('erp_funcionarios'),
+  ('erp_servicos'), ('erp_transportadoras'), ('erp_parcerias'), ('erp_tabelas_preco'),
+  ('erp_tabela_preco_itens');
+
+-- ---- pré-voo: alguma tabela de FORA aponta para alguma de DENTRO? ----
+-- Se sim, o TRUNCATE falha inteiro com "cannot truncate a table referenced in
+-- a foreign key constraint" e o script aborta no meio. Aconteceu de verdade
+-- quando a tabela de solicitações LGPD foi criada (migration 071) e ficou fora
+-- da lista: a virada parou no TRUNCATE. Esta conferência troca o acidente por
+-- uma mensagem que diz exatamente o que acrescentar.
+DO $preflight$
+DECLARE v_faltando text;
+BEGIN
+  SELECT string_agg(DISTINCT c.conrelid::regclass::text, ', ')
+    INTO v_faltando
+    FROM pg_constraint c
+   WHERE c.contype = 'f'
+     AND c.connamespace = 'erp'::regnamespace
+     AND replace(c.confrelid::regclass::text, 'erp.', '') IN (SELECT tabela FROM a_truncar)
+     AND replace(c.conrelid::regclass::text,  'erp.', '') NOT IN (SELECT tabela FROM a_truncar);
+  IF v_faltando IS NOT NULL THEN
+    RAISE EXCEPTION
+      'Estas tabelas apontam para tabelas que serão apagadas e não estão na lista: %. Acrescente-as ao INSERT INTO a_truncar acima e rode de novo.',
+      v_faltando;
+  END IF;
+END $preflight$;
+
+-- ---- apaga tudo de uma vez, na ordem que o Postgres resolve sozinho ----
+DO $truncar$
+BEGIN
+  EXECUTE 'TRUNCATE ' || (SELECT string_agg('erp.' || quote_ident(tabela), ', ' ORDER BY tabela) FROM a_truncar)
+       || ' RESTART IDENTITY';
+END $truncar$;
 
 -- numeração NFC-e: homologação e produção são ambientes independentes;
 -- em produção recomeça do 1
