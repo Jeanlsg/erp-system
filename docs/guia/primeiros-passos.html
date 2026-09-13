@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>ERP X-Life — Primeiros Passos</title>
+<style>
+  @page { size: A4; margin: 16mm 14mm 18mm 14mm; }
+  :root {
+    --tinta: #18181b; --suave: #52525b; --linha: #e4e4e7;
+    --marca: #c81e1e; --marca-fraca: #fef2f2;
+    --atencao: #b45309; --atencao-fundo: #fffbeb;
+    --ok: #15803d; --ok-fundo: #f0fdf4;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+         color: var(--tinta); font-size: 10.5pt; line-height: 1.55; }
+
+  .capa { height: 247mm; display: flex; flex-direction: column; justify-content: center; page-break-after: always; }
+  .capa .selo { font-size: 9pt; letter-spacing: .18em; text-transform: uppercase; color: var(--marca); font-weight: 700; margin-bottom: 10mm; }
+  .capa h1 { font-size: 34pt; line-height: 1.1; margin: 0 0 6mm; letter-spacing: -.02em; }
+  .capa .sub { font-size: 13pt; color: var(--suave); max-width: 120mm; margin: 0 0 14mm; }
+  .capa .meta { font-size: 9.5pt; color: var(--suave); border-top: 2px solid var(--linha); padding-top: 5mm; }
+  .capa .meta b { color: var(--tinta); }
+
+  h2 { font-size: 17pt; margin: 0 0 1mm; letter-spacing: -.01em; page-break-after: avoid; }
+  h2 .num { display: inline-block; min-width: 9mm; height: 9mm; line-height: 9mm; background: var(--marca);
+            color: #fff; border-radius: 50%; text-align: center; font-size: 11pt; margin-right: 3mm; vertical-align: 2px; }
+  h3 { font-size: 11.5pt; margin: 7mm 0 2mm; page-break-after: avoid; }
+  .secao { page-break-before: always; }
+  .fechamento { page-break-before: auto; }
+  .resumo { color: var(--suave); margin: 0 0 5mm; font-size: 10.5pt; }
+  p { margin: 0 0 3mm; }
+  ol, ul { margin: 0 0 4mm; padding-left: 5.5mm; }
+  li { margin-bottom: 1.8mm; }
+  b, strong { font-weight: 650; }
+  code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 9pt;
+         background: #f4f4f5; padding: .5mm 1.2mm; border-radius: 2px; }
+
+  .caminho { display: inline-block; background: var(--marca-fraca); color: var(--marca);
+             border: 1px solid #fecaca; border-radius: 3px; padding: 1mm 2.5mm;
+             font-size: 9.5pt; font-weight: 600; margin-bottom: 3mm; }
+
+  figure { margin: 4mm 0 5mm; page-break-inside: avoid; }
+  figure img { width: 100%; display: block; border: 1px solid var(--linha); border-radius: 4px; }
+  figcaption { font-size: 8.8pt; color: var(--suave); margin-top: 1.8mm; }
+
+  .aviso, .dica { border-left: 3px solid var(--atencao); background: var(--atencao-fundo);
+                  padding: 3mm 4mm; margin: 4mm 0; font-size: 10pt;
+                  page-break-inside: avoid; border-radius: 0 3px 3px 0; }
+  .aviso .rot { font-weight: 700; color: var(--atencao); display: block; margin-bottom: 1mm; }
+  .dica { border-left-color: var(--ok); background: var(--ok-fundo); }
+  .dica .rot { font-weight: 700; color: var(--ok); display: block; margin-bottom: 1mm; }
+
+  table { width: 100%; border-collapse: collapse; margin: 3mm 0 5mm; font-size: 9.8pt; page-break-inside: avoid; }
+  th { text-align: left; background: #fafafa; font-weight: 650; }
+  th, td { border: 1px solid var(--linha); padding: 2mm 2.5mm; vertical-align: top; }
+
+  .indice ol { list-style: none; padding: 0; counter-reset: i; }
+  .indice li { counter-increment: i; padding: 2.2mm 0; border-bottom: 1px solid var(--linha);
+               display: flex; gap: 4mm; align-items: baseline; }
+  .indice li::before { content: counter(i); color: var(--marca); font-weight: 700; min-width: 6mm; font-size: 10pt; }
+  .indice .t { font-weight: 600; }
+  .indice .d { color: var(--suave); font-size: 9.5pt; }
+
+  .rodape-nota { margin-top: 10mm; padding-top: 4mm; border-top: 2px solid var(--linha);
+                 font-size: 9.5pt; color: var(--suave); }
+</style>
+</head>
+<body>
+
+<section class="capa">
+  <div class="selo">Guia do usuário</div>
+  <h1>ERP X-Life<br>Primeiros passos</h1>
+  <p class="sub">
+    O caminho completo do primeiro acesso até a primeira venda com cupom fiscal —
+    com as telas reais do sistema.
+  </p>
+  <div class="meta">
+    <p><b>Para:</b> equipe da loja X-Life Suplementos</p>
+    <p><b>Sistema:</b> erp.lojaxlife.com.br</p>
+    <p><b>Versão do guia:</b> setembro de 2026</p>
+    <p style="margin-top:4mm">
+      As imagens deste guia usam <b>dados de exemplo</b> — produtos, clientes e valores
+      fictícios, criados só para ilustrar. O sistema que você vai receber está limpo,
+      pronto para os dados reais da loja.
+    </p>
+  </div>
+</section>
+
+<section>
+  <h2>O que tem neste guia</h2>
+  <p class="resumo">
+    Siga na ordem. Cada passo depende do anterior: não dá para vender sem produto
+    cadastrado, nem abrir o caixa sem estar dentro do sistema.
+  </p>
+  <div class="indice">
+    <ol>
+      <li><span><span class="t">Entrar no sistema</span> <span class="d">— endereço, usuário e senha</span></span></li>
+      <li><span><span class="t">Reconhecer a tela</span> <span class="d">— menu, seletor de loja e o botão de ajuda</span></span></li>
+      <li><span><span class="t">Cadastrar os produtos</span> <span class="d">— um a um, por planilha, ou pela nota do fornecedor</span></span></li>
+      <li><span><span class="t">Cadastrar os clientes</span> <span class="d">— também aceita planilha</span></span></li>
+      <li><span><span class="t">Abrir o caixa</span> <span class="d">— o primeiro ato do dia</span></span></li>
+      <li><span><span class="t">Fazer uma venda</span> <span class="d">— do carrinho ao troco</span></span></li>
+      <li><span><span class="t">Emitir o cupom fiscal</span> <span class="d">— a NFC-e, e o que ela exige</span></span></li>
+      <li><span><span class="t">Acompanhar o dia</span> <span class="d">— vendas, caixa e quem está devendo</span></span></li>
+      <li><span><span class="t">Fechar o caixa</span> <span class="d">— conferência do que entrou</span></span></li>
+      <li><span><span class="t">O que falta configurar</span> <span class="d">— antes da primeira venda de verdade</span></span></li>
+    </ol>
+  </div>
+  <div class="aviso">
+    <span class="rot">Antes de tudo</span>
+    O sistema só emite cupom fiscal com valor legal depois que o <b>CSC de produção</b>
+    for cadastrado e o ambiente trocado para <b>Produção</b> — é o passo 10.
+    Até lá, dá para usar tudo (vendas, estoque, caixa, clientes), mas o cupom sai
+    marcado como teste e não vale na SEFAZ.
+  </div>
+</section>
+
+<!-- 1 -->
+<section class="secao">
+  <h2><span class="num">1</span>Entrar no sistema</h2>
+  <p class="resumo">O ERP funciona no navegador. Não precisa instalar nada.</p>
+  <ol>
+    <li>Abra o navegador (Chrome ou Edge) e digite <code>erp.lojaxlife.com.br</code></li>
+    <li>Digite o <b>e-mail</b> e a <b>senha</b> que você recebeu</li>
+    <li>Clique em <b>Entrar</b></li>
+  </ol>
+  <figure>
+    <img src="IMG:02-login-preenchido">
+    <figcaption>Tela de entrada. Cada pessoa tem o próprio login — não compartilhe o seu.</figcaption>
+  </figure>
+  <div class="dica">
+    <span class="rot">Esqueceu a senha?</span>
+    Clique em <b>Esqueci minha senha</b> na tela de entrada. O sistema manda um link
+    por e-mail. O link vale por pouco tempo: se demorar, peça outro.
+  </div>
+  <div class="aviso">
+    <span class="rot">Cada pessoa com o seu login</span>
+    O sistema registra quem fez cada venda, cada sangria e cada alteração. Com login
+    compartilhado, essa informação se perde — e a comissão do vendedor também, porque
+    ela é calculada por quem vendeu.
+  </div>
+</section>
+
+<!-- 2 -->
+<section class="secao">
+  <h2><span class="num">2</span>Reconhecer a tela</h2>
+  <p class="resumo">Três coisas se repetem em todas as telas. Conhecendo elas, o resto se acha sozinho.</p>
+  <figure>
+    <img src="IMG:03-dashboard">
+    <figcaption>Tela inicial. À esquerda o menu, no topo o seletor de loja e os avisos.</figcaption>
+  </figure>
+  <h3>O menu da esquerda</h3>
+  <p>
+    Agrupado por assunto: <b>Vendas e Pedidos</b> (PDV, Caixa, Vendas),
+    <b>Gestão</b> (produtos, clientes, fornecedores, financeiro, fiscal) e
+    <b>Configurações</b>. Clique no grupo para abrir.
+  </p>
+  <h3>O seletor de loja, no alto</h3>
+  <p>
+    Mostra em qual loja você está — <b>Juazeiro</b> ou <b>Petrolina</b>. A estrela (★)
+    marca a matriz. Tudo o que você vê e faz vale para a loja selecionada aí:
+    estoque, caixa, vendas e configuração fiscal.
+  </p>
+  <div class="aviso">
+    <span class="rot">Confira a loja antes de lançar qualquer coisa</span>
+    Vender, dar entrada de mercadoria ou abrir caixa na loja errada é o engano mais
+    comum e o mais chato de desfazer. Olhe o seletor antes.
+  </div>
+  <h3>O botão de ajuda (?)</h3>
+  <p>
+    No canto superior direito de cada tela. Ele explica <b>o que aquela tela faz</b> e
+    oferece <b>“Ver como usar esta tela”</b>, uma demonstração guiada que percorre os
+    botões sem executar nada de verdade. Use à vontade: nenhuma venda é criada,
+    nenhum dado é alterado.
+  </p>
+</section>
+
+<!-- 3 -->
+<section class="secao">
+  <h2><span class="num">3</span>Cadastrar os produtos</h2>
+  <span class="caminho">Gestão › Gestão Empresarial › Cadastro e Estoque</span>
+  <p class="resumo">
+    Sem produto cadastrado não há venda. Há três caminhos: um a um, a loja inteira
+    por planilha, ou direto da nota fiscal do fornecedor.
+  </p>
+  <figure>
+    <img src="IMG:04-produtos-lista">
+    <figcaption>Lista de produtos. No topo, os atalhos; nos cartões, o resumo do estoque.</figcaption>
+  </figure>
+
+  <h3>Um produto de cada vez</h3>
+  <p>Clique em <b>Cadastrar Produto</b> e preencha. Os campos que mais importam:</p>
+  <table>
+    <tr><th style="width:38mm">Campo</th><th>Para que serve</th></tr>
+    <tr><td><b>Nome</b></td><td>o que aparece no PDV e no cupom</td></tr>
+    <tr><td><b>Código de barras</b></td><td>permite bipar o produto no PDV com o leitor</td></tr>
+    <tr><td><b>Valor de custo</b></td><td>quanto você paga. É o que calcula o lucro</td></tr>
+    <tr><td><b>Valor de venda</b></td><td>quanto o cliente paga</td></tr>
+    <tr><td><b>Estoque mínimo</b></td><td>abaixo disso o sistema avisa que está acabando</td></tr>
+    <tr><td><b>NCM</b></td><td>código fiscal do produto. <b>Sem ele o cupom fiscal não sai</b></td></tr>
+  </table>
+
+  <h3>A loja inteira por planilha</h3>
+  <p>
+    Clique em <b>Importar Planilha</b>, depois em <b>Baixar modelo</b>. Preencha o
+    modelo com os seus produtos e envie de volta.
+  </p>
+  <figure>
+    <img src="IMG:05-importar-planilha">
+    <figcaption>A janela de importação. Antes de confirmar, ela mostra o que entendeu de cada linha.</figcaption>
+  </figure>
+  <div class="aviso">
+    <span class="rot">Escreva os preços com vírgula e centavos</span>
+    Certo: <code>149,90</code> · <code>1.234,56</code> · <code>45,00</code>.<br>
+    Evite <code>1.234</code> sem centavos — o sistema lê como <b>R$ 1,23</b>.
+    Por isso a janela mostra a coluna <b>Venda</b> já convertida: <b>confira essa coluna
+    antes de clicar em Importar.</b> Se aparecer um valor estranho, corrija a planilha
+    e envie de novo.
+  </div>
+  <div class="dica">
+    <span class="rot">Pode importar quantas vezes quiser</span>
+    Produto que já existe (mesmo código ou mesmo código de barras) é <b>pulado</b>, não
+    duplicado. Ao final, o sistema lista linha por linha o que entrou e o que foi pulado.
+  </div>
+</section>
+
+<!-- 3b — NOVO -->
+<section class="secao">
+  <h2>A partir da nota fiscal do fornecedor</h2>
+  <span class="caminho">Vendas e Pedidos › Importar NFe</span>
+  <p class="resumo">
+    É o caminho do dia a dia: chegou mercadoria, você importa a nota e o sistema
+    cadastra o que é novo, dá entrada no estoque e ainda lança a conta a pagar.
+    Um passo, três efeitos.
+  </p>
+
+  <figure>
+    <img src="IMG:23-importar-nfe">
+    <figcaption>Duas formas de trazer a nota: pelo número dela, ou subindo o arquivo XML.</figcaption>
+  </figure>
+
+  <h3>Como trazer a nota</h3>
+  <table>
+    <tr><th style="width:44mm">Forma</th><th>Quando usar</th></tr>
+    <tr>
+      <td><b>Pelo número da nota</b></td>
+      <td>quando a nota já chegou da SEFAZ para o CNPJ da loja. Digite o número que está
+          no DANFE (ou a chave de 44 dígitos) e clique na lupa — <b>não precisa do arquivo</b></td>
+    </tr>
+    <tr>
+      <td><b>Subindo o arquivo XML</b></td>
+      <td>quando o fornecedor mandou o XML por e-mail ou WhatsApp. Arraste o arquivo
+          para a área pontilhada, ou clique nela para escolher. Aceita <code>.xml</code>
+          de NF-e, até 5 MB</td>
+    </tr>
+  </table>
+
+  <h3>O que acontece depois</h3>
+  <ol>
+    <li>O sistema lê a nota e <b>tenta casar cada item com um produto seu</b>, pelo código
+        de barras ou pelo código do produto</li>
+    <li>Mostra a lista item a item: o que ele reconheceu, o que é <b>produto novo</b>, e
+        o custo que veio na nota</li>
+    <li>Você escolhe a <b>margem</b> — dá para aplicar uma margem em todos de uma vez e
+        depois ajustar item por item. O preço de venda sai do custo da nota mais a margem</li>
+    <li>Ao confirmar: os produtos novos são <b>cadastrados</b>, o <b>estoque entra</b> na
+        loja, o <b>custo médio é recalculado</b> pelo custo real da nota, e a
+        <b>conta a pagar</b> é criada com as parcelas da própria nota</li>
+  </ol>
+
+  <div class="dica">
+    <span class="rot">É a forma mais segura de cadastrar produto</span>
+    Os dados fiscais que o cupom exige — <b>NCM</b>, CFOP, CST — vêm prontos da nota do
+    fornecedor. Produto cadastrado por aqui já nasce apto a sair no cupom fiscal, sem
+    você precisar caçar código nenhum.
+  </div>
+
+  <div class="aviso">
+    <span class="rot">Confira a margem antes de confirmar</span>
+    O preço de venda é calculado, não copiado: custo da nota + margem escolhida. Se a
+    margem padrão não for a sua, ajuste antes — depois de importado, corrigir preço de
+    30 produtos é um a um.
+  </div>
+
+  <div class="aviso">
+    <span class="rot">A mesma nota não entra duas vezes</span>
+    O sistema guarda a chave de acesso e recusa a reimportação, então não há risco de
+    dobrar o estoque por engano. Se precisar reimportar, fale com o suporte.
+  </div>
+
+  <div class="dica">
+    <span class="rot">Buscar pelo número só acha o que a SEFAZ já entregou</span>
+    A busca procura entre as notas que a SEFAZ já enviou para o CNPJ da loja. Isso passa
+    a funcionar depois da troca para o ambiente de produção (passo 10). Antes disso, use
+    o arquivo XML — esse caminho funciona desde já.
+  </div>
+</section>
+
+<!-- 4 -->
+<section class="secao">
+  <h2><span class="num">4</span>Cadastrar os clientes</h2>
+  <span class="caminho">Gestão › Gestão Empresarial › Clientes</span>
+  <p class="resumo">
+    Cliente cadastrado permite vender a prazo, acompanhar o que cada um deve e
+    ver o histórico de compras.
+  </p>
+  <figure>
+    <img src="IMG:06-clientes">
+    <figcaption>Lista de clientes, com o histórico de compras de cada um.</figcaption>
+  </figure>
+  <p>
+    <b>Novo Cliente</b> cadastra um. <b>Importar planilha</b> traz a lista inteira, do
+    mesmo jeito que os produtos — baixe o modelo, preencha e envie.
+  </p>
+  <div class="dica">
+    <span class="rot">Venda no balcão não exige cadastro</span>
+    Para quem só passa e compra, deixe <b>Consumidor Final</b> no PDV. O cadastro serve
+    para quem compra a prazo, quem você quer acompanhar, ou quem pede a nota no CPF.
+  </div>
+  <div class="aviso">
+    <span class="rot">Telefone repetido, cadastro repetido</span>
+    Se você cadastrar alguém com um telefone que já existe, o sistema avisa e mostra de
+    quem é. Vale conferir: dois cadastros da mesma pessoa dividem o histórico dela em dois.
+  </div>
+</section>
+
+<!-- 5 -->
+<section class="secao">
+  <h2><span class="num">5</span>Abrir o caixa</h2>
+  <span class="caminho">Vendas e Pedidos › PDV</span>
+  <p class="resumo">
+    Primeiro ato do dia. Sem caixa aberto o PDV não vende — e é assim de propósito,
+    porque é o caixa que controla o dinheiro da gaveta.
+  </p>
+  <ol>
+    <li>Abra o <b>PDV</b>. Se o selo ao lado do título disser <b>Caixa Fechado</b>, é hora de abrir</li>
+    <li>Escolha o caixa (<b>CAIXA 001</b> ou <b>CAIXA 002</b>)</li>
+    <li>Informe o <b>Saldo Inicial (Troco)</b> — o dinheiro que já está na gaveta</li>
+    <li>Clique em <b>Abrir Caixa</b> e confirme</li>
+  </ol>
+  <figure>
+    <img src="IMG:08-abrir-caixa">
+    <figcaption>Abertura do caixa. O valor informado é o troco que já está na gaveta.</figcaption>
+  </figure>
+  <div class="aviso">
+    <span class="rot">Conte o dinheiro antes de digitar</span>
+    O valor informado aqui é a base da conferência no fim do dia. Se você digitar um
+    número diferente do que tem na gaveta, o fechamento vai acusar sobra ou falta que
+    não existe.
+  </div>
+</section>
+
+<!-- 6 -->
+<section class="secao">
+  <h2><span class="num">6</span>Fazer uma venda</h2>
+  <span class="caminho">Vendas e Pedidos › PDV</span>
+  <ol>
+    <li><b>Bipe o código de barras</b> com o leitor, ou digite o nome no campo de busca e clique no produto</li>
+    <li>O produto cai no <b>Carrinho</b>, à direita. Use <b>+</b> e <b>−</b> para mudar a quantidade</li>
+    <li>Se for cliente cadastrado, escolha em <b>Cliente</b>. Senão, deixe <b>Consumidor Final</b></li>
+    <li>Escolha o <b>Vendedor</b> — é isso que gera a comissão</li>
+    <li>Escolha a <b>Forma de Pagamento</b>. Em Dinheiro, informe o <b>Valor Recebido</b> e o sistema calcula o troco</li>
+    <li>Clique em <b>Finalizar</b></li>
+  </ol>
+  <figure>
+    <img src="IMG:11-pdv-carrinho">
+    <figcaption>Carrinho com dois itens, forma de pagamento escolhida e total à direita.</figcaption>
+  </figure>
+  <div class="dica">
+    <span class="rot">O leitor de código de barras funciona sozinho</span>
+    Não precisa clicar em lugar nenhum antes de bipar: o leitor se comporta como um
+    teclado e o PDV entende o código em qualquer ponto da tela.
+  </div>
+</section>
+
+<!-- 7 -->
+<section class="secao">
+  <h2><span class="num">7</span>Emitir o cupom fiscal</h2>
+  <p class="resumo">
+    Ao clicar em Finalizar, aparece a confirmação. É aí que se decide se sai cupom fiscal.
+  </p>
+  <figure>
+    <img src="IMG:12-confirmar-venda">
+    <figcaption>Confirmação da venda: troco, CPF na nota e a opção de emitir o cupom fiscal.</figcaption>
+  </figure>
+  <ul>
+    <li><b>CPF na nota?</b> — se o cliente pedir, digite aqui. Não precisa cadastrá-lo</li>
+    <li><b>Emitir NFC-e (cupom fiscal)</b> — marque para transmitir o cupom à SEFAZ</li>
+    <li><b>Confirmar Venda</b> — conclui</li>
+  </ul>
+  <div class="aviso">
+    <span class="rot">A caixinha do cupom volta desmarcada a cada venda</span>
+    Se a loja emite cupom em toda venda, crie o hábito de marcar. O sistema não marca
+    sozinho, e uma venda sem cupom não pode ser “transformada” em cupom depois pela
+    tela do PDV — o caminho aí passa a ser <b>Notas Fiscais</b>.
+  </div>
+  <div class="dica">
+    <span class="rot">Se o cupom falhar, a venda não se perde</span>
+    A venda fica registrada e o sistema avisa o motivo. Corrija a causa e emita o cupom
+    depois, em <b>Vendas e Pedidos › Notas Fiscais</b>.
+  </div>
+</section>
+
+<!-- 8 -->
+<section class="secao">
+  <h2><span class="num">8</span>Acompanhar o dia</h2>
+
+  <h3>Os cupons emitidos</h3>
+  <span class="caminho">Vendas e Pedidos › Notas Fiscais</span>
+  <p>
+    Cada linha mostra a situação (<b>autorizada</b>, <b>rejeitada</b>) e o ambiente
+    (<b>Produção</b> ou <b>Homologação</b>). Nos ícones da linha: ver detalhes com a
+    chave de acesso, <b>ver o DANFE</b> para imprimir, <b>baixar o XML</b> e
+    <b>enviar por e-mail</b> ao cliente.
+  </p>
+  <div class="aviso">
+    <span class="rot">Se aparecer “rejeitada”, anote o motivo na hora</span>
+    A mensagem da SEFAZ aparece no aviso da tela e some em poucos segundos. Tire uma
+    foto da tela: é ela que diz o que corrigir.
+  </div>
+
+  <h3>As vendas</h3>
+  <span class="caminho">Vendas e Pedidos › Vendas</span>
+  <figure>
+    <img src="IMG:14-vendas">
+    <figcaption>Todas as vendas, com número, cliente, total, forma de pagamento e situação.</figcaption>
+  </figure>
+
+  <h3>O caixa</h3>
+  <span class="caminho">Vendas e Pedidos › Caixa</span>
+  <p>
+    Mostra o movimento do caixa aberto. É aqui que se lança <b>Sangria</b> (retirada de
+    dinheiro da gaveta) e <b>Entrada Extra</b> (dinheiro que entra fora de venda).
+  </p>
+  <figure>
+    <img src="IMG:15-caixa">
+    <figcaption>Movimento do caixa, com o esperado em gaveta calculado.</figcaption>
+  </figure>
+
+  <h3>Quem está devendo</h3>
+  <span class="caminho">Financeiro › Contas a Pagar/Receber</span>
+  <figure>
+    <img src="IMG:16-contas-receber">
+    <figcaption>Contas em aberto. As vencidas aparecem em vermelho, com o botão de dar baixa.</figcaption>
+  </figure>
+  <p>
+    Quando o cliente pagar, clique em <b>Dar baixa</b> na linha. O sistema pergunta o
+    valor e a data.
+  </p>
+  <div class="aviso">
+    <span class="rot">Baixa com valor menor fecha a conta</span>
+    Se você informar menos que o valor da conta, ela é fechada como paga e a diferença
+    fica como abatimento — o sistema <b>não</b> cria outra conta pelo que faltou. O
+    aviso na tela explica isso antes de confirmar.
+  </div>
+
+  <h3>Os avisos do sistema</h3>
+  <p>
+    O <b>sino</b> no topo e a tela <b>Notificações</b> mostram o que está pedindo
+    atenção: produtos acabando, contas vencidas, lotes perto da validade e certificado
+    digital vencendo.
+  </p>
+</section>
+
+<!-- 9 -->
+<section class="secao">
+  <h2><span class="num">9</span>Fechar o caixa</h2>
+  <span class="caminho">Vendas e Pedidos › PDV › Fechar Caixa</span>
+  <p class="resumo">Último ato do dia. É a conferência entre o que o sistema calculou e o que tem na gaveta.</p>
+  <ol>
+    <li>Conte o dinheiro da gaveta</li>
+    <li>Clique em <b>Fechar Caixa</b> no topo do PDV</li>
+    <li>O sistema mostra o <b>esperado</b>: saldo inicial + vendas em dinheiro + entradas − sangrias</li>
+    <li>Informe o valor contado e confirme</li>
+  </ol>
+  <figure>
+    <img src="IMG:22-fechar-caixa">
+    <figcaption>Fechamento de caixa: o sistema mostra a conta inteira antes de você digitar o valor contado.</figcaption>
+  </figure>
+  <p>
+    Repare no exemplo: saldo inicial de R$ 200,00, R$ 209,80 vendidos em dinheiro e
+    R$ 40,20 devolvidos em troco dão <b>R$ 369,60 esperados na gaveta</b>. É esse número
+    que você compara com o dinheiro contado.
+  </p>
+  <div class="dica">
+    <span class="rot">Diferença não é acusação</span>
+    Sobra ou falta acontece — troco errado, sangria não lançada. O sistema registra a
+    diferença para você investigar, não para travar o fechamento.
+  </div>
+</section>
+
+<!-- 10 -->
+<section class="secao">
+  <h2><span class="num">10</span>O que falta configurar</h2>
+  <p class="resumo">
+    Estes passos são feitos uma vez, antes da primeira venda de verdade. Alguns dependem
+    de informação que só você ou o contador têm.
+  </p>
+
+  <h3>Dados do contabilista</h3>
+  <span class="caminho">Gestão › Fiscal › Escrituração (SPED)</span>
+  <figure>
+    <img src="IMG:21-sped-contabilista">
+    <figcaption>Preencha com os dados que o contador informar e clique em Salvar.</figcaption>
+  </figure>
+  <p>
+    Nome, CPF, CRC, CNPJ do escritório, telefone e e-mail. Sem isso, o arquivo do SPED
+    sai incompleto e é recusado na entrega.
+  </p>
+
+  <h3>CSC e ambiente de produção</h3>
+  <span class="caminho">Gestão › Fiscal › Configurações SEFAZ</span>
+  <figure>
+    <img src="IMG:18-config-sefaz">
+    <figcaption>É aqui que o cupom fiscal passa a valer de verdade.</figcaption>
+  </figure>
+  <p>
+    O <b>CSC</b> é um código que você pede no portal da SEFAZ do estado — um para cada
+    loja, porque é amarrado ao CNPJ. Com ele em mãos: preencha <b>CSC ID</b> e
+    <b>CSC Token</b>, e só então troque <b>Ambiente</b> para <b>Produção</b>.
+  </p>
+  <div class="aviso">
+    <span class="rot">Uma loja por vez, e CSC antes do ambiente</span>
+    Cada loja tem CSC próprio e precisa ser configurada separadamente — trocar a matriz
+    não troca a filial. E se o ambiente virar Produção sem o CSC, a tela salva sem
+    reclamar e o erro só aparece no meio de uma venda.
+  </div>
+
+  <h3>Equipe e comissão</h3>
+  <span class="caminho">Gestão › Usuários e Permissões · Gestão Empresarial › Funcionários</span>
+  <p>
+    São <b>dois cadastros diferentes</b> e os dois são necessários para quem vende e usa
+    o sistema:
+  </p>
+  <table>
+    <tr><th style="width:32mm">Cadastro</th><th>Para que serve</th></tr>
+    <tr><td><b>Usuário</b></td><td>o login. Sem ele a pessoa não entra no sistema</td></tr>
+    <tr><td><b>Funcionário</b></td><td>os dados de trabalho: cargo, salário e o <b>% de comissão</b></td></tr>
+  </table>
+  <p>
+    No cadastro do funcionário há o campo <b>Usuário do sistema</b>: é ele que liga os
+    dois. Crie o <b>usuário primeiro</b> — a lista só mostra logins que já existem.
+  </p>
+  <div class="aviso">
+    <span class="rot">Sem esse vínculo, não há comissão</span>
+    Quando a pessoa vende com o próprio login, o PDV já preenche o vendedor. Sem o
+    vínculo, o caixa precisa escolher na mão — e se esquecer, a venda fica sem vendedor
+    e <b>não gera comissão</b>, sem nenhum aviso.
+  </div>
+</section>
+
+<!-- fechamento -->
+<section class="fechamento">
+  <h2 style="margin-top:8mm">O dia a dia, em resumo</h2>
+  <table>
+    <tr><th style="width:34mm">Quando</th><th>O que fazer</th></tr>
+    <tr><td><b>Ao abrir a loja</b></td><td>Conferir a loja no seletor · Abrir o caixa com o troco contado</td></tr>
+    <tr><td><b>Durante o dia</b></td><td>Vender no PDV · Lançar sangria ao tirar dinheiro da gaveta</td></tr>
+    <tr><td><b>Ao fechar</b></td><td>Contar a gaveta · Fechar o caixa · Conferir a diferença</td></tr>
+    <tr><td><b>Toda semana</b></td><td>Olhar o sino de avisos · Conferir quem está devendo · Repor o que está acabando</td></tr>
+    <tr><td><b>Ao receber mercadoria</b></td><td>Importar a NF-e do fornecedor: cadastra o que é novo, dá entrada no estoque e cria a conta a pagar</td></tr>
+  </table>
+
+  <h3>Quando tiver dúvida</h3>
+  <ul>
+    <li><b>O botão (?)</b> no topo de cada tela explica aquela tela e oferece uma demonstração guiada</li>
+    <li><b>Ajuda</b>, no menu, reúne as perguntas mais comuns com link para a tela certa</li>
+    <li><b>Tutoriais</b>, no menu, tem o passo a passo com imagens de cada tela</li>
+  </ul>
+  <div class="dica">
+    <span class="rot">Explorar não quebra nada</span>
+    As demonstrações guiadas não executam ação nenhuma — não criam venda, não apagam
+    nada. Pode clicar à vontade para conhecer o sistema.
+  </div>
+
+  <div class="rodape-nota">
+    <p>
+      <b>Sobre as imagens deste guia:</b> todos os produtos, clientes, valores e vendas
+      mostrados são fictícios, criados apenas para ilustrar. O sistema entregue está
+      sem nenhum desses dados.
+    </p>
+    <p><b>Suporte:</b> Vertta Tech — pelo canal combinado com a loja.</p>
+  </div>
+</section>
+
+</body>
+</html>
