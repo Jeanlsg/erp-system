@@ -20,13 +20,14 @@ import {
 import {
   Users, Plus, Edit, Shield, Lock, Unlock,
   Search, Loader2, Save, RefreshCw,
-  Mail, Phone, KeyRound, Trash2, Check, Eye, EyeOff, RotateCcw, Layers, Download,
+  Mail, Phone, KeyRound, Trash2, Check, Eye, EyeOff, RotateCcw, Layers, Download, Briefcase,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   useUsuarios, useUpdateUsuario, useDesbloquearUsuario,
   useUpdatePermissoesUsuario, useLojas,
   usePapelPermissoes, useSalvarPapelPermissoes,
+  useFuncionarios, useCreateFuncionario, useUpdateFuncionario,
   isSupabaseConfigured,
 } from "@/lib/supabase-queries";
 import { supabase } from "@/lib/supabase";
@@ -315,6 +316,11 @@ export function UsuariosPage() {
   const desbloquearUsuario = useDesbloquearUsuario();
   const updatePermissoes = useUpdatePermissoesUsuario();
   const { data: papelPermissoesRows = [] } = usePapelPermissoes();
+  // O usuário é o cadastro-mestre: daqui ele pode nascer já como funcionário.
+  const { data: funcionarios = [] } = useFuncionarios();
+  const createFunc = useCreateFuncionario();
+  const updateFunc = useUpdateFuncionario();
+  const funcionarioDe = (userId?: string | null) => funcionarios.find((f: any) => f.usuario_id === userId);
 
   // permissões padrão de cada papel: tabela por cima do mapa do código
   const mapaPapeis = useMemo(() => {
@@ -348,6 +354,9 @@ export function UsuariosPage() {
     telefone: "",
     senha: "",
     definirSenha: false,
+    // funcionário: criado/atualizado junto com o usuário
+    funcionario: false, cargo: "", departamento: "", cpf: "",
+    data_admissao: new Date().toISOString().slice(0, 10), funcionarioAtivo: true,
   });
   const [showPasswordUsuario, setShowPasswordUsuario] = useState(false);
   const [permissoesCustom, setPermissoesCustom] = useState<Record<string, boolean>>({});
@@ -399,6 +408,8 @@ export function UsuariosPage() {
       // sem convite por e-mail: o link cairia na tela do CRM (SITE_URL é
       // compartilhada). Quem já tem login no CRM entra por "Importar do CRM".
       definirSenha: true,
+      funcionario: false, cargo: "", departamento: "", cpf: "",
+      data_admissao: new Date().toISOString().slice(0, 10), funcionarioAtivo: true,
     });
     setShowPasswordUsuario(false);
     setModalUsuario(true);
@@ -415,9 +426,58 @@ export function UsuariosPage() {
       telefone: u.telefone ?? "",
       senha: "",
       definirSenha: false,
+      funcionario: !!funcionarioDe(u.id),
+      cargo: funcionarioDe(u.id)?.cargo ?? "",
+      departamento: funcionarioDe(u.id)?.departamento ?? "",
+      cpf: funcionarioDe(u.id)?.cpf ?? u.cpf ?? "",
+      data_admissao: funcionarioDe(u.id)?.data_admissao ?? new Date().toISOString().slice(0, 10),
+      funcionarioAtivo: !funcionarioDe(u.id)?.data_demissao,
     });
     setShowPasswordUsuario(false);
     setModalUsuario(true);
+  };
+
+  /**
+   * Cria ou atualiza o funcionário deste usuário, conforme o formulário.
+   * Desmarcar "É funcionário" não apaga nada (histórico de comissões);
+   * para desligar, use "Funcionário ativo".
+   */
+  const sincronizarFuncionario = async (userId: string) => {
+    if (!formUsuario.funcionario) return;
+    const hoje = new Date().toISOString().slice(0, 10);
+    const cpf = formUsuario.cpf.replace(/\D/g, "") || null;
+    const existente = funcionarioDe(userId);
+    if (existente) {
+      await updateFunc.mutateAsync({
+        id: existente.id,
+        cargo: formUsuario.cargo || null,
+        departamento: formUsuario.departamento || null,
+        data_admissao: formUsuario.data_admissao || null,
+        data_demissao: formUsuario.funcionarioAtivo ? null : (existente.data_demissao ?? hoje),
+      });
+      return;
+    }
+    // pessoa: reaproveita pelo CPF (cliente que virou funcionário), senão cria
+    let pessoaId: string | null = null;
+    if (cpf) {
+      const { data } = await supabase.from("erp_pessoas").select("id").eq("cpf_cnpj", cpf).maybeSingle();
+      pessoaId = data?.id ?? null;
+    }
+    if (!pessoaId) {
+      const { data, error } = await supabase.from("erp_pessoas").insert({
+        tipo: "fisica", nome_razao: formUsuario.nome, email: formUsuario.email || null,
+        telefone: formUsuario.telefone || null, cpf_cnpj: cpf,
+      }).select("id").single();
+      if (error) throw new Error(`pessoa: ${error.message}`);
+      pessoaId = data.id;
+    }
+    await createFunc.mutateAsync({
+      pessoa_id: pessoaId, usuario_id: userId,
+      cargo: formUsuario.cargo || null, departamento: formUsuario.departamento || null,
+      data_admissao: formUsuario.data_admissao || null, cpf,
+      comissao_percentual: 0, gerente: false,
+      data_demissao: formUsuario.funcionarioAtivo ? null : hoje,
+    });
   };
 
   const salvarUsuario = async () => {
@@ -464,6 +524,8 @@ export function UsuariosPage() {
         } else {
           toast.success("Usuário atualizado");
         }
+        try { await sincronizarFuncionario(editId); }
+        catch (e: any) { toast.warning(`Usuário salvo, mas o funcionário não: ${e.message ?? e}`, { duration: 10000 }); }
       } else {
         // Criação: usa Edge Function create-user
         const { data, error } = await supabase.functions.invoke<{
@@ -488,6 +550,10 @@ export function UsuariosPage() {
         if (data?.error) throw new Error(data.error);
         if (!data?.success) throw new Error("Erro desconhecido ao criar usuário");
         toast.success(`Usuário criado. Já pode entrar com ${formUsuario.email} e a senha definida.`);
+        if (data.user_id) {
+          try { await sincronizarFuncionario(data.user_id); }
+          catch (e: any) { toast.warning(`Usuário criado, mas o funcionário não: ${e.message ?? e}`, { duration: 10000 }); }
+        }
       }
       setModalUsuario(false);
       refetch();
@@ -771,6 +837,12 @@ export function UsuariosPage() {
                                   <Phone className="h-2 w-2" /> {u.telefone}
                                 </p>
                               )}
+                              {funcionarioDe(u.id) && (
+                                <Badge variant="outline" className={`mt-1 text-[10px] ${funcionarioDe(u.id)?.data_demissao ? "text-orange-600 border-orange-400" : ""}`}>
+                                  <Briefcase className="h-2.5 w-2.5 mr-0.5" />
+                                  {funcionarioDe(u.id)?.cargo || "Funcionário"}{funcionarioDe(u.id)?.data_demissao ? " · desligado" : ""}
+                                </Badge>
+                              )}
                             </div>
                           </div>
                         </td>
@@ -1000,6 +1072,43 @@ export function UsuariosPage() {
                   </label>
                 </div>
               </div>
+            </div>
+
+            {/* Funcionário: o usuário é o cadastro-mestre; daqui ele já nasce
+                como funcionário (pessoa + vínculo), com o status editável. */}
+            <div className="space-y-2 border rounded-md p-3 bg-muted/30">
+              <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                <input type="checkbox" className="h-4 w-4" checked={formUsuario.funcionario}
+                  disabled={!!editId && !!funcionarioDe(editId)}
+                  onChange={(e) => setFormUsuario({ ...formUsuario, funcionario: e.target.checked })} />
+                <Briefcase className="h-4 w-4" /> É funcionário
+                {!!editId && !!funcionarioDe(editId) && (
+                  <span className="text-[11px] font-normal text-muted-foreground">(vínculo existente — para desligar, desmarque "ativo" abaixo)</span>
+                )}
+              </label>
+              {formUsuario.funcionario && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><Label>Cargo</Label><Input value={formUsuario.cargo} onChange={(e) => setFormUsuario({ ...formUsuario, cargo: e.target.value })} /></div>
+                    <div><Label>Departamento</Label><Input value={formUsuario.departamento} onChange={(e) => setFormUsuario({ ...formUsuario, departamento: e.target.value })} /></div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div><Label>CPF</Label><Input value={formUsuario.cpf} onChange={(e) => setFormUsuario({ ...formUsuario, cpf: e.target.value })} placeholder="000.000.000-00" /></div>
+                    <div><Label>Admissão</Label><Input type="date" value={formUsuario.data_admissao} onChange={(e) => setFormUsuario({ ...formUsuario, data_admissao: e.target.value })} /></div>
+                    <div>
+                      <Label>Status</Label>
+                      <label className="mt-2 flex items-center gap-2 text-sm cursor-pointer">
+                        <input type="checkbox" className="h-4 w-4" checked={formUsuario.funcionarioAtivo}
+                          onChange={(e) => setFormUsuario({ ...formUsuario, funcionarioAtivo: e.target.checked })} />
+                        Funcionário ativo
+                      </label>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Salário e comissão se ajustam em Funcionários. Desmarcar "ativo" registra a demissão na data de hoje; o histórico é preservado.
+                  </p>
+                </>
+              )}
             </div>
 
             {/* Senha — obrigatória na criação. Não há convite por e-mail: o

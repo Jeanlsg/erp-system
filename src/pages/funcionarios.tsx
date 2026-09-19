@@ -28,7 +28,7 @@ export function FuncionariosPage() {
   const { data: usuarios = [] } = useQuery<any[]>({
     queryKey: ["erp_usuarios_vinculo"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("erp_usuarios").select("id, nome, email, ativo, role, papeis").order("nome");
+      const { data, error } = await supabase.from("erp_usuarios").select("id, nome, email, telefone, ativo, role, papeis").order("nome");
       if (error) throw error;
       return data ?? [];
     },
@@ -448,6 +448,27 @@ export function FuncionariosPage() {
               </label>
               {form.acesso && (
                 <>
+                  {!form.usuario_id && (
+                    <div>
+                      <Label>Vincular a um login que já existe</Label>
+                      <select className="flex h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm"
+                        value="" onChange={(e) => {
+                          const u = usuarios.find((x: any) => x.id === e.target.value);
+                          if (!u) return;
+                          // puxa os dados do login; o que já foi digitado prevalece
+                          setForm({
+                            ...form, usuario_id: u.id, acesso: true,
+                            nome: form.nome || u.nome || "", email: u.email ?? form.email,
+                            telefone: form.telefone || u.telefone || "", papeis: papeisDe(u),
+                          });
+                        }}>
+                        <option value="">— ou crie um novo login abaixo —</option>
+                        {usuarios
+                          .filter((u: any) => !funcionarios.some((f: any) => f.usuario_id === u.id && f.id !== editando?.id))
+                          .map((u: any) => <option key={u.id} value={u.id}>{u.nome ?? u.email} · {u.email}{u.ativo ? "" : " (inativo)"}</option>)}
+                      </select>
+                    </div>
+                  )}
                   {!form.usuario_id && (
                     <div className="grid grid-cols-2 gap-3">
                       <div>
