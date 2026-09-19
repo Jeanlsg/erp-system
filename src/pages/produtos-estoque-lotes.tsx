@@ -574,7 +574,14 @@ export function ProdutosEstoqueLotesPage() {
                       return (
                         <tr key={rowKey} className={`border-b hover:bg-accent transition-colors ${rowClass}`}>
                           <td className="p-2 font-mono text-xs">
-                            {p.codigo_barras || p.sku || "—"}
+                            {/* Sem EAN mostra o SKU, mas dizendo que é SKU: antes
+                                ele aparecia aqui sob o título "Código de Barras" e
+                                o cadastro, correto, mostrava o campo vazio. */}
+                            {p.codigo_barras
+                              ? p.codigo_barras
+                              : p.sku
+                                ? <span className="text-muted-foreground">SKU {p.sku}</span>
+                                : "—"}
                           </td>
                           <td className="p-2">
                             <div className="font-medium">{p.nome}</div>
