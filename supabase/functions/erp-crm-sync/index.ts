@@ -140,6 +140,11 @@ Deno.serve(async (req) => {
             telefone: tel,
             nome: (v.cliente as any)?.nome_razao ?? undefined,
             ...(cfg.etapa_venda ? { etapa: cfg.etapa_venda } : {}),
+            // Venda é ganho. O CRM exige valor ao marcar ganho; vai o total
+            // gasto pelo telefone (a receita que o lead representa), não só
+            // esta venda — é o que o painel do CRM soma como receita.
+            status: "won",
+            valor_ganho: Number((resumo as any)?.total ?? v.total ?? 0),
             campos: {
               // Só entra quando o ERP TEM a data. Mandar vazio apagaria no CRM
               // uma data preenchida lá à mão — o campo é opcional dos dois

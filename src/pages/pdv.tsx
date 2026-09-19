@@ -12,6 +12,7 @@ import {
   Calculator, Plus, Trash2, Loader2, ShoppingCart, Package,
   CreditCard, Banknote, QrCode, Lock, Unlock, Settings,
   Check, X, AlertCircle, Receipt, CloudOff, RefreshCw, Cloud, Camera,
+  UserPlus,
 } from "lucide-react";
 import { useProdutos, useClientes, useCaixaAberto, useCreateCaixa, useFecharCaixa, useKits, useCaixas, useCreateSangria, useCreateEntradaExtra, useCaixaConfig, useUpdateCaixaConfig, useEmitirNFeVenda, isSupabaseConfigured, useFuncionarios } from "@/lib/supabase-queries";
 import { toast } from "sonner";
@@ -26,6 +27,7 @@ import { LeitorCodigoBarras } from "@/components/leitor-codigo-barras";
 import { useLeitorUsb } from "@/lib/use-leitor-usb";
 import { documentoValido, mascaraDocumento } from "@/lib/documento";
 import { ComboboxBusca } from "@/components/ui/combobox-busca";
+import { ClienteRapidoPdvDialog } from "@/components/cliente-rapido-pdv";
 
 interface CartItem {
   produto_id: string;          // para kit: o id do kit (kit_id === produto_id)
@@ -80,6 +82,7 @@ export function PDVPage() {
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [clienteId, setClienteId] = useState("");
+  const [modalCliente, setModalCliente] = useState(false);
   // Vendedor da venda: é dele a comissão. Começa no funcionário ligado ao
   // usuário logado; o caixa pode trocar quando vende para outro vendedor.
   const [vendedorId, setVendedorId] = useState("");
@@ -620,15 +623,26 @@ export function PDVPage() {
             {/* Cliente */}
             <div className="p-4 border-b">
               <Label className="text-xs">Cliente</Label>
-              <ComboboxBusca
-                className="mt-1"
-                itens={clientes.map((c: any) => ({
-                  id: c.id, rotulo: c.nome_razao,
-                  detalhe: [c.cpf_cnpj, c.celular ?? c.telefone].filter(Boolean).join(" · "),
-                }))}
-                value={clienteId}
-                onChange={setClienteId}
-                vazio="Consumidor Final"
+              <div className="mt-1 flex gap-1">
+                <ComboboxBusca
+                  className="flex-1"
+                  itens={clientes.map((c: any) => ({
+                    id: c.id, rotulo: c.nome_razao,
+                    detalhe: [c.cpf_cnpj, c.celular ?? c.telefone].filter(Boolean).join(" · "),
+                  }))}
+                  value={clienteId}
+                  onChange={setClienteId}
+                  vazio="Consumidor Final"
+                />
+                {/* cadastro pelo celular: acha no ERP ou no CRM, ou cria */}
+                <Button variant="outline" size="sm" className="h-9 shrink-0 px-2"
+                  onClick={() => setModalCliente(true)} title="Novo cliente pelo celular (busca no ERP e no CRM)">
+                  <UserPlus className="h-4 w-4" />
+                </Button>
+              </div>
+              <ClienteRapidoPdvDialog
+                open={modalCliente} onOpenChange={setModalCliente} online={online}
+                onCliente={(id) => setClienteId(id)}
               />
             </div>
             {/* Vendedor */}
