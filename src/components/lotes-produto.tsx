@@ -9,7 +9,7 @@
 // ============================================================
 
 import { useMemo, useState } from "react";
-import { CalendarClock, Loader2, Plus, Trash2, AlertTriangle, Check } from "lucide-react";
+import { CalendarClock, Loader2, Plus, Trash2, AlertTriangle, Check, PackageX, Scale } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { invalidarProdutos } from "@/lib/supabase-queries";
 import { toast } from "sonner";
@@ -70,6 +70,91 @@ export function LotesProdutoDialog({ open, onOpenChange, produto, lojas, lojaIdI
       return data ?? [];
     },
   });
+
+  // Saldo por loja: o total dos lotes só faz sentido ao lado dele. Lote e
+  // saldo são contagens separadas (cadastrar lote não movimenta estoque);
+  // aqui a diferença fica visível e há um botão para igualar — pelo Kardex.
+  const { data: saldos = [] } = useQuery<any[]>({
+    queryKey: ["erp_estoque_produto", produto?.id],
+    enabled: open && !!produto?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("erp_estoque").select("loja_id, quantidade").eq("produto_id", produto!.id);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const [ocupado, setOcupado] = useState<string | null>(null);
+
+  const resumoPorLoja = useMemo(() => {
+    const m = new Map<string, { lotes: number; saldo: number; vencidos: number }>();
+    for (const l of lotes) {
+      const r = m.get(l.loja_id) ?? { lotes: 0, saldo: 0, vencidos: 0 };
+      r.lotes += Number(l.quantidade) || 0;
+      if (diasAte(l.data_validade) < 0) r.vencidos += Number(l.quantidade) || 0;
+      m.set(l.loja_id, r);
+    }
+    for (const s of saldos) {
+      const r = m.get(s.loja_id) ?? { lotes: 0, saldo: 0, vencidos: 0 };
+      r.saldo = Number(s.quantidade) || 0;
+      m.set(s.loja_id, r);
+    }
+    return [...m.entries()].filter(([, r]) => r.lotes > 0 || r.saldo > 0);
+  }, [lotes, saldos]);
+
+  const recarregar = () => {
+    void qc.invalidateQueries({ queryKey: ["erp_lotes_produto", produto?.id] });
+    void qc.invalidateQueries({ queryKey: ["erp_estoque_produto", produto?.id] });
+    void qc.invalidateQueries({ queryKey: ["erp_lotes"] });
+    void qc.invalidateQueries({ queryKey: ["erp_lotes-vencendo"] });
+    void qc.invalidateQueries({ queryKey: ["erp_estoque"] });
+    void qc.invalidateQueries({ queryKey: ["erp_estoque_movimentacoes"] });
+    invalidarProdutos(qc);
+  };
+
+  const alterarQuantidade = async (loteId: string, nova: string) => {
+    const n = parseInt(nova, 10);
+    if (!Number.isInteger(n) || n < 0) { toast.error("Quantidade inválida."); return; }
+    const { error } = await supabase.from("erp_lotes").update({ quantidade: n }).eq("id", loteId);
+    if (error) { toast.error(`Erro ao alterar: ${error.message}`); return; }
+    toast.success(`Quantidade do lote: ${n}. O saldo do estoque não muda — use "Igualar" se for o caso.`);
+    recarregar();
+  };
+
+  const igualarSaldo = async (lojaId: string, total: number, saldo: number) => {
+    if (!produto) return;
+    if (!confirm(`Ajustar o saldo de ${lojas.find((x: any) => x.id === lojaId)?.apelido ?? "loja"} de ${saldo} para ${total} (total dos lotes)? Fica registrado no Kardex como ajuste.`)) return;
+    setOcupado(`igualar-${lojaId}`);
+    try {
+      const { error } = await supabase.schema("erp").rpc("ajustar_estoque_atomico", {
+        p_loja_id: lojaId, p_produto_id: produto.id, p_nova_quantidade: total,
+        p_observacao: "igualado ao total dos lotes",
+      });
+      if (error) throw error;
+      toast.success(`Saldo ajustado: ${saldo} → ${total}.`);
+      recarregar();
+    } catch (e: any) {
+      toast.error(`Não foi possível ajustar: ${e.message ?? e}`);
+    } finally {
+      setOcupado(null);
+    }
+  };
+
+  const baixarVencido = async (l: any) => {
+    if (!confirm(`Dar baixa por vencimento no lote ${l.codigo} (${l.quantidade} un)?\n\nTira do estoque, registra saída "vencimento" no Kardex e zera o lote. O lote continua listado, zerado, como rastro.`)) return;
+    setOcupado(`baixa-${l.id}`);
+    try {
+      const { data, error } = await supabase.schema("erp").rpc("baixar_lote_vencido", { p_lote_id: l.id });
+      if (error) throw error;
+      const r = data as any;
+      toast.success(`Baixa feita: ${r?.baixado ?? l.quantidade} un retiradas do estoque (${r?.saldo_anterior} → ${r?.saldo_posterior}).`);
+      recarregar();
+    } catch (e: any) {
+      toast.error(`Não foi possível dar baixa: ${e.message ?? e}`);
+    } finally {
+      setOcupado(null);
+    }
+  };
 
   // Prazo em dias e data final são a mesma informação vista de dois lados:
   // qualquer um dos dois campos recalcula o outro na hora.
@@ -264,6 +349,32 @@ export function LotesProdutoDialog({ open, onOpenChange, produto, lojas, lojaIdI
             </div>
           </div>
 
+          {/* ---- total por loja × saldo ---- */}
+          {resumoPorLoja.length > 0 && (
+            <div className="rounded-md border p-3 space-y-1.5 text-sm">
+              <p className="font-medium flex items-center gap-2"><Scale className="h-4 w-4" /> Total nos lotes × saldo em estoque</p>
+              {resumoPorLoja.map(([lojaId, r]) => (
+                <div key={lojaId} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="min-w-[7rem]">{lojas.find((x: any) => x.id === lojaId)?.apelido ?? "—"}</span>
+                  <span className="tabular-nums">lotes: <b>{r.lotes}</b>{r.vencidos > 0 && <span className="text-destructive"> ({r.vencidos} vencido{r.vencidos > 1 ? "s" : ""})</span>}</span>
+                  <span className="tabular-nums">saldo: <b>{r.saldo}</b></span>
+                  {r.lotes !== r.saldo ? (
+                    <>
+                      <Badge variant="outline" className="border-orange-500 text-orange-600">diferença {r.lotes - r.saldo > 0 ? "+" : ""}{r.lotes - r.saldo}</Badge>
+                      <Button size="sm" variant="outline" className="h-7 text-xs" disabled={ocupado === `igualar-${lojaId}`}
+                        onClick={() => void igualarSaldo(lojaId, r.lotes, r.saldo)}>
+                        {ocupado === `igualar-${lojaId}` ? <Loader2 className="h-3 w-3 animate-spin" /> : "Igualar saldo aos lotes"}
+                      </Button>
+                    </>
+                  ) : <Badge variant="outline"><Check className="h-3 w-3 mr-1" />batem</Badge>}
+                </div>
+              ))}
+              <p className="text-[11px] text-muted-foreground">
+                A venda tira do lote que vence primeiro e nunca de lote vencido. Lote vencido: use "Baixar vencido" na linha.
+              </p>
+            </div>
+          )}
+
           {/* ---- lotes existentes ---- */}
           <div>
             <p className="text-sm font-medium mb-2">Lotes cadastrados</p>
@@ -295,7 +406,15 @@ export function LotesProdutoDialog({ open, onOpenChange, produto, lojas, lojaIdI
                           <td className="p-2 text-xs">
                             {lojas.find((x: any) => x.id === l.loja_id)?.apelido ?? "—"}
                           </td>
-                          <td className="p-2 text-right tabular-nums">{l.quantidade}</td>
+                          <td className="p-2 text-right">
+                            <Input type="number" min={0} step={1} defaultValue={l.quantidade}
+                              className="h-8 w-20 text-right tabular-nums"
+                              onBlur={(e) => {
+                                if (e.target.value !== "" && Number(e.target.value) !== Number(l.quantidade)) {
+                                  void alterarQuantidade(l.id, e.target.value);
+                                }
+                              }} />
+                          </td>
                           <td className="p-2">
                             {/* editável no lugar: corrigir data errada é o ajuste mais comum */}
                             <Input type="date" defaultValue={l.data_validade} className="h-8 w-[9.5rem]"
@@ -316,7 +435,14 @@ export function LotesProdutoDialog({ open, onOpenChange, produto, lojas, lojaIdI
                               <Badge variant="outline"><Check className="h-3 w-3 mr-1" />{d}d</Badge>
                             )}
                           </td>
-                          <td className="p-2 text-right">
+                          <td className="p-2 text-right whitespace-nowrap">
+                            {d < 0 && Number(l.quantidade) > 0 && (
+                              <Button size="sm" variant="outline" className="h-7 text-xs mr-1 border-destructive text-destructive"
+                                onClick={() => void baixarVencido(l)} disabled={ocupado === `baixa-${l.id}`}
+                                title="Tira do estoque, registra no Kardex e zera o lote">
+                                {ocupado === `baixa-${l.id}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <><PackageX className="h-3 w-3 mr-1" />Baixar vencido</>}
+                              </Button>
+                            )}
                             <Button size="sm" variant="ghost" className="h-7 w-7 p-0"
                               onClick={() => void excluir(l.id)} disabled={excluindo === l.id}
                               title="Excluir lote">
