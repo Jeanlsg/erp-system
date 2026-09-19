@@ -5,8 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { InputMoeda } from "@/components/ui/input-moeda";
 import { Label } from "@/components/ui/label";
-import { Building2, Plus, Search, Loader2, UserCheck, UserX, Mail, Phone, Pencil, UserMinus, RotateCcw } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { Building2, Plus, Search, Loader2, UserCheck, UserX, Mail, Phone, Pencil, UserMinus, RotateCcw, KeyRound } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useFuncionarios, useCreateFuncionario, useUpdateFuncionario, isSupabaseConfigured } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
@@ -14,22 +14,26 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogC
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { brl, date } from "@/lib/format";
 import { toast } from "sonner";
+import { type Role, ROLES, roleLabels, papelPrincipal } from "@/lib/store/auth-store";
 
 export function FuncionariosPage() {
   const { lojaId } = useAutoSelectLoja();
   const { data: funcionarios = [], isLoading } = useFuncionarios(lojaId ?? undefined);
   const create = useCreateFuncionario();
   const update = useUpdateFuncionario();
-  // Usuários do sistema, para ligar o funcionário ao login: é esse vínculo
-  // que faz a venda no PDV já sair com o vendedor certo (e a comissão).
+  const qc = useQueryClient();
+  // Logins do sistema, para mostrar o vínculo do funcionário. O vínculo é o
+  // que faz a venda no PDV sair com o vendedor certo (e a comissão). O login
+  // nasce AQUI, no cadastro do funcionário — não numa tela separada.
   const { data: usuarios = [] } = useQuery<any[]>({
-    queryKey: ["erp_usuarios_ativos"],
+    queryKey: ["erp_usuarios_vinculo"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("erp_usuarios").select("id, nome, email").eq("ativo", true).order("nome");
+      const { data, error } = await supabase.from("erp_usuarios").select("id, nome, email, ativo, role, papeis").order("nome");
       if (error) throw error;
       return data ?? [];
     },
   });
+  const papeisDe = (u: any): Role[] => (u?.papeis?.length ? u.papeis : [u?.role ?? "caixa"]);
   const [search, setSearch] = useState("");
   const [modalAberto, setModalAberto] = useState(false);
   // Manter o funcionário estava morto: não havia Editar nem Demitir, e os
@@ -48,7 +52,14 @@ export function FuncionariosPage() {
     email: "",
     telefone: "",
     comissao: "0", usuario_id: "",
+    // acesso ao sistema: criado junto com o funcionário
+    acesso: false, senha: "", papeis: ["caixa"] as Role[],
   });
+  const FORM_VAZIO = {
+    nome: "", cpf: "", cargo: "", departamento: "", salario: "",
+    data_admissao: new Date().toISOString().slice(0, 10), email: "", telefone: "",
+    comissao: "0", usuario_id: "", acesso: false, senha: "", papeis: ["caixa"] as Role[],
+  };
 
   if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="Funcionários" />;
 
@@ -75,14 +86,84 @@ export function FuncionariosPage() {
       telefone: f.pessoa?.telefone ?? "",
       comissao: String(f.comissao_percentual ?? 0),
       usuario_id: f.usuario_id ?? "",
+      acesso: !!f.usuario_id,
+      senha: "",
+      papeis: papeisDe(usuarios.find((u: any) => u.id === f.usuario_id)),
     });
     setModalAberto(true);
+  };
+
+  /**
+   * Garante o login do funcionário e devolve o id em erp_usuarios (ou null
+   * se ele não deve ter acesso). Já vinculado → só atualiza os papéis.
+   *
+   * Se o e-mail já tem login (é o mesmo Supabase do CRM), o login é
+   * aproveitado com a senha que a pessoa já usa — sem convite por e-mail,
+   * que cairia na tela do CRM.
+   */
+  const garantirAcesso = async (): Promise<string | null> => {
+    if (!form.acesso) return form.usuario_id || null;
+    const email = form.email.trim().toLowerCase();
+    const papeis = form.papeis.length ? form.papeis : (["caixa"] as Role[]);
+    const role = papelPrincipal(papeis);
+
+    if (form.usuario_id) {
+      const atual = usuarios.find((u: any) => u.id === form.usuario_id);
+      const mudou = JSON.stringify([...papeisDe(atual)].sort()) !== JSON.stringify([...papeis].sort());
+      if (mudou) {
+        const { error } = await supabase.from("erp_usuarios").update({ role, papeis }).eq("id", form.usuario_id);
+        if (error) throw new Error(`papéis: ${error.message}`);
+      }
+      return form.usuario_id;
+    }
+
+    if (!email.includes("@")) throw new Error("Informe o e-mail do funcionário para criar o acesso.");
+
+    // 1) cria login + perfil no ERP
+    const { data, error } = await supabase.functions.invoke<{ success: boolean; user_id?: string; error?: string }>(
+      "erp-create-user",
+      { body: { email, nome: form.nome, role, papeis, senha: form.senha || null, telefone: form.telefone || null, send_invite: false } },
+    );
+    if (data?.success && data.user_id) return data.user_id;
+
+    // a function devolve o motivo no corpo mesmo em 4xx; o supabase-js
+    // esconde isso atrás de "non-2xx" — vamos buscar o texto de verdade
+    let motivo = data?.error ?? "";
+    if (!motivo && error && (error as any).context?.json) {
+      const corpo = await (error as any).context.json().catch(() => null);
+      motivo = corpo?.error ?? "";
+    }
+    if (!motivo) motivo = error?.message ?? "falha desconhecida";
+
+    // 2) e-mail já tem login (CRM): aproveita, com a mesma senha
+    if (/já existe|already/i.test(motivo)) {
+      const { data: crm, error: eCrm } = await supabase.rpc("usuarios_crm_disponiveis");
+      if (eCrm) throw new Error(eCrm.message);
+      const achado = ((crm ?? []) as any[]).find((u) => String(u.email).toLowerCase() === email);
+      if (!achado) throw new Error("Este e-mail já tem login e já está no ERP como outro usuário.");
+      const { error: eI } = await supabase.from("erp_usuarios").insert({
+        id: achado.id, email, nome: form.nome, role, papeis, ativo: true, telefone: form.telefone || null,
+      });
+      if (eI) throw new Error(eI.message);
+      toast.info("Este e-mail já tinha login no CRM — aproveitado, com a mesma senha.");
+      return achado.id;
+    }
+    throw new Error(motivo);
+  };
+
+  const validarAcesso = (): boolean => {
+    if (!form.acesso || form.usuario_id) return true;
+    if (!form.email.trim().includes("@")) { toast.error("Informe o e-mail para criar o acesso."); return false; }
+    if (form.senha.length < 6) { toast.error("A senha do acesso precisa de pelo menos 6 caracteres."); return false; }
+    return true;
   };
 
   const handleSalvarEdicao = async () => {
     if (!editando) return;
     if (!form.nome) { toast.error("Informe o nome do funcionário."); return; }
+    if (!validarAcesso()) return;
     try {
+      const usuarioId = await garantirAcesso();
       // só os campos que vivem em erp_funcionarios; nome, e-mail e telefone
       // pertencem a erp_pessoas e se editam na tela de Clientes
       await update.mutateAsync({
@@ -92,9 +173,11 @@ export function FuncionariosPage() {
         salario: form.salario ? Number(form.salario) : null,
         data_admissao: form.data_admissao || null,
         comissao_percentual: Number(form.comissao) || 0,
-        usuario_id: form.usuario_id || null,
+        usuario_id: usuarioId,
       });
-      toast.success("Funcionário atualizado.");
+      void qc.invalidateQueries({ queryKey: ["erp_usuarios_vinculo"] });
+      void qc.invalidateQueries({ queryKey: ["erp_usuarios"] });
+      toast.success(usuarioId && !editando.usuario_id ? "Funcionário atualizado e acesso criado." : "Funcionário atualizado.");
       setModalAberto(false);
       setEditando(null);
     } catch (e: any) {
@@ -138,6 +221,7 @@ export function FuncionariosPage() {
       toast.error("Informe o nome do funcionário.");
       return;
     }
+    if (!validarAcesso()) return;
 
     // Sem CPF o cadastro é aceito, mas o funcionário fica incompleto para
     // folha, comissão e documentos — melhor avisar na hora do que descobrir
@@ -173,7 +257,7 @@ export function FuncionariosPage() {
       return toast.error(amigavel);
     }
 
-    await create.mutateAsync({
+    const criado = await create.mutateAsync({
       pessoa_id: pessoa.id,
       cargo: form.cargo || null,
       departamento: form.departamento || null,
@@ -181,12 +265,30 @@ export function FuncionariosPage() {
       data_admissao: form.data_admissao || null,
       cpf: form.cpf || null,
       comissao_percentual: parseFloat(form.comissao) || 0,
-      usuario_id: form.usuario_id || null,
+      usuario_id: null,
       gerente: false,
     });
-    toast.success(`${form.nome} cadastrado(a).${form.usuario_id ? " Vendas feitas no login vinculado já geram comissão." : ""}`);
+
+    // 3) acesso ao sistema — depois do funcionário existir, para uma falha
+    // aqui não deixar a pessoa sem cadastro: ele fica salvo e o acesso pode
+    // ser criado depois pelo Editar.
+    if (form.acesso) {
+      try {
+        const usuarioId = await garantirAcesso();
+        if (usuarioId && criado?.id) {
+          await update.mutateAsync({ id: criado.id, usuario_id: usuarioId });
+        }
+        void qc.invalidateQueries({ queryKey: ["erp_usuarios_vinculo"] });
+        void qc.invalidateQueries({ queryKey: ["erp_usuarios"] });
+        toast.success(`${form.nome} cadastrado(a) com acesso ao sistema (${form.papeis.map((p) => roleLabels[p]).join(", ")}).`);
+      } catch (e: any) {
+        toast.warning(`${form.nome} cadastrado(a), mas o acesso não foi criado: ${e.message ?? e}. Abra o cadastro e tente de novo.`, { duration: 12000 });
+      }
+    } else {
+      toast.success(`${form.nome} cadastrado(a).`);
+    }
     setModalAberto(false);
-    setForm({ nome: "", cpf: "", cargo: "", departamento: "", salario: "", data_admissao: new Date().toISOString().slice(0, 10), email: "", telefone: "", comissao: "0", usuario_id: "" });
+    setForm(FORM_VAZIO);
   };
 
   return (
@@ -327,15 +429,64 @@ export function FuncionariosPage() {
             <div className="grid grid-cols-3 gap-3">
               <div><Label>Salário</Label><InputMoeda value={form.salario} onChange={(v) => setForm({ ...form, salario: String(v) })} /></div>
               <div><Label>Comissão %</Label><Input type="number" step="0.01" value={form.comissao} onChange={(e) => setForm({ ...form, comissao: e.target.value })} /></div>
-              <div>
-                <Label>Usuário do sistema</Label>
-                <select className="flex h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm"
-                  value={form.usuario_id} onChange={(e) => setForm({ ...form, usuario_id: e.target.value })}>
-                  <option value="">Sem login (não vende no PDV)</option>
-                  {usuarios.map((u: any) => <option key={u.id} value={u.id}>{u.nome ?? u.email}</option>)}
-                </select>
-              </div>
               <div><Label>Admissão</Label><Input type="date" value={form.data_admissao} onChange={(e) => setForm({ ...form, data_admissao: e.target.value })} /></div>
+            </div>
+
+            {/* Acesso ao sistema: nasce junto com o funcionário. Sem login ele
+                não vende no PDV e não gera comissão. */}
+            <div className="rounded-md border p-3 space-y-2 bg-muted/30">
+              <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                <input type="checkbox" className="h-4 w-4" checked={form.acesso}
+                  disabled={!!form.usuario_id}
+                  onChange={(e) => setForm({ ...form, acesso: e.target.checked })} />
+                <KeyRound className="h-4 w-4" /> Acesso ao sistema
+                {form.usuario_id && (
+                  <Badge variant="outline" className="ml-1 text-[10px]">
+                    login: {usuarios.find((u: any) => u.id === form.usuario_id)?.email ?? "vinculado"}
+                  </Badge>
+                )}
+              </label>
+              {form.acesso && (
+                <>
+                  {!form.usuario_id && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label>E-mail do login</Label>
+                        <Input value={form.email} readOnly className="bg-muted" placeholder="preencha o e-mail acima" />
+                      </div>
+                      <div>
+                        <Label>Senha (mín. 6)</Label>
+                        <Input type="password" value={form.senha} onChange={(e) => setForm({ ...form, senha: e.target.value })} />
+                      </div>
+                    </div>
+                  )}
+                  <div>
+                    <Label>Papéis</Label>
+                    <div className="mt-1 flex flex-wrap gap-3">
+                      {ROLES.map((p) => (
+                        <label key={p} className="flex items-center gap-1.5 text-sm cursor-pointer">
+                          <input type="checkbox" className="h-4 w-4" checked={form.papeis.includes(p)}
+                            onChange={(e) => {
+                              const papeis = e.target.checked ? [...form.papeis, p] : form.papeis.filter((x) => x !== p);
+                              setForm({ ...form, papeis: papeis.length ? papeis : form.papeis });
+                            }} />
+                          {roleLabels[p]}
+                        </label>
+                      ))}
+                    </div>
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      Vê a união dos papéis; acesso ao banco pelo principal: <b>{roleLabels[papelPrincipal(form.papeis)]}</b>.
+                      {!form.usuario_id && " Se o e-mail já tiver login no CRM, ele é aproveitado com a mesma senha."}
+                    </p>
+                  </div>
+                  {form.usuario_id && (
+                    <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive"
+                      onClick={() => setForm({ ...form, usuario_id: "", acesso: false })}>
+                      Desvincular login (o login continua existindo em Usuários e Permissões)
+                    </Button>
+                  )}
+                </>
+              )}
             </div>
           </div>
           <DialogFooter>
