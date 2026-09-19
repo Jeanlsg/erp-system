@@ -14,7 +14,13 @@ import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { ImportarPessoasDialog } from "@/components/importar-pessoas";
 import type { Pessoa } from "@/types/database";
 
-const FORM_VAZIO = { tipo: "fisica" as "fisica" | "juridica", nome_razao: "", cpf_cnpj: "", email: "", telefone: "", celular: "" };
+const FORM_VAZIO = {
+  tipo: "fisica" as "fisica" | "juridica",
+  nome_razao: "", cpf_cnpj: "", email: "", telefone: "", celular: "",
+  // Opcional. Alimenta a automação de aniversário do CRM: a data viaja
+  // junto com o cliente na sincronização, e lá vira a régua de contato.
+  data_nascimento: "",
+};
 
 export function CustomersPage() {
   const { data: clientes = [], isLoading } = useClientesCompras();
@@ -58,6 +64,7 @@ export function CustomersPage() {
       email: c.email ?? "",
       telefone: c.telefone ?? "",
       celular: c.celular ?? "",
+      data_nascimento: (c as any).data_nascimento ?? "",
     });
     setModalAberto(true);
   };
@@ -92,6 +99,7 @@ export function CustomersPage() {
       email: form.email || null,
       telefone: form.telefone || null,
       celular: form.celular || null,
+      data_nascimento: form.data_nascimento || null,
     };
     try {
       if (editando) {
@@ -246,6 +254,17 @@ export function CustomersPage() {
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Telefone</Label><Input value={form.telefone} onChange={(e) => setForm({ ...form, telefone: e.target.value })} /></div>
               <div><Label>Celular</Label><Input value={form.celular} onChange={(e) => setForm({ ...form, celular: e.target.value })} /></div>
+            </div>
+            <div>
+              <Label>Data de nascimento</Label>
+              <Input
+                type="date"
+                value={form.data_nascimento}
+                onChange={(e) => setForm({ ...form, data_nascimento: e.target.value })}
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Opcional. Preenchida, o cliente entra na régua de aniversário do CRM.
+              </p>
             </div>
           </div>
           <DialogFooter>

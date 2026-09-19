@@ -108,7 +108,7 @@ Deno.serve(async (req) => {
       if (item.evento === "venda") {
         const { data: v } = await admin
           .from("erp_vendas")
-          .select("id, total, data_venda, cliente:erp_pessoas(nome_razao, telefone, celular), itens:erp_venda_itens(nome, quantidade, produto:erp_produtos(duracao_dias))")
+          .select("id, total, data_venda, cliente:erp_pessoas(nome_razao, telefone, celular, data_nascimento), itens:erp_venda_itens(nome, quantidade, produto:erp_produtos(duracao_dias))")
           .eq("id", item.referencia_id).maybeSingle();
         if (!v) { await marcar("ignorado", "venda não existe mais"); ignorados++; continue; }
 
@@ -139,6 +139,12 @@ Deno.serve(async (req) => {
           corpo = {
             telefone: tel,
             nome: (v.cliente as any)?.nome_razao ?? undefined,
+            // Só vai quando o ERP TEM a data. Mandar null apagaria no CRM uma
+            // data que alguém preencheu lá à mão, e o campo é opcional dos dois
+            // lados — quem tem o dado manda, quem não tem fica quieto.
+            ...((v.cliente as any)?.data_nascimento
+              ? { data_nascimento: (v.cliente as any).data_nascimento }
+              : {}),
             ...(cfg.etapa_venda ? { etapa: cfg.etapa_venda } : {}),
             campos: {
               [cfg.campos.ultima_compra]: dataVenda,
@@ -159,7 +165,7 @@ Deno.serve(async (req) => {
       } else {
         const { data: o } = await admin
           .from("erp_orcamentos")
-          .select("id, total, created_at, cliente:erp_pessoas(nome_razao, telefone, celular)")
+          .select("id, total, created_at, cliente:erp_pessoas(nome_razao, telefone, celular, data_nascimento)")
           .eq("id", item.referencia_id).maybeSingle();
         if (!o) { await marcar("ignorado", "orçamento não existe mais"); ignorados++; continue; }
         const tel = telefoneLead((o.cliente as any)?.celular ?? (o.cliente as any)?.telefone);
@@ -168,6 +174,9 @@ Deno.serve(async (req) => {
           corpo = {
             telefone: tel,
             nome: (o.cliente as any)?.nome_razao ?? undefined,
+            ...((o.cliente as any)?.data_nascimento
+              ? { data_nascimento: (o.cliente as any).data_nascimento }
+              : {}),
             campos: {
               [cfg.campos.orcamento_em]: dataISO(o.created_at),
               [cfg.campos.orcamento_valor]: String(o.total),
