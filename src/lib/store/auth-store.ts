@@ -122,11 +122,19 @@ export const useAuthStore = create<AuthState>()(
       can: (permission) => {
         const { user } = get();
         if (!user) return false;
+        // O dono do sistema nunca fica trancado para fora. Sem isto, um JSON
+        // de permissões que o front não entende esconde o menu inteiro dele —
+        // e o único lugar para consertar é justamente o menu.
+        if (user.admin_principal) return true;
         // Customização por usuário vence o padrão do papel. A tela inicializa
         // os checkboxes com as permissões do papel e o admin desmarca o que
         // quer tirar — então um objeto não vazio JÁ É o conjunto efetivo.
         const custom = user.permissoes;
         if (custom && Object.keys(custom).length > 0) {
+          // {"all": true} é o curinga que a migration 022 gravou no admin.
+          // Este campo ficou meses sem ser lido; quando passou a valer, o
+          // curinga virou "nenhuma permissão" e a sidebar esvaziou no login.
+          if (custom.all === true) return true;
           return custom[permission] === true;
         }
         return ROLE_PERMISSIONS[user.role]?.includes(permission) ?? false;

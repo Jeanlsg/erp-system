@@ -10,7 +10,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useFeatureFlags } from "@/lib/supabase-queries";
 import { cn } from "@/lib/utils";
 
-type NavItem = {
+export type NavItem = {
   title: string;
   /** vazio quando o item é só um grupo expansível */
   url: string;
@@ -26,7 +26,7 @@ type NavItem = {
   external?: boolean;
 };
 
-type NavSection = {
+export type NavSection = {
   label: string;
   items: NavItem[];
 };
@@ -74,7 +74,7 @@ const SCROLLBAR_W = 0;
 // veicular) simplesmente não aparece. Flags e permissões continuam
 // mandando: item desligado some, grupo vazio some.
 // ============================================================
-const sections: NavSection[] = [
+export const sections: NavSection[] = [
   {
     // Sem título, como no Excellent: a Página Inicial fica solta acima das
     // quatro seções nomeadas (Vendas e Pedidos, Gestão, Vendas pela

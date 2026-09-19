@@ -1,11 +1,11 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, Fragment } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Cog, Flag, Search, Loader2, ShieldOff, ShieldCheck, Power, AlertTriangle, Eye, History, Lock, CheckSquare, Square, Layers, Save, Trash2, Crown } from "lucide-react";
+import { Cog, Flag, Search, Loader2, ShieldOff, ShieldCheck, Power, AlertTriangle, Eye, History, Lock, CheckSquare, Square, Layers, Save, Trash2, Crown, CornerDownRight } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import {
@@ -19,21 +19,7 @@ import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { dateTime, date } from "@/lib/format";
 import { cn } from "@/lib/utils";
-
-const CATEGORIAS_LABEL: Record<string, string> = {
-  operacao: "Operação",
-  catalogo: "Catálogo",
-  cadastros: "Cadastros",
-  gestao: "Gestão Empresarial",
-  financeiro: "Financeiro",
-  cobranca: "Cobrança",
-  "venda-mais": "Venda Mais (Marketing)",
-  fiscal: "Fiscal",
-  crm: "CRM & Atendimento",
-  "controle-comercial": "Controle Comercial",
-  "vendas-online": "Vendas Online",
-  administracao: "Administração",
-};
+import { sections as MENU, type NavItem } from "@/components/app-sidebar";
 
 export function ConfigSistemaPage() {
   // O conjunto de telas do sistema é decisão do dono, não de qualquer admin:
@@ -205,12 +191,22 @@ function PresetsPanel() {
 // ====================================================================
 // FEATURE FLAGS PANEL (somente o administrador principal)
 // ====================================================================
+// Uma página do menu na aba: o item da sidebar e, se existir, a flag dele.
+type Linha = { titulo: string; path: string; flag?: FF };
+type Bloco = { titulo?: string; linhas: Linha[] };
+type Secao = { titulo: string; blocos: Bloco[] };
+
+/** Só as flags (páginas com controle) dentro de um conjunto de seções. */
+const flagsDe = (secs: Secao[]): FF[] =>
+  secs.flatMap((s) => s.blocos.flatMap((b) => b.linhas.map((l) => l.flag)))
+      .filter((f): f is FF => !!f);
+
 function FeatureFlagsPanel() {
   const { user } = useAuth();
   const { data: flags = [], isLoading } = useFeatureFlags();
   const toggle = useToggleFeatureFlag();
   const [search, setSearch] = useState("");
-  const [categoriaAtiva, setCategoriaAtiva] = useState<string>("todas");
+  const [secaoAtiva, setSecaoAtiva] = useState<string>("todas");
   const [showApenasAtivas, setShowApenasAtivas] = useState(false);
   const [modalMotivo, setModalMotivo] = useState<{ flag: FF; novoValor: boolean } | null>(null);
   const [motivo, setMotivo] = useState("");
@@ -221,39 +217,78 @@ function FeatureFlagsPanel() {
   const [motivoLote, setMotivoLote] = useState("");
   const [aplicandoLote, setAplicandoLote] = useState(false);
 
-  const flagsFiltradas = useMemo(() => {
-    let result = flags;
-    if (search) {
-      const s = search.toLowerCase();
-      result = result.filter(
-        (f) =>
-          f.titulo.toLowerCase().includes(s) ||
-          f.path.toLowerCase().includes(s) ||
-          f.chave.toLowerCase().includes(s) ||
-          (f.descricao ?? "").toLowerCase().includes(s)
-      );
-    }
-    if (categoriaAtiva !== "todas") {
-      result = result.filter((f) => f.categoria === categoriaAtiva);
-    }
-    if (showApenasAtivas) {
-      result = result.filter((f) => f.ativo);
-    }
-    return result;
-  }, [flags, search, categoriaAtiva, showApenasAtivas]);
-
-  const flagsAgrupadas = useMemo(() => {
-    const mapa: Record<string, FF[]> = {};
-    for (const f of flagsFiltradas) {
-      if (!mapa[f.categoria]) mapa[f.categoria] = [];
-      mapa[f.categoria].push(f);
-    }
-    return mapa;
-  }, [flagsFiltradas]);
-
-  const categoriasDisponiveis = useMemo(() => {
-    return Array.from(new Set(flags.map((f) => f.categoria))).sort();
+  // ---- a lista segue a sidebar ----
+  // Antes a aba agrupava por `categoria` da flag — uma taxonomia que não
+  // aparece em lugar nenhum da tela. Quem vem aqui quer ligar ou desligar o
+  // que vê no menu; então a lista tem as mesmas seções, os mesmos grupos e a
+  // mesma ordem da sidebar, lida da MESMA estrutura (nada para manter em
+  // dois lugares). Flag que não está no menu fica numa seção própria no fim,
+  // para nada ficar inalcançável. Página do menu sem flag aparece como
+  // "sempre visível".
+  const flagPorPath = useMemo(() => {
+    const m: Record<string, FF> = {};
+    for (const f of flags) m[f.path] = f;
+    return m;
   }, [flags]);
+
+  const secoes = useMemo<Secao[]>(() => {
+    const usados = new Set<string>();
+    const linha = (i: NavItem): Linha | null => {
+      if (i.external || !i.url) return null;
+      // "/financeiro?aba=apagar" é a mesma página que "/financeiro": uma flag só.
+      // Item repetido em dois grupos (Promissórias) aparece no primeiro.
+      const path = i.url.split("?")[0];
+      if (usados.has(path)) return null;
+      usados.add(path);
+      return { titulo: i.title, path, flag: flagPorPath[path] };
+    };
+    const lista: Secao[] = [];
+    for (const s of MENU) {
+      const blocos: Bloco[] = [];
+      const soltas: Linha[] = [];
+      for (const i of s.items) {
+        if (i.children) {
+          const linhas = i.children.map(linha).filter((l): l is Linha => !!l);
+          if (linhas.length) blocos.push({ titulo: i.title, linhas });
+        } else {
+          const l = linha(i);
+          if (l) soltas.push(l);
+        }
+      }
+      if (soltas.length) blocos.unshift({ linhas: soltas });
+      if (blocos.length) lista.push({ titulo: s.label || "Página inicial", blocos });
+    }
+    const fora = flags
+      .filter((f) => !usados.has(f.path))
+      .map((f) => ({ titulo: f.titulo, path: f.path, flag: f }));
+    if (fora.length) lista.push({ titulo: "Fora do menu (acesso só por URL)", blocos: [{ linhas: fora }] });
+    return lista;
+  }, [flags, flagPorPath]);
+
+  const secoesFiltradas = useMemo(() => {
+    const s = search.toLowerCase();
+    const passa = (l: Linha) => {
+      if (showApenasAtivas && !l.flag?.ativo) return false;
+      if (!s) return true;
+      return l.titulo.toLowerCase().includes(s)
+        || l.path.toLowerCase().includes(s)
+        || (l.flag?.titulo ?? "").toLowerCase().includes(s)
+        || (l.flag?.chave ?? "").toLowerCase().includes(s)
+        || (l.flag?.descricao ?? "").toLowerCase().includes(s);
+    };
+    return secoes
+      .filter((sec) => secaoAtiva === "todas" || sec.titulo === secaoAtiva)
+      .map((sec) => ({
+        ...sec,
+        blocos: sec.blocos
+          .map((b) => ({ ...b, linhas: b.linhas.filter(passa) }))
+          .filter((b) => b.linhas.length > 0),
+      }))
+      .filter((sec) => sec.blocos.length > 0);
+  }, [secoes, search, secaoAtiva, showApenasAtivas]);
+
+  // as flags visíveis com os filtros atuais — é sobre elas que a seleção em lote age
+  const flagsFiltradas = useMemo(() => flagsDe(secoesFiltradas), [secoesFiltradas]);
 
   const totalAtivas = flags.filter((f) => f.ativo).length;
   const totalDesativadas = flags.filter((f) => !f.ativo).length;
@@ -427,18 +462,15 @@ function FeatureFlagsPanel() {
             </div>
             <select
               className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
-              value={categoriaAtiva}
-              onChange={(e) => setCategoriaAtiva(e.target.value)}
+              value={secaoAtiva}
+              onChange={(e) => setSecaoAtiva(e.target.value)}
             >
-              <option value="todas">Todas categorias ({flags.length})</option>
-              {categoriasDisponiveis.map((c) => {
-                const count = flags.filter((f) => f.categoria === c).length;
-                return (
-                  <option key={c} value={c}>
-                    {CATEGORIAS_LABEL[c] ?? c} ({count})
-                  </option>
-                );
-              })}
+              <option value="todas">Todas as seções ({flags.length})</option>
+              {secoes.map((sec) => (
+                <option key={sec.titulo} value={sec.titulo}>
+                  {sec.titulo} ({flagsDe([sec]).length})
+                </option>
+              ))}
             </select>
             <Button
               variant={showApenasAtivas ? "default" : "outline"}
@@ -490,32 +522,34 @@ function FeatureFlagsPanel() {
         </p>
       </div>
 
-      {/* Lista agrupada por categoria */}
+      {/* Lista na ordem da sidebar: seção › grupo › página */}
       {isLoading ? (
         <div className="p-8 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></div>
       ) : (
         <div className="space-y-4">
-          {Object.keys(flagsAgrupadas).length === 0 ? (
+          {secoesFiltradas.length === 0 ? (
             <Card>
               <CardContent className="p-8 text-center text-muted-foreground">
                 Nenhuma página encontrada com os filtros atuais.
               </CardContent>
             </Card>
           ) : (
-            Object.entries(flagsAgrupadas).map(([categoria, items]) => (
-              <Card key={categoria}>
+            secoesFiltradas.map((sec) => {
+              const items = flagsDe([sec]);
+              return (
+              <Card key={sec.titulo}>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base flex items-center justify-between">
                     <span className="flex items-center gap-2">
                       <button type="button" onClick={() => alternarGrupo(items)}
-                        title="Selecionar/desmarcar a categoria inteira"
+                        title="Selecionar/desmarcar a seção inteira"
                         className="text-muted-foreground hover:text-foreground">
                         {items.filter((f) => !f.is_protegida).every((f) => selecionadas.has(f.id))
                           && items.some((f) => !f.is_protegida)
                           ? <CheckSquare className="h-4 w-4" />
                           : <Square className="h-4 w-4" />}
                       </button>
-                      {CATEGORIAS_LABEL[categoria] ?? categoria}
+                      {sec.titulo}
                     </span>
                     <Badge variant="outline" className="text-[10px]">
                       {items.filter((f) => f.ativo).length}/{items.length}
@@ -535,7 +569,52 @@ function FeatureFlagsPanel() {
                       </tr>
                     </thead>
                     <tbody>
-                      {items.map((f) => (
+                      {sec.blocos.map((b, bi) => (
+                        <Fragment key={b.titulo ?? `soltas-${bi}`}>
+                          {b.titulo && (() => {
+                            const fs = flagsDe([{ titulo: "", blocos: [b] }]);
+                            const alvos = fs.filter((f) => !f.is_protegida);
+                            const marcado = alvos.length > 0 && alvos.every((f) => selecionadas.has(f.id));
+                            return (
+                              <tr className="border-b bg-muted/40">
+                                <td className="p-3">
+                                  {alvos.length > 0 && (
+                                    <button type="button" onClick={() => alternarGrupo(fs)}
+                                      title={`Selecionar/desmarcar o grupo ${b.titulo}`}
+                                      className="text-muted-foreground hover:text-foreground">
+                                      {marcado ? <CheckSquare className="h-4 w-4 text-primary" /> : <Square className="h-4 w-4" />}
+                                    </button>
+                                  )}
+                                </td>
+                                <td colSpan={5} className="p-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                  <CornerDownRight className="mr-1 inline h-3 w-3" />
+                                  {b.titulo}
+                                  <span className="ml-2 font-normal normal-case tracking-normal">
+                                    {fs.filter((f) => f.ativo).length}/{fs.length}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })()}
+                          {b.linhas.map((l) => {
+                        const f = l.flag;
+                        if (!f) return (
+                          <tr key={l.path} className="border-b text-muted-foreground">
+                            <td className="p-3" />
+                            <td className="p-3">
+                              <Badge variant="outline" className="text-[9px]">Sempre visível</Badge>
+                            </td>
+                            <td className="p-3">
+                              <p className="font-medium">{l.titulo}</p>
+                              <p className="mt-1 text-xs font-mono md:hidden">{l.path}</p>
+                              <p className="text-xs">Página sem controle de visualização — não pode ser desligada.</p>
+                            </td>
+                            <td className="p-3 font-mono text-xs hidden md:table-cell">{l.path}</td>
+                            <td className="hidden lg:table-cell" />
+                            <td className="hidden lg:table-cell" />
+                          </tr>
+                        );
+                        return (
                         <tr
                           key={f.id}
                           className={cn(
@@ -631,12 +710,16 @@ function FeatureFlagsPanel() {
                             )}
                           </td>
                         </tr>
+                        );
+                      })}
+                        </Fragment>
                       ))}
                     </tbody>
                   </table>
                 </CardContent>
               </Card>
-            ))
+              );
+            })
           )}
         </div>
       )}
