@@ -747,6 +747,22 @@ export function useDashboardStats(lojaId: string | undefined) {
 // MUTATIONS
 // ========================================
 
+/**
+ * Invalida TODAS as leituras de produto de uma vez.
+ *
+ * A tabela de Produtos lê de "erp_produto_completo" (singular), os formulários
+ * de "erp_produtos" e o PDV de "erp_produtos-com-estoque". Sete pontos de
+ * escrita invalidavam cada um a sua chave, e cinco deles usavam
+ * "erp_produtos_completo" — com "s" — que nunca existiu. Resultado: importar,
+ * criar ou reajustar produto não mudava a lista até um F5. Uma função só,
+ * usada em todo lugar, para a grafia não voltar a divergir.
+ */
+export function invalidarProdutos(qc: ReturnType<typeof useQueryClient>) {
+  for (const chave of ["erp_produtos", "erp_produto_completo", "erp_produtos-com-estoque"]) {
+    void qc.invalidateQueries({ queryKey: [chave] });
+  }
+}
+
 export function useCreateProduto() {
   const qc = useQueryClient();
   return useMutation({
@@ -755,7 +771,7 @@ export function useCreateProduto() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_produtos'] }),
+    onSuccess: () => invalidarProdutos(qc),
   });
 }
 
@@ -767,7 +783,7 @@ export function useUpdateProduto() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_produtos'] }),
+    onSuccess: () => invalidarProdutos(qc),
   });
 }
 
@@ -4104,8 +4120,7 @@ export function useReceberCompra() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['erp_compras'] });
-      qc.invalidateQueries({ queryKey: ['erp_produtos'] });
-      qc.invalidateQueries({ queryKey: ['erp_produtos_completo'] });
+      invalidarProdutos(qc);
       qc.invalidateQueries({ queryKey: ['erp_estoque'] });
       qc.invalidateQueries({ queryKey: ['erp_estoque_movimentacoes'] });
       qc.invalidateQueries({ queryKey: ['erp_contas'] });

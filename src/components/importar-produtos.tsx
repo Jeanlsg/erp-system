@@ -13,6 +13,7 @@
 import { useMemo, useRef, useState } from "react";
 import { Download, FileSpreadsheet, Loader2, Upload } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { invalidarProdutos } from "@/lib/supabase-queries";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -197,8 +198,7 @@ export function ImportarProdutosDialog({ open, onOpenChange, lojas, lojaIdInicia
       ];
       setResultado(resumo);
       toast.success(`Importação concluída: ${inseridos} produto(s).`);
-      void qc.invalidateQueries({ queryKey: ["erp_produtos"] });
-      void qc.invalidateQueries({ queryKey: ["erp_produtos_completo"] });
+      invalidarProdutos(qc);
       void qc.invalidateQueries({ queryKey: ["erp_categorias"] });
       setItens([]);
       setNomeArquivo("");

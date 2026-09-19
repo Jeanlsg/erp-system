@@ -31,7 +31,7 @@ import {
   ChevronLeft, ChevronRight, ArrowDownToLine,
 } from "lucide-react";
 import {
-  useProdutosCompleto, useProdutos, useCreateProduto, useUpdateProduto,
+  useProdutosCompleto, useProdutos, useCreateProduto, useUpdateProduto, invalidarProdutos,
   useCreateCategoria, useUpdateCategoria, useDeleteCategoria,
   useCategorias, useLojas,
   isSupabaseConfigured,
@@ -156,7 +156,7 @@ export function ProdutosEstoqueLotesPage() {
     if (error) { toast.error(`Falha ao reativar: ${error.message}`); return; }
     toast.success("Produto reativado — volta a aparecer no catálogo e no PDV.");
     qc.invalidateQueries({ queryKey: ["erp_produtos_excluidos"] });
-    qc.invalidateQueries({ queryKey: ["erp_produtos"] });
+    invalidarProdutos(qc);
   };
 
   // Aplica o percentual sobre o preço de venda dos produtos FILTRADOS na
@@ -179,8 +179,7 @@ export function ProdutosEstoqueLotesPage() {
         if (!error) ok++;
       }
       toast.success(`${ok} produto(s) reajustado(s) em ${perc > 0 ? "+" : ""}${perc}%.`);
-      qc.invalidateQueries({ queryKey: ["erp_produtos"] });
-      qc.invalidateQueries({ queryKey: ["erp_produtos_completo"] });
+      invalidarProdutos(qc);
       setModalReajuste(false);
       setPercReajuste("");
     } finally {

@@ -11,6 +11,7 @@
 import { useMemo, useState } from "react";
 import { CalendarClock, Loader2, Plus, Trash2, AlertTriangle, Check } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { invalidarProdutos } from "@/lib/supabase-queries";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -122,8 +123,7 @@ export function LotesProdutoDialog({ open, onOpenChange, produto, lojas, lojaIdI
       void qc.invalidateQueries({ queryKey: ["erp_lotes_produto", produto.id] });
       void qc.invalidateQueries({ queryKey: ["erp_lotes"] });
       void qc.invalidateQueries({ queryKey: ["erp_lotes-vencendo"] });
-      void qc.invalidateQueries({ queryKey: ["erp_produtos_completo"] });
-      void qc.invalidateQueries({ queryKey: ["erp_produtos"] });
+      invalidarProdutos(qc);
     } catch (e: any) {
       toast.error(`Não foi possível salvar: ${e.message ?? e}`);
     } finally {
@@ -139,7 +139,7 @@ export function LotesProdutoDialog({ open, onOpenChange, produto, lojas, lojaIdI
     toast.success(`Validade alterada para ${fmtData(novaData)}.`);
     void qc.invalidateQueries({ queryKey: ["erp_lotes_produto", produto?.id] });
     void qc.invalidateQueries({ queryKey: ["erp_lotes-vencendo"] });
-    void qc.invalidateQueries({ queryKey: ["erp_produtos_completo"] });
+    invalidarProdutos(qc);
   };
 
   const excluir = async (loteId: string) => {
@@ -151,7 +151,7 @@ export function LotesProdutoDialog({ open, onOpenChange, produto, lojas, lojaIdI
     toast.success("Lote excluído.");
     void qc.invalidateQueries({ queryKey: ["erp_lotes_produto", produto?.id] });
     void qc.invalidateQueries({ queryKey: ["erp_lotes-vencendo"] });
-    void qc.invalidateQueries({ queryKey: ["erp_produtos_completo"] });
+    invalidarProdutos(qc);
   };
 
   return (
