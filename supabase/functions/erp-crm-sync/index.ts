@@ -139,14 +139,14 @@ Deno.serve(async (req) => {
           corpo = {
             telefone: tel,
             nome: (v.cliente as any)?.nome_razao ?? undefined,
-            // Só vai quando o ERP TEM a data. Mandar null apagaria no CRM uma
-            // data que alguém preencheu lá à mão, e o campo é opcional dos dois
-            // lados — quem tem o dado manda, quem não tem fica quieto.
-            ...((v.cliente as any)?.data_nascimento
-              ? { data_nascimento: (v.cliente as any).data_nascimento }
-              : {}),
             ...(cfg.etapa_venda ? { etapa: cfg.etapa_venda } : {}),
             campos: {
+              // Só entra quando o ERP TEM a data. Mandar vazio apagaria no CRM
+              // uma data preenchida lá à mão — o campo é opcional dos dois
+              // lados, então quem tem o dado manda e quem não tem fica quieto.
+              ...((v.cliente as any)?.data_nascimento && cfg.campos.nascimento
+                ? { [cfg.campos.nascimento]: String((v.cliente as any).data_nascimento).slice(0, 10) }
+                : {}),
               [cfg.campos.ultima_compra]: dataVenda,
               [cfg.campos.produtos]: produtos,
               [cfg.campos.valor]: String(v.total),
@@ -174,10 +174,10 @@ Deno.serve(async (req) => {
           corpo = {
             telefone: tel,
             nome: (o.cliente as any)?.nome_razao ?? undefined,
-            ...((o.cliente as any)?.data_nascimento
-              ? { data_nascimento: (o.cliente as any).data_nascimento }
-              : {}),
             campos: {
+              ...((o.cliente as any)?.data_nascimento && cfg.campos.nascimento
+                ? { [cfg.campos.nascimento]: String((o.cliente as any).data_nascimento).slice(0, 10) }
+                : {}),
               [cfg.campos.orcamento_em]: dataISO(o.created_at),
               [cfg.campos.orcamento_valor]: String(o.total),
             },
