@@ -28,10 +28,11 @@ import {
   Edit, Trash2, Boxes, Calendar, Barcode,
   Tag, AlertCircle, Clock, FileSpreadsheet,
   TrendingUp,
-  ChevronLeft, ChevronRight, ArrowDownToLine,
+  ChevronLeft, ChevronRight, ArrowDownToLine, SlidersHorizontal,
 } from "lucide-react";
 import {
   useProdutosCompleto, useProdutos, useCreateProduto, useUpdateProduto, invalidarProdutos,
+  useAjustarEstoque,
   useCreateCategoria, useUpdateCategoria, useDeleteCategoria,
   useCategorias, useLojas,
   isSupabaseConfigured,
@@ -91,6 +92,34 @@ export function ProdutosEstoqueLotesPage() {
     categoria_id: "", ncm: "", cest: "", cfop_padrao: "5102", csosn: "102",
   });
   const [formCategoria, setFormCategoria] = useState({ nome: "", descricao: "" });
+
+  // Ajuste de saldo: passa pela RPC ajustar_estoque_atomico, que grava a
+  // movimentação no Kardex com saldo anterior/posterior. Editar o número
+  // direto em erp_estoque deixaria o Kardex mentindo.
+  const ajustarEstoque = useAjustarEstoque();
+  const [ajuste, setAjuste] = useState<{
+    produtoId: string; nome: string; lojaId: string; lojaNome: string;
+    atual: number; nova: string; motivo: string;
+  } | null>(null);
+
+  const confirmarAjuste = async () => {
+    if (!ajuste) return;
+    const nova = Number(ajuste.nova);
+    if (!Number.isInteger(nova) || nova < 0) { toast.error("Informe uma quantidade inteira, zero ou maior."); return; }
+    if (!ajuste.motivo.trim()) { toast.error("Informe o motivo — ele fica registrado no Kardex."); return; }
+    if (nova === ajuste.atual) { toast.info("A quantidade já é essa."); return; }
+    try {
+      await ajustarEstoque.mutateAsync({
+        lojaId: ajuste.lojaId, produtoId: ajuste.produtoId,
+        novaQuantidade: nova, observacao: ajuste.motivo.trim(),
+      });
+      invalidarProdutos(qc);
+      toast.success(`Estoque de ${ajuste.nome} em ${ajuste.lojaNome}: ${ajuste.atual} → ${nova}.`);
+      setAjuste(null);
+    } catch (e: any) {
+      toast.error(e.message ?? String(e));
+    }
+  };
 
   // ===== Queries =====
   const { data: lojas = [] } = useLojas();
@@ -670,6 +699,20 @@ export function ProdutosEstoqueLotesPage() {
                               >
                                 <Calendar className="h-3 w-3" />
                               </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 w-7 p-0"
+                                onClick={() => setAjuste({
+                                  produtoId: p.produto_id, nome: p.nome,
+                                  lojaId: p.loja_id, lojaNome: p.loja_apelido || p.loja_nome,
+                                  atual: Number(p.estoque_atual ?? 0),
+                                  nova: String(p.estoque_atual ?? 0), motivo: "",
+                                })}
+                                title="Ajustar estoque"
+                              >
+                                <SlidersHorizontal className="h-3 w-3" />
+                              </Button>
                             </div>
                           </td>
                         </tr>
@@ -1022,6 +1065,52 @@ export function ProdutosEstoqueLotesPage() {
               ))}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Ajuste de estoque */}
+      <Dialog open={!!ajuste} onOpenChange={(o) => !o && setAjuste(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Ajustar estoque</DialogTitle>
+            <DialogClose />
+          </DialogHeader>
+          {ajuste && (
+            <div className="space-y-3">
+              <div className="rounded-md bg-muted/40 p-3 text-sm">
+                <p className="font-medium">{ajuste.nome}</p>
+                <p className="text-xs text-muted-foreground">
+                  Loja: <b>{ajuste.lojaNome}</b> · saldo atual: <b>{ajuste.atual}</b>
+                </p>
+              </div>
+              <div>
+                <Label>Nova quantidade</Label>
+                <Input type="number" min={0} step={1} autoFocus value={ajuste.nova}
+                  onChange={(e) => setAjuste({ ...ajuste, nova: e.target.value })}
+                  onKeyDown={(e) => { if (e.key === "Enter") void confirmarAjuste(); }} />
+                {Number(ajuste.nova) !== ajuste.atual && Number.isFinite(Number(ajuste.nova)) && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Diferença: {Number(ajuste.nova) - ajuste.atual > 0 ? "+" : ""}{Number(ajuste.nova) - ajuste.atual}
+                  </p>
+                )}
+              </div>
+              <div>
+                <Label>Motivo *</Label>
+                <Input value={ajuste.motivo} placeholder="Ex.: contagem física, avaria, erro de lançamento"
+                  onChange={(e) => setAjuste({ ...ajuste, motivo: e.target.value })} />
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Fica registrado em Movimentações (Kardex) como ajuste, com saldo anterior e posterior.
+                </p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAjuste(null)}>Cancelar</Button>
+            <Button onClick={() => void confirmarAjuste()} disabled={ajustarEstoque.isPending}>
+              {ajustarEstoque.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+              Ajustar
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
