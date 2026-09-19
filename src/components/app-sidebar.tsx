@@ -207,7 +207,7 @@ export const sections: NavSection[] = [
         ],
       },
       { title: "Usuários e Permissões", url: "/gestao/usuarios", icon: Users, perm: "usuario.ver" },
-      { title: "Visão Geral", url: "/gestao", icon: LayoutDashboard },
+      // { title: "Visão Geral", url: "/gestao", icon: LayoutDashboard }, // desativado: duplicava a Visão Geral (/visao-geral) — reativar descomentando aqui, a rota e o import em App.tsx
     ],
   },
   {

@@ -58,7 +58,7 @@ import { RemessasPage } from "@/pages/remessas";
 import { PedidoPage, OrcamentoPage, OrdemServicoPage, ConsignacaoPage, LocacaoPage } from "@/pages/controle-comercial";
 import { ExAppPedidosPage, TEFPage } from "@/pages/integracoes";
 // import { MarketplaceIFoodPage } from "@/pages/marketplace-ifood"; // desativado: cliente não usa iFood — reativar descomentando aqui e a rota
-import { GestaoHubPage } from "@/pages/gestao";
+// import { GestaoHubPage } from "@/pages/gestao"; // desativado: duplicava a Visão Geral (/visao-geral)
 import { TreinamentoPage } from "@/pages/treinamento";
 import { TransportadorasPage } from "@/pages/transportadoras";
 import { AgendaTelefonicaPage } from "@/pages/agenda-telefonica";
@@ -119,7 +119,7 @@ export default function App() {
         <Route path="gestao/relatorios-financeiros" element={<FinanceiroPage />} />
 
         {/* Gestão Empresarial — Hub + Alias */}
-        <Route path="gestao" element={<GestaoHubPage />} />
+        {/* <Route path="gestao" element={<GestaoHubPage />} /> */} {/* desativado: duplicava a Visão Geral (/visao-geral) — reativar junto com o item da sidebar */}
         <Route path="gestao/empresarial" element={<EmpresarialPage />} />
 
         {/* Clientes / Fornecedores / Funcionários */}
