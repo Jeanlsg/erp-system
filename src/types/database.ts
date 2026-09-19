@@ -32,6 +32,8 @@ export interface Usuario {
   email: string;
   nome: string;
   role: UserRole;
+  /** todos os papéis; `role` é o principal e sempre está aqui */
+  papeis: UserRole[];
   ativo: boolean;
   loja_default_id: string | null;
   permissoes: any;
@@ -633,4 +635,11 @@ export interface FechamentoCaixa {
   diferenca: number;
   observacoes: string | null;
   created_at: string;
+}
+// Permissões de navegação padrão de cada papel (Usuários e Permissões › Papéis)
+export interface PapelPermissoes {
+  papel: UserRole;
+  permissoes: string[];
+  updated_at: string;
+  updated_by: string | null;
 }

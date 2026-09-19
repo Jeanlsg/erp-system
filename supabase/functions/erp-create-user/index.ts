@@ -23,6 +23,8 @@ interface CreateUserPayload {
   email: string;
   nome: string;
   role?: Role;
+  /** todos os papéis; `role` é o principal (o mais alto) */
+  papeis?: Role[];
   loja_default_id?: string | null;
   telefone?: string | null;
   senha?: string | null;
@@ -134,6 +136,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
       }
     }
 
+    // papéis: todos válidos; o principal (`role`) sempre entra
+    const papeis: Role[] = Array.isArray(body.papeis) && body.papeis.length ? body.papeis : [role];
+    if (papeis.some((p) => !validRoles.includes(p))) {
+      return jsonResponse(
+        { success: false, error: `Papel inválido em papeis. Use: ${validRoles.join(", ")}` },
+        400
+      );
+    }
+    if (!papeis.includes(role)) papeis.push(role);
+
     // 5. Cliente Admin (com service_role)
     const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
@@ -196,20 +208,31 @@ Deno.serve(async (req: Request): Promise<Response> => {
       );
     }
 
-    // 8. Atualiza campos adicionais (loja, telefone)
-    if (body.loja_default_id || body.telefone) {
+    // 8. Linha em erp_usuarios (papel, papéis, loja, telefone)
+    //
+    // Era um UPDATE, que pressupunha a linha já criada por trigger — e não
+    // há trigger em auth.users que insira em erp_usuarios: só o de
+    // public.profiles. Um UPDATE em linha inexistente afeta 0 linhas sem
+    // erro, e o usuário nascia no Auth sem perfil no ERP (login barrado com
+    // "Perfil de usuário não encontrado"). O upsert cria se faltar e
+    // atualiza se um trigger vier a existir.
+    {
       const { error: updateError } = await adminClient
         .from("erp_usuarios")
-        .update({
+        .upsert({
+          id: newUser.user.id,
+          email: body.email,
+          nome: body.nome,
+          role,
+          papeis,
           loja_default_id: body.loja_default_id || null,
           telefone: body.telefone || null,
-        })
-        .eq("id", newUser.user.id);
+        }, { onConflict: "id" });
       if (updateError) {
         return jsonResponse(
           {
             success: false,
-            error: `Usuário criado, mas falhou ao gravar loja/telefone: ${updateError.message}`,
+            error: `Usuário criado no Auth, mas falhou ao gravar o perfil no ERP: ${updateError.message}`,
             user_id: newUser.user.id,
           },
           500

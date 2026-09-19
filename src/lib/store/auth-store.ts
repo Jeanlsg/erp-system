@@ -3,6 +3,25 @@ import { persist } from "zustand/middleware";
 
 export type Role = "admin" | "gerente" | "caixa" | "estoquista";
 
+/** Força de cada papel. O mais alto dos papéis do usuário vira o `role`
+ *  principal — o que o RLS do banco consulta. */
+export const ROLE_RANK: Record<Role, number> = { admin: 4, gerente: 3, estoquista: 2, caixa: 1 };
+export const ROLES: Role[] = ["admin", "gerente", "estoquista", "caixa"];
+
+/** O papel principal de um conjunto: o mais forte. Vazio → caixa. */
+export function papelPrincipal(papeis: Role[]): Role {
+  return [...papeis].sort((a, b) => ROLE_RANK[b] - ROLE_RANK[a])[0] ?? "caixa";
+}
+
+/** Linhas de erp_papel_permissoes → mapa papel → permissões. */
+export function mapaPapelPermissoes(
+  linhas: { papel: string; permissoes: string[] }[],
+): Partial<Record<Role, Permission[]>> {
+  const m: Partial<Record<Role, Permission[]>> = {};
+  for (const l of linhas) m[l.papel as Role] = l.permissoes as Permission[];
+  return m;
+}
+
 export type Permission =
   | "pdv.usar"
   | "caixa.abrir"
@@ -43,6 +62,8 @@ export interface User {
   email: string;
   nome: string;
   role: Role;
+  /** Todos os papéis; `role` é o principal e sempre está aqui. Vazio = só `role`. */
+  papeis?: Role[];
   ativo: boolean;
   /** Dono do sistema: só ele vê página desativada e troca o conjunto de telas. */
   admin_principal?: boolean;
@@ -104,6 +125,13 @@ export { ROLE_PERMISSIONS as DEFAULT_ROLE_PERMISSIONS };
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
+  /**
+   * Permissões padrão de cada papel, lidas de erp_papel_permissoes (editáveis
+   * em Usuários e Permissões › Papéis). Null = ainda não lidas; o can() cai
+   * no ROLE_PERMISSIONS do código.
+   */
+  papelPermissoes: Partial<Record<Role, Permission[]>> | null;
+  setPapelPermissoes: (m: Partial<Record<Role, Permission[]>>) => void;
   setUser: (user: User | null) => void;
   logout: () => void;
   can: (permission: Permission) => boolean;
@@ -117,6 +145,8 @@ export const useAuthStore = create<AuthState>()(
     (set, get) => ({
       user: null,
       isAuthenticated: false,
+      papelPermissoes: null,
+      setPapelPermissoes: (m) => set({ papelPermissoes: m }),
       setUser: (user) => set({ user, isAuthenticated: !!user }),
       logout: () => set({ user: null, isAuthenticated: false }),
       can: (permission) => {
@@ -137,7 +167,11 @@ export const useAuthStore = create<AuthState>()(
           if (custom.all === true) return true;
           return custom[permission] === true;
         }
-        return ROLE_PERMISSIONS[user.role]?.includes(permission) ?? false;
+        // União dos papéis: gerente E estoquista enxerga o que qualquer um
+        // dos dois enxerga. A tabela vence o código; o código é a reserva.
+        const papeis: Role[] = user.papeis?.length ? user.papeis : [user.role];
+        const mapa = get().papelPermissoes ?? {};
+        return papeis.some((p) => (mapa[p] ?? ROLE_PERMISSIONS[p] ?? []).includes(permission));
       },
       canAny: (permissions) => {
         return permissions.some((p) => get().can(p));
@@ -171,7 +205,7 @@ export async function login(
     // O id do erp_usuarios == auth.users.id (FK direta)
     const { data: perfil, error: perfilError } = await supabase
       .from("erp_usuarios")
-      .select("id, email, nome, role, ativo, admin_principal, permissoes")
+      .select("id, email, nome, role, papeis, ativo, admin_principal, permissoes")
       .eq("id", data.user.id)
       .single();
 
@@ -190,11 +224,17 @@ export async function login(
       email: perfil.email,
       nome: perfil.nome,
       role: perfil.role,
+      papeis: ((perfil as any).papeis ?? []) as Role[],
       ativo: perfil.ativo,
       admin_principal: !!(perfil as any).admin_principal,
       permissoes: ((perfil as any).permissoes ?? null) as Record<string, boolean> | null,
     };
     useAuthStore.getState().setUser(user);
+
+    // permissões padrão dos papéis: da tabela, com o mapa do código de reserva
+    const { data: pp } = await supabase.from("erp_papel_permissoes").select("papel, permissoes");
+    if (pp?.length) useAuthStore.getState().setPapelPermissoes(mapaPapelPermissoes(pp));
+
     return { ok: true, user };
   } catch (err) {
     console.error("Erro no login:", err);

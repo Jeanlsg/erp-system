@@ -3,7 +3,7 @@
 // CRUD completo + gerenciamento granular de permissões
 // ============================================================
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Card, CardContent, CardHeader, CardTitle,
 } from "@/components/ui/card";
@@ -20,15 +20,17 @@ import {
 import {
   Users, Plus, Edit, Shield, Lock, Unlock,
   Search, Loader2, Save, RefreshCw,
-  Mail, Phone, KeyRound, Trash2, Check, Eye, EyeOff, RotateCcw,
+  Mail, Phone, KeyRound, Trash2, Check, Eye, EyeOff, RotateCcw, Layers, Download,
 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   useUsuarios, useUpdateUsuario, useDesbloquearUsuario,
   useUpdatePermissoesUsuario, useLojas,
+  usePapelPermissoes, useSalvarPapelPermissoes,
   isSupabaseConfigured,
 } from "@/lib/supabase-queries";
 import { supabase } from "@/lib/supabase";
-import { useAuth, type Role, roleLabels, ROLE_PERMISSIONS } from "@/lib/store/auth-store";
+import { useAuth, type Role, roleLabels, ROLE_PERMISSIONS, ROLES, papelPrincipal } from "@/lib/store/auth-store";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { toast } from "sonner";
 
@@ -87,6 +89,224 @@ const PERMISSOES_POR_MODULO: Record<string, string[]> = {
   ],
 };
 
+
+// ============================================================
+// Aba "Papéis": as permissões padrão de cada papel, editáveis.
+//
+// Saíram do código (ROLE_PERMISSIONS) para erp_papel_permissoes. O que está
+// aqui vale para todo usuário do papel que NÃO tenha permissões próprias.
+// "Restaurar padrão do sistema" volta ao mapa do código.
+// ============================================================
+function PapeisPanel({ isAdmin, userId }: { isAdmin: boolean; userId?: string }) {
+  const { data: linhas = [], isLoading } = usePapelPermissoes();
+  const salvar = useSalvarPapelPermissoes();
+  const [edicao, setEdicao] = useState<Partial<Record<Role, Record<string, boolean>>>>({});
+  const [sujo, setSujo] = useState<Partial<Record<Role, boolean>>>({});
+
+  // o que está gravado (ou o padrão do código, se a tabela ainda não tem o papel)
+  const gravado = useMemo(() => {
+    const m: Record<Role, string[]> = { ...ROLE_PERMISSIONS };
+    for (const l of linhas) m[l.papel as Role] = l.permissoes;
+    return m;
+  }, [linhas]);
+
+  const marcadas = (papel: Role): Record<string, boolean> =>
+    edicao[papel] ?? Object.fromEntries(gravado[papel].map((p) => [p, true]));
+
+  const definir = (papel: Role, mudar: (atual: Record<string, boolean>) => Record<string, boolean>) => {
+    setEdicao((prev) => ({ ...prev, [papel]: mudar(marcadas(papel)) }));
+    setSujo((prev) => ({ ...prev, [papel]: true }));
+  };
+
+  const gravar = async (papel: Role) => {
+    const lista = Object.entries(marcadas(papel)).filter(([, v]) => v).map(([k]) => k);
+    try {
+      await salvar.mutateAsync({ papel, permissoes: lista, userId });
+      setSujo((prev) => ({ ...prev, [papel]: false }));
+      setEdicao((prev) => { const n = { ...prev }; delete n[papel]; return n; });
+      toast.success(`Permissões padrão de ${roleLabels[papel]} salvas — valem no próximo login de cada usuário.`);
+    } catch (e: any) {
+      toast.error(`Não foi possível salvar: ${e.message ?? e}`);
+    }
+  };
+
+  if (isLoading) return <div className="p-8 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs dark:border-amber-900 dark:bg-amber-950/20">
+        <p className="font-medium">O que isto controla</p>
+        <p className="mt-1 text-muted-foreground">
+          Quais itens de menu e botões cada papel vê, para todo usuário do papel que não tenha
+          permissões próprias. Um usuário com vários papéis enxerga a união deles. O acesso ao
+          banco continua governado pelo papel principal (o mais alto) nas regras do Supabase.
+        </p>
+      </div>
+      {ROLES.map((papel) => {
+        const atual = marcadas(papel);
+        const total = Object.values(atual).filter(Boolean).length;
+        return (
+          <Card key={papel}>
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between gap-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Shield className="h-4 w-4" /> {roleLabels[papel]}
+                  <Badge variant="outline" className="text-[10px]">{total} permissões</Badge>
+                  {sujo[papel] && <Badge className="text-[10px]">não salvo</Badge>}
+                </CardTitle>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" disabled={!isAdmin}
+                    onClick={() => definir(papel, () => Object.fromEntries(ROLE_PERMISSIONS[papel].map((p) => [p, true])))}
+                    title="Volta ao conjunto que veio com o sistema">
+                    <RotateCcw className="h-3 w-3 mr-1" /> Restaurar padrão do sistema
+                  </Button>
+                  <Button size="sm" disabled={!isAdmin || !sujo[papel] || salvar.isPending} onClick={() => gravar(papel)}>
+                    {salvar.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+                    Salvar
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {Object.entries(PERMISSOES_POR_MODULO).map(([modulo, perms]) => (
+                  <div key={modulo} className="rounded-md border p-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-xs font-semibold">{modulo}</p>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" disabled={!isAdmin}
+                          onClick={() => definir(papel, (a) => ({ ...a, ...Object.fromEntries(perms.map((p) => [p, true])) }))}>
+                          Todas
+                        </Button>
+                        <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" disabled={!isAdmin}
+                          onClick={() => definir(papel, (a) => ({ ...a, ...Object.fromEntries(perms.map((p) => [p, false])) }))}>
+                          Nenhuma
+                        </Button>
+                      </div>
+                    </div>
+                    {perms.map((p) => (
+                      <label key={p} className="flex items-center gap-2 cursor-pointer hover:bg-accent px-1 py-0.5 rounded">
+                        <input type="checkbox" className="h-4 w-4" checked={!!atual[p]} disabled={!isAdmin}
+                          onChange={() => definir(papel, (a) => ({ ...a, [p]: !a[p] }))} />
+                        <span className="text-xs">{p}</span>
+                      </label>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+// ============================================================
+// "Importar do CRM": ERP e CRM dividem o mesmo auth.users. Quem já tem
+// login no CRM não precisa de convite (que cairia na tela do CRM): basta a
+// linha em erp_usuarios com o mesmo id e os papéis.
+// ============================================================
+type UsuarioCrm = { id: string; email: string; nome: string; criado_em: string };
+
+function ImportarDoCrmDialog({ open, onOpenChange, onImportado }: {
+  open: boolean; onOpenChange: (v: boolean) => void; onImportado: () => void;
+}) {
+  const [lista, setLista] = useState<UsuarioCrm[]>([]);
+  const [carregando, setCarregando] = useState(false);
+  const [busca, setBusca] = useState("");
+  const [papeisPor, setPapeisPor] = useState<Record<string, Role[]>>({});
+  const [salvando, setSalvando] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setCarregando(true);
+    supabase.rpc("usuarios_crm_disponiveis").then(({ data, error }) => {
+      if (error) toast.error(`Não foi possível listar os logins do CRM: ${error.message}`);
+      setLista((data ?? []) as UsuarioCrm[]);
+      setCarregando(false);
+    });
+  }, [open]);
+
+  const papeisDe = (id: string): Role[] => papeisPor[id] ?? ["caixa"];
+  const alternar = (id: string, p: Role) => {
+    const atual = papeisDe(id);
+    const novo = atual.includes(p) ? atual.filter((x) => x !== p) : [...atual, p];
+    setPapeisPor((prev) => ({ ...prev, [id]: novo.length ? novo : atual }));
+  };
+
+  const importar = async (u: UsuarioCrm) => {
+    const papeis = papeisDe(u.id);
+    setSalvando(u.id);
+    try {
+      const { error } = await supabase.from("erp_usuarios").insert({
+        id: u.id, email: u.email, nome: u.nome,
+        role: papelPrincipal(papeis), papeis, ativo: true,
+      });
+      if (error) throw error;
+      toast.success(`${u.nome} agora entra no ERP como ${papeis.map((p) => roleLabels[p]).join(", ")}.`);
+      setLista((prev) => prev.filter((x) => x.id !== u.id));
+      onImportado();
+    } catch (e: any) {
+      toast.error(`Falha ao importar: ${e.message ?? e}`);
+    } finally {
+      setSalvando(null);
+    }
+  };
+
+  const visiveis = lista.filter((u) => {
+    const s = busca.toLowerCase();
+    return !s || u.nome.toLowerCase().includes(s) || u.email.toLowerCase().includes(s);
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[85vh]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><Users className="h-5 w-5" /> Importar usuário do CRM</DialogTitle>
+          <DialogClose />
+        </DialogHeader>
+        <p className="text-xs text-muted-foreground">
+          Logins que já existem no CRM e ainda não têm perfil no ERP. A senha é a mesma do CRM —
+          nenhum e-mail é enviado.
+        </p>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input placeholder="Nome ou e-mail..." className="pl-9" value={busca} onChange={(e) => setBusca(e.target.value)} />
+        </div>
+        <div className="max-h-[55vh] overflow-y-auto space-y-2 pr-1">
+          {carregando ? (
+            <div className="p-6 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>
+          ) : visiveis.length === 0 ? (
+            <p className="p-6 text-center text-sm text-muted-foreground">
+              {lista.length === 0 ? "Todo login do CRM já tem perfil no ERP." : "Ninguém com esse nome ou e-mail."}
+            </p>
+          ) : visiveis.map((u) => (
+            <div key={u.id} className="flex flex-wrap items-center gap-3 rounded-md border p-3">
+              <div className="min-w-[180px] flex-1">
+                <p className="font-medium text-sm">{u.nome}</p>
+                <p className="text-xs text-muted-foreground">{u.email}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {ROLES.map((p) => (
+                  <label key={p} className="flex items-center gap-1 text-xs cursor-pointer">
+                    <input type="checkbox" className="h-3.5 w-3.5" checked={papeisDe(u.id).includes(p)} onChange={() => alternar(u.id, p)} />
+                    {roleLabels[p]}
+                  </label>
+                ))}
+              </div>
+              <Button size="sm" onClick={() => importar(u)} disabled={salvando === u.id}>
+                {salvando === u.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />}
+                Adicionar ao ERP
+              </Button>
+            </div>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function UsuariosPage() {
   const { user: currentUser } = useAuth();
   const { data: usuarios = [], isLoading, refetch } = useUsuarios();
@@ -94,8 +314,21 @@ export function UsuariosPage() {
   const updateUsuario = useUpdateUsuario();
   const desbloquearUsuario = useDesbloquearUsuario();
   const updatePermissoes = useUpdatePermissoesUsuario();
+  const { data: papelPermissoesRows = [] } = usePapelPermissoes();
+
+  // permissões padrão de cada papel: tabela por cima do mapa do código
+  const mapaPapeis = useMemo(() => {
+    const m: Record<Role, string[]> = { ...ROLE_PERMISSIONS };
+    for (const l of papelPermissoesRows) m[l.papel as Role] = l.permissoes;
+    return m;
+  }, [papelPermissoesRows]);
+  const papeisDe = (u: any): Role[] => (u?.papeis?.length ? u.papeis : [u?.role ?? "caixa"]);
+  const permissoesDosPapeis = (ps: Role[]) => Array.from(new Set(ps.flatMap((p) => mapaPapeis[p] ?? [])));
+  const nomesDosPapeis = (ps: Role[]) => ps.map((p) => roleLabels[p]).join(", ");
 
   const [search, setSearch] = useState("");
+  const [modalImportarCrm, setModalImportarCrm] = useState(false);
+  const [aba, setAba] = useState("usuarios");
   const [roleFilter, setRoleFilter] = useState<string>("todos");
   const [statusFilter, setStatusFilter] = useState<string>("todos");
 
@@ -109,7 +342,7 @@ export function UsuariosPage() {
   const [formUsuario, setFormUsuario] = useState({
     nome: "",
     email: "",
-    role: "caixa" as Role,
+    papeis: ["caixa"] as Role[],
     ativo: true,
     loja_default_id: "",
     telefone: "",
@@ -135,7 +368,7 @@ export function UsuariosPage() {
       );
     }
     if (roleFilter !== "todos") {
-      lista = lista.filter((u) => u.role === roleFilter);
+      lista = lista.filter((u) => papeisDe(u).includes(roleFilter as Role));
     }
     if (statusFilter === "ativos") lista = lista.filter((u) => u.ativo && !u.bloqueado);
     if (statusFilter === "inativos") lista = lista.filter((u) => !u.ativo);
@@ -158,12 +391,14 @@ export function UsuariosPage() {
     setFormUsuario({
       nome: "",
       email: "",
-      role: "caixa",
+      papeis: ["caixa"] as Role[],
       ativo: true,
       loja_default_id: "",
       telefone: "",
       senha: "",
-      definirSenha: false,
+      // sem convite por e-mail: o link cairia na tela do CRM (SITE_URL é
+      // compartilhada). Quem já tem login no CRM entra por "Importar do CRM".
+      definirSenha: true,
     });
     setShowPasswordUsuario(false);
     setModalUsuario(true);
@@ -174,7 +409,7 @@ export function UsuariosPage() {
     setFormUsuario({
       nome: u.nome ?? "",
       email: u.email ?? "",
-      role: u.role ?? "caixa",
+      papeis: papeisDe(u),
       ativo: u.ativo ?? true,
       loja_default_id: u.loja_default_id ?? "",
       telefone: u.telefone ?? "",
@@ -195,7 +430,7 @@ export function UsuariosPage() {
       return;
     }
     // Validação de senha apenas na criação (e se o usuário marcou para definir agora)
-    if (!editId && formUsuario.definirSenha && formUsuario.senha.length < 6) {
+    if (!editId && formUsuario.senha.length < 6) {
       toast.error("A senha deve ter pelo menos 6 caracteres");
       return;
     }
@@ -206,7 +441,8 @@ export function UsuariosPage() {
           id: editId,
           nome: formUsuario.nome,
           email: formUsuario.email,
-          role: formUsuario.role,
+          role: papelPrincipal(formUsuario.papeis),
+          papeis: formUsuario.papeis,
           ativo: formUsuario.ativo,
           loja_default_id: formUsuario.loja_default_id || null,
           telefone: formUsuario.telefone || null,
@@ -240,37 +476,18 @@ export function UsuariosPage() {
           body: {
             email: formUsuario.email,
             nome: formUsuario.nome,
-            role: formUsuario.role,
+            role: papelPrincipal(formUsuario.papeis),
+            papeis: formUsuario.papeis,
             loja_default_id: formUsuario.loja_default_id || null,
             telefone: formUsuario.telefone || null,
-            senha:
-              formUsuario.definirSenha && formUsuario.senha.length >= 6
-                ? formUsuario.senha
-                : null,
-            send_invite: !formUsuario.definirSenha,
-            redirect_base: window.location.origin,
+            senha: formUsuario.senha,
+            send_invite: false,
           },
         });
         if (error) throw error;
         if (data?.error) throw new Error(data.error);
         if (!data?.success) throw new Error("Erro desconhecido ao criar usuário");
-        if (formUsuario.definirSenha) {
-          toast.success(
-            `Usuário criado com senha! Pode logar imediatamente com: ${formUsuario.email}`
-          );
-        } else if (data.invite_sent) {
-          toast.success(
-            `Usuário criado! Email de convite enviado para ${formUsuario.email}`
-          );
-        } else {
-          // Usuário existe no Auth, mas sem senha e sem convite: precisa saber.
-          toast.warning(
-            `Usuário criado, mas o e-mail de convite não saiu${
-              (data as any).invite_error ? `: ${(data as any).invite_error}` : ""
-            }. Use "Enviar e-mail de redefinição de senha" na lista.`,
-            { duration: 12000 }
-          );
-        }
+        toast.success(`Usuário criado. Já pode entrar com ${formUsuario.email} e a senha definida.`);
       }
       setModalUsuario(false);
       refetch();
@@ -347,16 +564,8 @@ export function UsuariosPage() {
     setModalPermissoes(true);
   };
 
-  const aplicarPermissoesDoRole = (role: Role) => {
-    setPermissoesCustom({});
-    setUsarPermissoesCustom(false);
-    // Recarrega dados do usuário selecionado
-    const u = usuarios.find((x) => x.id === permissoesUsuarioId);
-    if (u) {
-      setPermissoesCustom(
-        Object.fromEntries(ROLE_PERMISSIONS[role].map((p) => [p, true]))
-      );
-    }
+  const aplicarPermissoesDosPapeis = () => {
+    setPermissoesCustom(Object.fromEntries(permissoesPadrao.map((p) => [p, true])));
   };
 
   const togglePermissao = (perm: string) => {
@@ -394,7 +603,8 @@ export function UsuariosPage() {
   };
 
   const usuarioSelecionado = usuarios.find((u) => u.id === permissoesUsuarioId);
-  const roleSelecionado = (usuarioSelecionado?.role ?? "caixa") as Role;
+  const papeisSelecionados = papeisDe(usuarioSelecionado);
+  const permissoesPadrao = permissoesDosPapeis(papeisSelecionados);
 
   return (
     <div className="space-y-4">
@@ -413,12 +623,24 @@ export function UsuariosPage() {
             <RefreshCw className="h-4 w-4 mr-1" />
             Atualizar
           </Button>
+          <Button variant="outline" size="sm" onClick={() => setModalImportarCrm(true)} disabled={!isAdmin}
+            title="Quem já tem login no CRM entra no ERP sem convite">
+            <Download className="h-4 w-4 mr-1" />
+            Importar do CRM
+          </Button>
           <Button size="sm" onClick={abrirNovoUsuario} disabled={!isAdmin}>
             <Plus className="h-4 w-4 mr-1" />
             Novo Usuário
           </Button>
         </div>
       </div>
+
+      <Tabs value={aba} onValueChange={setAba} className="space-y-4">
+      <TabsList>
+        <TabsTrigger value="usuarios"><Users className="h-3.5 w-3.5 mr-1.5" /> Usuários</TabsTrigger>
+        <TabsTrigger value="papeis"><Layers className="h-3.5 w-3.5 mr-1.5" /> Papéis e permissões padrão</TabsTrigger>
+      </TabsList>
+      <TabsContent value="usuarios" className="space-y-4">
 
       {/* KPIs */}
       <div className="grid gap-3 sm:grid-cols-4">
@@ -559,9 +781,14 @@ export function UsuariosPage() {
                           </div>
                         </td>
                         <td className="p-2 text-center">
-                          <Badge variant={u.role === "admin" ? "default" : "outline"}>
-                            {roleLabels[u.role as Role] ?? u.role}
-                          </Badge>
+                          <div className="flex flex-wrap justify-center gap-1">
+                            {papeisDe(u).map((p) => (
+                              <Badge key={p} variant={p === u.role ? "default" : "outline"}
+                                title={p === u.role ? "Papel principal — governa o acesso ao banco" : undefined}>
+                                {roleLabels[p] ?? p}
+                              </Badge>
+                            ))}
+                          </div>
                         </td>
                         <td className="p-2 text-sm">
                           {u.loja_default_id ? lojaMap[u.loja_default_id] ?? "—" : "—"}
@@ -671,6 +898,14 @@ export function UsuariosPage() {
         </CardContent>
       </Card>
 
+      </TabsContent>
+      <TabsContent value="papeis">
+        <PapeisPanel isAdmin={isAdmin} userId={currentUser?.id} />
+      </TabsContent>
+      </Tabs>
+
+      <ImportarDoCrmDialog open={modalImportarCrm} onOpenChange={setModalImportarCrm} onImportado={() => refetch()} />
+
       {/* Modal: Editar Usuário */}
       <Dialog open={modalUsuario} onOpenChange={setModalUsuario}>
         <DialogContent className="max-w-lg">
@@ -699,21 +934,27 @@ export function UsuariosPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Papel</Label>
-                <Select
-                  value={formUsuario.role}
-                  onValueChange={(v) => setFormUsuario({ ...formUsuario, role: v as Role })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="admin">Administrador</SelectItem>
-                    <SelectItem value="gerente">Gerente</SelectItem>
-                    <SelectItem value="caixa">Operador de Caixa</SelectItem>
-                    <SelectItem value="estoquista">Estoquista</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label>Papéis</Label>
+                <div className="mt-1 space-y-1 rounded-md border p-2">
+                  {ROLES.map((p) => (
+                    <label key={p} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input type="checkbox" className="h-4 w-4"
+                        checked={formUsuario.papeis.includes(p)}
+                        onChange={(e) => {
+                          const papeis = e.target.checked
+                            ? [...formUsuario.papeis, p]
+                            : formUsuario.papeis.filter((x) => x !== p);
+                          // sem papel nenhum o usuário não vê nada — mantém o último
+                          setFormUsuario({ ...formUsuario, papeis: papeis.length ? papeis : formUsuario.papeis });
+                        }} />
+                      {roleLabels[p]}
+                    </label>
+                  ))}
+                </div>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Vê a união dos papéis. Acesso ao banco pelo principal:{" "}
+                  <b>{roleLabels[papelPrincipal(formUsuario.papeis)]}</b>.
+                </p>
               </div>
               <div>
                 <Label>Loja Padrão</Label>
@@ -761,28 +1002,12 @@ export function UsuariosPage() {
               </div>
             </div>
 
-            {/* Campo de Senha - apenas na criação */}
+            {/* Senha — obrigatória na criação. Não há convite por e-mail: o
+                link cairia na tela do CRM. Quem já tem login no CRM entra por
+                "Importar do CRM". */}
             {!editId && (
               <div className="space-y-2 border rounded-md p-3 bg-muted/30">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="definirSenha"
-                    checked={formUsuario.definirSenha}
-                    onChange={(e) =>
-                      setFormUsuario({
-                        ...formUsuario,
-                        definirSenha: e.target.checked,
-                        senha: e.target.checked ? formUsuario.senha : "",
-                      })
-                    }
-                    className="h-4 w-4"
-                  />
-                  <label htmlFor="definirSenha" className="text-sm cursor-pointer font-medium">
-                    Definir senha agora (senão, envia e-mail de convite)
-                  </label>
-                </div>
-                {formUsuario.definirSenha && (
+                {(
                   <div>
                     <Label>Senha (mínimo 6 caracteres)</Label>
                     <div className="relative">
@@ -813,15 +1038,7 @@ export function UsuariosPage() {
               </div>
             )}
 
-            {/* Aviso contextual */}
-            {!editId && !formUsuario.definirSenha && (
-              <div className="text-xs text-muted-foreground bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 p-2 rounded">
-                <Mail className="h-3 w-3 inline mr-1 text-blue-600" />
-                Será enviado um e-mail de convite (via Resend) para o usuário
-                definir sua senha.
-              </div>
-            )}
-            {!editId && formUsuario.definirSenha && (
+            {!editId && (
               <div className="text-xs text-muted-foreground bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 p-2 rounded">
                 <Check className="h-3 w-3 inline mr-1 text-green-600" />
                 O usuário poderá logar imediatamente com a senha definida acima.
@@ -866,7 +1083,7 @@ export function UsuariosPage() {
             <p className="font-medium">O que isto controla</p>
             <p className="mt-1 text-muted-foreground">
               Quais itens de menu e botões o usuário vê. O acesso ao banco é governado pelo
-              <b> cargo</b> ({roleLabels[roleSelecionado]}) nas regras do Supabase — tirar um item
+              <b> papel principal</b> ({roleLabels[papelPrincipal(papeisSelecionados)]}) nas regras do Supabase — tirar um item
               daqui esconde o caminho, não vira uma trava de servidor. Para restringir de verdade
               o que alguém pode gravar, mude o cargo.
             </p>
@@ -886,18 +1103,18 @@ export function UsuariosPage() {
               <p className="text-xs text-muted-foreground">
                 {usarPermissoesCustom
                   ? "Permissões definidas individualmente abaixo"
-                  : "Usando permissões padrão do role: " + roleLabels[roleSelecionado]}
+                  : "Usando o padrão dos papéis: " + nomesDosPapeis(papeisSelecionados)}
               </p>
             </label>
             {usarPermissoesCustom && (
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => aplicarPermissoesDoRole(roleSelecionado)}
-                title="Preencher com todas as permissões do role"
+                onClick={aplicarPermissoesDosPapeis}
+                title="Preencher com o padrão dos papéis"
               >
                 <RotateCcw className="h-3 w-3 mr-1" />
-                Copiar do Role
+                Copiar dos papéis
               </Button>
             )}
           </div>
@@ -963,10 +1180,10 @@ export function UsuariosPage() {
           {!usarPermissoesCustom && (
             <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-2">
               <p className="text-xs text-muted-foreground">
-                Permissões padrão do role <strong>{roleLabels[roleSelecionado]}</strong>:
+                Permissões padrão dos papéis <strong>{nomesDosPapeis(papeisSelecionados)}</strong>:
               </p>
               <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
-                {ROLE_PERMISSIONS[roleSelecionado].map((p) => (
+                {permissoesPadrao.map((p) => (
                   <div key={p} className="flex items-center gap-2 p-1 text-xs">
                     <Check className="h-3 w-3 text-green-600" />
                     {p}

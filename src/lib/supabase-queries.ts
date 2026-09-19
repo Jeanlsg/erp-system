@@ -17,7 +17,9 @@ import type {
   Contato,
   FeatureFlag,
   Caixa,
+  PapelPermissoes,
 } from "@/types/database";
+import { useAuthStore, mapaPapelPermissoes } from "@/lib/store/auth-store";
 
 export { isSupabaseConfigured, supabase };
 
@@ -1125,6 +1127,38 @@ export function useMarcarNotificacaoLida() {
     // era 'erp_feature_flags' — a notificação continuava aparecendo como
     // não lida até a próxima recarga da página
     onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_notificacoes'] }),
+  });
+}
+
+// ---- permissões padrão por papel (Usuários e Permissões › Papéis) ----
+
+export function usePapelPermissoes() {
+  return useQuery<PapelPermissoes[]>({
+    queryKey: ["erp_papel_permissoes"],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      const { data, error } = await supabase
+        .from("erp_papel_permissoes")
+        .select("*")
+        .order("papel");
+      if (error) throw error;
+      // o can() do store lê deste mapa; manter os dois em dia na mesma leitura
+      useAuthStore.getState().setPapelPermissoes(mapaPapelPermissoes(data ?? []));
+      return (data ?? []) as PapelPermissoes[];
+    },
+  });
+}
+
+export function useSalvarPapelPermissoes() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ papel, permissoes, userId }: { papel: string; permissoes: string[]; userId?: string }) => {
+      const { error } = await supabase
+        .from("erp_papel_permissoes")
+        .upsert({ papel, permissoes, updated_at: new Date().toISOString(), updated_by: userId ?? null });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["erp_papel_permissoes"] }),
   });
 }
 
