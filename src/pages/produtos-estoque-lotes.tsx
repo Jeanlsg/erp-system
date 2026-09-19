@@ -272,10 +272,18 @@ export function ProdutosEstoqueLotesPage() {
     setModalProduto(true);
   };
 
-  const abrirEdicaoProduto = (p: any) => {
-    setEditId(p.id);
-    // Encontra o categoria_id correspondente pelo nome
-    const cat = categorias.find((c) => c.nome === p.categoria_nome);
+  const abrirEdicaoProduto = (linha: any) => {
+    // A tabela vem da view, que chama o id de `produto_id` e não traz
+    // duracao_dias, csosn nem cfop_padrao. Hidratar dela tinha dois efeitos:
+    // editId ficava undefined (o modal abria como "Cadastrar" e o Salvar fazia
+    // INSERT) e esses três campos voltavam ao padrão a cada edição. O cadastro
+    // completo está em `produtos` (select * de erp_produtos); a linha da view
+    // serve só para achar o id.
+    const id = linha.id ?? linha.produto_id;
+    const p = produtos.find((x: any) => x.id === id) ?? linha;
+    setEditId(id);
+    const cat = categorias.find((c) => c.id === p.categoria_id)
+      ?? categorias.find((c) => c.nome === linha.categoria_nome);
     setFormProduto({
       sku: p.sku ?? p.produto_sku ?? "",
       nome: p.nome ?? p.produto_nome ?? "",
