@@ -105,6 +105,25 @@ export function PDVPage() {
   const [saldoInicial, setSaldoInicial] = useState("");
   const [caixaSelecionado, setCaixaSelecionado] = useState<number | null>(null);
 
+  // O troco do dia seguinte é o que sobrou na gaveta ontem. Sem isto o
+  // operador digitava o valor de cabeça toda manhã — e errar aqui desencontra
+  // o fechamento inteiro, porque a diferença é medida contra este número.
+  const ultimoFechamento = useMemo(() => {
+    if (!caixaSelecionado) return null;
+    return (caixas as any[])
+      .filter((c) => Number(c.numero_caixa) === Number(caixaSelecionado)
+                  && c.status === "fechado" && c.data_fechamento)
+      .sort((a, b) => String(b.data_fechamento).localeCompare(String(a.data_fechamento)))[0] ?? null;
+  }, [caixas, caixaSelecionado]);
+
+  // sugere, não impõe: só preenche o campo vazio, e o operador pode trocar
+  const [saldoVeioDoFechamento, setSaldoVeioDoFechamento] = useState(false);
+  useEffect(() => {
+    if (!ultimoFechamento || saldoInicial !== "") return;
+    const v = Number(ultimoFechamento.valor_final ?? 0);
+    if (v > 0) { setSaldoInicial(String(v)); setSaldoVeioDoFechamento(true); }
+  }, [ultimoFechamento, saldoInicial]);
+
   // Estados de modais
   const [modalAbertura, setModalAbertura] = useState(false);
   const [modalFechamento, setModalFechamento] = useState(false);
@@ -489,8 +508,23 @@ export function PDVPage() {
                       step="0.01"
                       placeholder="R$ 0,00"
                       value={saldoInicial}
-                      onChange={(e) => setSaldoInicial(e.target.value)}
+                      onChange={(e) => { setSaldoInicial(e.target.value); setSaldoVeioDoFechamento(false); }}
                     />
+                    {ultimoFechamento && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {saldoVeioDoFechamento ? "Puxado do" : "No"} fechamento de{" "}
+                        {new Date(ultimoFechamento.data_fechamento).toLocaleString("pt-BR", {
+                          day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
+                        })}{" "}
+                        ficaram <b>{brl(Number(ultimoFechamento.valor_final ?? 0))}</b> na gaveta.
+                        {!saldoVeioDoFechamento && (
+                          <button type="button" className="ml-1 underline hover:no-underline"
+                            onClick={() => { setSaldoInicial(String(Number(ultimoFechamento.valor_final ?? 0))); setSaldoVeioDoFechamento(true); }}>
+                            usar este valor
+                          </button>
+                        )}
+                      </p>
+                    )}
                   </div>
                 </div>
                 <Button
