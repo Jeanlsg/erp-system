@@ -112,12 +112,41 @@ export function LotesProdutoDialog({ open, onOpenChange, produto, lojas, lojaIdI
     invalidarProdutos(qc);
   };
 
-  const alterarQuantidade = async (loteId: string, nova: string) => {
+  // Lote É estoque: o que entra no lote entra no saldo, o que sai do lote
+  // sai do saldo — sempre pelas RPCs, para o Kardex contar a história.
+  // Antes as duas contagens eram independentes e o balcão vivia com uma
+  // "diferença" para consertar na mão.
+  const moverSaldo = async (lojaId: string, delta: number, motivo: string, loteId?: string) => {
+    if (!produto || delta === 0) return;
+    if (delta > 0) {
+      const { error } = await supabase.schema("erp").rpc("creditar_estoque_atomico", {
+        p_loja_id: lojaId,
+        p_itens: [{ produto_id: produto.id, quantidade: delta }],
+        p_origem: "lote", p_documento_id: loteId ?? null,
+      });
+      if (error) throw new Error(error.message);
+      return;
+    }
+    const saldo = Number(saldos.find((s: any) => s.loja_id === lojaId)?.quantidade ?? 0);
+    const { error } = await supabase.schema("erp").rpc("ajustar_estoque_atomico", {
+      p_loja_id: lojaId, p_produto_id: produto.id,
+      p_nova_quantidade: Math.max(0, saldo + delta), p_observacao: motivo,
+    });
+    if (error) throw new Error(error.message);
+  };
+
+  const alterarQuantidade = async (lote: any, nova: string) => {
     const n = parseInt(nova, 10);
     if (!Number.isInteger(n) || n < 0) { toast.error("Quantidade inválida."); return; }
-    const { error } = await supabase.from("erp_lotes").update({ quantidade: n }).eq("id", loteId);
-    if (error) { toast.error(`Erro ao alterar: ${error.message}`); return; }
-    toast.success(`Quantidade do lote: ${n}. O saldo do estoque não muda — use "Igualar" se for o caso.`);
+    const delta = n - Number(lote.quantidade);
+    try {
+      const { error } = await supabase.from("erp_lotes").update({ quantidade: n }).eq("id", lote.id);
+      if (error) throw new Error(error.message);
+      await moverSaldo(lote.loja_id, delta, `lote ${lote.codigo}: ${lote.quantidade} → ${n}`, lote.id);
+      toast.success(`Lote ${lote.codigo}: ${lote.quantidade} → ${n}. Estoque ${delta > 0 ? "+" : ""}${delta}.`);
+    } catch (e: any) {
+      toast.error(`Erro ao alterar: ${e.message ?? e}`);
+    }
     recarregar();
   };
 
@@ -184,15 +213,17 @@ export function LotesProdutoDialog({ open, onOpenChange, produto, lojas, lojaIdI
       // Código é obrigatório no banco; sem um do fabricante, usa a validade
       // como identificação — é o que a etiqueta da prateleira mostra mesmo.
       const codigo = form.codigo.trim() || `VAL-${dataFinal.replace(/-/g, "")}`;
-      const { error } = await supabase.from("erp_lotes").insert({
+      const { data: novo, error } = await supabase.from("erp_lotes").insert({
         produto_id: produto.id,
         loja_id: loja,
         codigo,
         data_fabricacao: form.fabricacao || null,
         data_validade: dataFinal,
         quantidade: qtd,
-      });
+      }).select("id").single();
       if (error) throw error;
+      // o lote entra no estoque (Kardex: entrada, origem "lote")
+      await moverSaldo(loja, qtd, `lote ${codigo}`, novo.id);
 
       // Sem controla_lote a venda ignora os lotes (o FEFO nem roda) e a
       // validade viraria enfeite. Liga junto com o primeiro lote.
@@ -200,15 +231,12 @@ export function LotesProdutoDialog({ open, onOpenChange, produto, lojas, lojaIdI
         const { error: e2 } = await supabase
           .from("erp_produtos").update({ controla_lote: true }).eq("id", produto.id);
         if (e2) throw e2;
-        toast.success("Lote salvo. Controle de validade ligado neste produto — a venda passa a tirar do lote que vence primeiro.");
+        toast.success(`Lote salvo: ${qtd} un entraram no estoque. Controle de validade ligado — a venda passa a tirar do lote que vence primeiro.`);
       } else {
-        toast.success(`Lote salvo: vence em ${fmtData(dataFinal)}.`);
+        toast.success(`Lote salvo: ${qtd} un entraram no estoque, vence em ${fmtData(dataFinal)}.`);
       }
       limpar();
-      void qc.invalidateQueries({ queryKey: ["erp_lotes_produto", produto.id] });
-      void qc.invalidateQueries({ queryKey: ["erp_lotes"] });
-      void qc.invalidateQueries({ queryKey: ["erp_lotes-vencendo"] });
-      invalidarProdutos(qc);
+      recarregar();
     } catch (e: any) {
       toast.error(`Não foi possível salvar: ${e.message ?? e}`);
     } finally {
@@ -227,21 +255,29 @@ export function LotesProdutoDialog({ open, onOpenChange, produto, lojas, lojaIdI
     invalidarProdutos(qc);
   };
 
-  const excluir = async (loteId: string) => {
-    if (!confirm("Excluir este lote? O saldo do estoque não muda — só o rastro de validade.")) return;
-    setExcluindo(loteId);
-    const { error } = await supabase.from("erp_lotes").delete().eq("id", loteId);
-    setExcluindo(null);
-    if (error) { toast.error(`Erro ao excluir: ${error.message}`); return; }
-    toast.success("Lote excluído.");
-    void qc.invalidateQueries({ queryKey: ["erp_lotes_produto", produto?.id] });
-    void qc.invalidateQueries({ queryKey: ["erp_lotes-vencendo"] });
-    invalidarProdutos(qc);
+  const excluir = async (l: any) => {
+    const qtd = Number(l.quantidade) || 0;
+    const aviso = qtd > 0
+      ? `Excluir o lote ${l.codigo}? As ${qtd} un dele SAEM do estoque (ajuste no Kardex). Se venceu, prefira "Baixar vencido".`
+      : `Excluir o lote ${l.codigo} (já zerado)?`;
+    if (!confirm(aviso)) return;
+    setExcluindo(l.id);
+    try {
+      if (qtd > 0) await moverSaldo(l.loja_id, -qtd, `lote ${l.codigo} excluído`, l.id);
+      const { error } = await supabase.from("erp_lotes").delete().eq("id", l.id);
+      if (error) throw new Error(error.message);
+      toast.success(qtd > 0 ? `Lote excluído; estoque −${qtd}.` : "Lote excluído.");
+    } catch (e: any) {
+      toast.error(`Erro ao excluir: ${e.message ?? e}`);
+    } finally {
+      setExcluindo(null);
+    }
+    recarregar();
   };
 
   return (
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) limpar(); }}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CalendarClock className="h-5 w-5" /> Validade e lotes
@@ -251,7 +287,8 @@ export function LotesProdutoDialog({ open, onOpenChange, produto, lojas, lojaIdI
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        {/* rola por dentro: com vários lotes o modal passava do viewport e a lista saía da tela */}
+        <div className="space-y-4 overflow-y-auto pr-1 min-h-0 flex-1">
           {/* ---- novo lote ---- */}
           <div className="rounded-md border p-3 space-y-3">
             <p className="text-sm font-medium">Novo lote</p>
@@ -370,7 +407,7 @@ export function LotesProdutoDialog({ open, onOpenChange, produto, lojas, lojaIdI
                 </div>
               ))}
               <p className="text-[11px] text-muted-foreground">
-                A venda tira do lote que vence primeiro e nunca de lote vencido. Lote vencido: use "Baixar vencido" na linha.
+                Lote novo entra no estoque; lote excluído ou baixado sai. Diferença aqui é de cadastros antigos — "Igualar" acerta pelo Kardex. A venda tira do lote que vence primeiro e nunca de lote vencido.
               </p>
             </div>
           )}
@@ -411,7 +448,7 @@ export function LotesProdutoDialog({ open, onOpenChange, produto, lojas, lojaIdI
                               className="h-8 w-20 text-right tabular-nums"
                               onBlur={(e) => {
                                 if (e.target.value !== "" && Number(e.target.value) !== Number(l.quantidade)) {
-                                  void alterarQuantidade(l.id, e.target.value);
+                                  void alterarQuantidade(l, e.target.value);
                                 }
                               }} />
                           </td>
@@ -444,7 +481,7 @@ export function LotesProdutoDialog({ open, onOpenChange, produto, lojas, lojaIdI
                               </Button>
                             )}
                             <Button size="sm" variant="ghost" className="h-7 w-7 p-0"
-                              onClick={() => void excluir(l.id)} disabled={excluindo === l.id}
+                              onClick={() => void excluir(l)} disabled={excluindo === l.id}
                               title="Excluir lote">
                               {excluindo === l.id
                                 ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
