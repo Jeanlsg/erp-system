@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -9,12 +9,13 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  Calculator, Plus, Trash2, Loader2, ShoppingCart, Package,
+  Calculator, Plus, Trash2, Loader2, ShoppingCart,
   CreditCard, Banknote, QrCode, Lock, Unlock, Settings,
   Check, X, AlertCircle, Receipt, CloudOff, RefreshCw, Cloud, Camera,
   UserPlus,
+  Search, Keyboard,
 } from "lucide-react";
-import { useProdutos, useClientes, useCaixaAberto, useCreateCaixa, useFecharCaixa, useKits, useCaixas, useCreateSangria, useCreateEntradaExtra, useCaixaConfig, useUpdateCaixaConfig, useEmitirNFeVenda, isSupabaseConfigured, useVendedores } from "@/lib/supabase-queries";
+import { useProdutos, useClientes, useCaixaAberto, useCreateCaixa, useFecharCaixa, useKits, useCaixas, useCreateSangria, useCreateEntradaExtra, useCaixaConfig, useUpdateCaixaConfig, useEmitirNFeVenda, isSupabaseConfigured, useVendedores, useEstoqueLoja } from "@/lib/supabase-queries";
 import { toast } from "sonner";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -28,6 +29,7 @@ import { registrarVenda, useFilaVendas } from "@/lib/offline/fila-vendas";
 import { useCatalogoOffline } from "@/lib/offline/catalogo";
 import { LeitorCodigoBarras } from "@/components/leitor-codigo-barras";
 import { useLeitorUsb } from "@/lib/use-leitor-usb";
+import { useAtalhosPdv, type Atalho } from "@/lib/use-atalhos-pdv";
 import { documentoValido, mascaraDocumento } from "@/lib/documento";
 import { ComboboxBusca } from "@/components/ui/combobox-busca";
 import { ClienteRapidoPdvDialog } from "@/components/cliente-rapido-pdv";
@@ -59,6 +61,19 @@ export function PDVPage() {
 
   // Queries
   const { data: produtosServidor = [] } = useProdutos({ lojaId: lojaId ?? undefined });
+  // O saldo NÃO vem em erp_produtos (mora em erp_estoque, por loja). Sem este
+  // mapa, "Qtd. Estoque" ficaria vazio e o aviso de estoque zerado dispararia
+  // para todo produto — `Number(undefined ?? 0) <= 0` é verdadeiro.
+  const { data: estoqueDaLoja = [] } = useEstoqueLoja(lojaId ?? undefined);
+  const saldoPorProduto = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const e of estoqueDaLoja as any[]) m.set(e.produto_id, Number(e.quantidade) || 0);
+    return m;
+  }, [estoqueDaLoja]);
+  /** Saldo do produto nesta loja; null quando não há posição cadastrada. */
+  const saldoDe = useCallback(
+    (prod: any) => (prod && saldoPorProduto.has(prod.id) ? saldoPorProduto.get(prod.id)! : null),
+    [saldoPorProduto]);
   const { data: kits = [] } = useKits();
   // Kits entram no catálogo como itens vendáveis (o servidor desmembra os
   // componentes na hora da venda). Entram ANTES do espelho offline, então
@@ -86,6 +101,16 @@ export function PDVPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [clienteId, setClienteId] = useState("");
   const [modalCliente, setModalCliente] = useState(false);
+
+  // ---- linha de lançamento (código → TAB → quantidade) ----
+  const campoCodigo = useRef<HTMLInputElement>(null);
+  const campoQtd = useRef<HTMLInputElement>(null);
+  const [codigo, setCodigo] = useState("");
+  const [qtdLinha, setQtdLinha] = useState("1");
+  const [produtoNaLinha, setProdutoNaLinha] = useState<any | null>(null);
+  const [itemSelecionado, setItemSelecionado] = useState<string | null>(null);
+  const [modalLocalizar, setModalLocalizar] = useState(false);
+  const [modalAtalhos, setModalAtalhos] = useState(false);
   // Vendedor da venda: é dele a comissão. Começa no funcionário ligado ao
   // usuário logado; o caixa pode trocar quando vende para outro vendedor.
   const [vendedorId, setVendedorId] = useState("");
@@ -200,6 +225,33 @@ export function PDVPage() {
       }];
     });
   }, []);
+
+  /** Acha o produto por código de barras ou SKU, sem diferenciar maiúscula. */
+  const acharPorCodigo = useCallback((c: string) => {
+    const t = c.trim();
+    if (!t) return null;
+    return produtos.find((x: any) =>
+      x.codigo_barras === t || (x.sku && String(x.sku).toUpperCase() === t.toUpperCase())) ?? null;
+  }, [produtos]);
+
+  /** Lança no cupom o que está na linha e devolve o foco ao código. */
+  const lancarPorCodigo = useCallback(() => {
+    const p = produtoNaLinha ?? acharPorCodigo(codigo);
+    if (!p) {
+      toast.error("Produto não encontrado ou não está no catálogo desta loja.");
+      campoCodigo.current?.select();
+      return;
+    }
+    const qtd = Math.max(1, parseFloat(qtdLinha) || 1);
+    // uma chamada por unidade mantém a soma correta quando o item já está
+    // no cupom (adicionar() incrementa de um em um)
+    for (let i = 0; i < qtd; i++) adicionar(p);
+    setCodigo(""); setQtdLinha("1"); setProdutoNaLinha(null);
+    campoCodigo.current?.focus();
+  }, [produtoNaLinha, codigo, qtdLinha, acharPorCodigo, adicionar]);
+
+  // o código volta a ser o campo ativo sempre que a venda começa do zero
+  useEffect(() => { if (cart.length === 0) campoCodigo.current?.focus(); }, [cart.length]);
 
   // Leitor por câmera: cada bipe adiciona o produto ao carrinho — o operador
   // passa os itens em sequência sem tocar na tela.
@@ -437,6 +489,25 @@ export function PDVPage() {
     setModalEntrada(false);
   };
 
+  // ---- atalhos de teclado (mesmas teclas do sistema anterior da loja) ----
+  const ATALHOS: Atalho[] = [
+    { tecla: "F1", rotulo: "Vendedor", acao: () => document.querySelector<HTMLElement>("[data-campo='vendedor'] input, [data-campo='vendedor'] button")?.click() },
+    { tecla: "F2", rotulo: "Cliente", acao: () => setModalCliente(true) },
+    { tecla: "F4", rotulo: "Código", acao: () => { campoCodigo.current?.focus(); campoCodigo.current?.select(); } },
+    { tecla: "F5", rotulo: "Localizar", acao: () => setModalLocalizar(true) },
+    { tecla: "F8", rotulo: "Cancelar item", acao: () => { if (itemSelecionado) { remover(itemSelecionado); setItemSelecionado(null); } else toast.info("Escolha o item no cupom antes."); }, ativo: cart.length > 0 },
+    { tecla: "F10", rotulo: "Add Pagamento", acao: () => { if (cart.length) setModalConfirmarVenda(true); }, ativo: cart.length > 0 },
+    { tecla: "F11", rotulo: "Cancelar venda", acao: () => { if (cart.length && confirm("Cancelar a venda e limpar o cupom?")) limparCarrinho(); }, ativo: cart.length > 0 },
+    { tecla: "Ctrl+S", rotulo: "Sangria", acao: () => setModalSangria(true), ativo: !!caixaAberto },
+    { tecla: "Ctrl+E", rotulo: "Entrada de valores", acao: () => setModalEntrada(true), ativo: !!caixaAberto },
+    { tecla: "Ctrl+X", rotulo: "Fechar caixa", acao: () => setModalFechamento(true), ativo: !!caixaAberto },
+    { tecla: "F12", rotulo: "Atalhos", acao: () => setModalAtalhos(true) },
+  ];
+  useAtalhosPdv(ATALHOS, !!caixaAberto || true);
+  // a barra de baixo mostra só o que o operador usa a todo momento
+  const ATALHOS_VISIVEIS = ATALHOS.filter((a) =>
+    ["F4", "F5", "F8", "F10", "F11", "Ctrl+S", "Ctrl+X", "F12"].includes(a.tecla));
+
   if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="PDV / Frente de Caixa" />;
 
   // =================== RENDER ===================
@@ -570,8 +641,12 @@ export function PDVPage() {
       ) : (
         /* Com caixa aberto - mostrar PDV */
         <div className="flex-1 flex overflow-hidden">
-          {/* Painel Esquerdo: Produtos */}
-          <div className="flex-1 flex flex-col overflow-hidden border-r">
+          {/* Painel Esquerdo: entrada por código e cupom.
+
+              Não há catálogo em grade: balcão não escolhe produto na tela,
+              lê o código de barras ou digita. O catálogo continua acessível
+              em Localizar (F5), para quando o código não se lê. */}
+          <div className="flex flex-1 flex-col overflow-hidden border-r">
             {/* Estado da conexão e da fila. Fica no topo do painel de venda
                 porque é a informação que muda o que o operador deve prometer
                 ao cliente — sem internet ainda não existe cupom fiscal. */}
@@ -618,95 +693,186 @@ export function PDVPage() {
               </div>
             )}
 
-            {/* Busca + leitor por câmera */}
-            <div className="flex items-center gap-2 p-4 border-b">
-              <Input
-                placeholder="Buscar por nome, SKU ou código de barras..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="max-w-md"
-              />
-              <Button variant="outline" size="icon" title="Ler código de barras pela câmera"
-                onClick={() => setLeitorAberto(true)}>
-                <Camera className="h-4 w-4" />
-              </Button>
+
+            {/* Linha de entrada: código → TAB → quantidade */}
+            <div className="border-b bg-muted/20 p-3">
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="min-w-[16rem] flex-1">
+                  <Label className="text-xs">Código <span className="text-muted-foreground">(F4)</span></Label>
+                  <Input
+                    ref={campoCodigo}
+                    className="mt-1 font-mono text-lg"
+                    placeholder="Bipe ou digite o código e pressione TAB"
+                    value={codigo}
+                    onChange={(e) => setCodigo(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { e.preventDefault(); lancarPorCodigo(); }
+                      if (e.key === "Tab" && codigo.trim()) {
+                        // TAB confere o código e passa para a quantidade,
+                        // como no sistema antigo da loja
+                        const p = acharPorCodigo(codigo);
+                        if (p) { e.preventDefault(); setProdutoNaLinha(p); campoQtd.current?.focus(); }
+                      }
+                    }}
+                  />
+                </div>
+                <div className="w-28">
+                  <Label className="text-xs">Quantidade</Label>
+                  <Input
+                    ref={campoQtd}
+                    type="number" min="0" step="any"
+                    className="mt-1 text-lg"
+                    value={qtdLinha}
+                    onChange={(e) => setQtdLinha(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); lancarPorCodigo(); } }}
+                  />
+                </div>
+                <Button onClick={lancarPorCodigo} disabled={!codigo.trim() && !produtoNaLinha}>
+                  <Plus className="mr-1 h-4 w-4" /> Lançar
+                </Button>
+                <Button variant="outline" onClick={() => setModalLocalizar(true)} title="Localizar produto (F5)">
+                  <Search className="mr-1 h-4 w-4" /> Localizar <span className="ml-1 text-xs opacity-60">F5</span>
+                </Button>
+                <Button variant="outline" size="icon" title="Ler pela câmera"
+                  onClick={() => setLeitorAberto(true)}>
+                  <Camera className="h-4 w-4" />
+                </Button>
+              </div>
+
+              {/* O que o operador precisa ver antes de lançar */}
+              {produtoNaLinha ? (
+                <div className="mt-2 flex flex-wrap items-center gap-x-6 gap-y-1 rounded-md border bg-background px-3 py-2 text-sm">
+                  <span className="font-medium">{produtoNaLinha.nome}</span>
+                  <span className="text-muted-foreground">R$ Unitário: <b className="text-foreground">{brl(produtoNaLinha.preco_venda)}</b></span>
+                  <span className="text-muted-foreground">R$ Total: <b className="text-foreground">{brl(Number(produtoNaLinha.preco_venda) * (parseFloat(qtdLinha) || 1))}</b></span>
+                  <span className="text-muted-foreground">
+                    Qtd. Estoque:{" "}
+                    <b className={(saldoDe(produtoNaLinha) ?? 1) <= 0 ? "text-red-600" : "text-foreground"}>
+                      {saldoDe(produtoNaLinha) ?? "—"}
+                    </b>
+                  </span>
+                  {/* só avisa quando o saldo é CONHECIDO e não dá: produto sem
+                      posição de estoque na loja não é produto zerado */}
+                  {saldoDe(produtoNaLinha) !== null && saldoDe(produtoNaLinha)! <= 0 && (
+                    <span className="text-xs font-medium text-red-600">
+                      Produto está com o estoque zerado ou negativo
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Pressione TAB para conferir o produto e avançar para a quantidade, ou Enter para lançar 1.
+                </p>
+              )}
             </div>
 
-            {/* Grid de Produtos */}
-            <div className="flex-1 overflow-y-auto p-4">
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {filtrados.map((p) => (
-                  <Card
-                    key={p.id}
-                    className="hover:border-primary cursor-pointer transition-all hover:shadow-md"
-                    onClick={() => adicionar(p)}
-                  >
-                    <CardContent className="p-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm line-clamp-2">{p.nome}</p>
-                          <p className="text-xs text-muted-foreground font-mono mt-1">{p.sku}</p>
+            {/* Cupom: os itens lançados */}
+            <div className="min-h-0 flex-1 overflow-auto">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 border-b bg-muted/40 text-xs uppercase text-muted-foreground">
+                  <tr>
+                    <th className="p-2 text-left">Item</th>
+                    <th className="p-2 text-left">Cód</th>
+                    <th className="p-2 text-left">Descrição</th>
+                    <th className="p-2 text-center">Un</th>
+                    <th className="p-2 text-right">Qtde</th>
+                    <th className="p-2 text-right">Vlr. unit.</th>
+                    <th className="p-2 text-right">Total</th>
+                    <th className="p-2"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cart.length === 0 ? (
+                    <tr><td colSpan={8} className="p-10 text-center text-muted-foreground">
+                      Nenhum item lançado. Bipe o código de barras para começar.
+                    </td></tr>
+                  ) : cart.map((item, i) => (
+                    <tr key={item.produto_id}
+                      onClick={() => setItemSelecionado(item.produto_id)}
+                      className={`cursor-pointer border-b last:border-0 ${
+                        itemSelecionado === item.produto_id ? "bg-primary/10" : "hover:bg-accent"}`}>
+                      <td className="p-2 tabular-nums text-muted-foreground">{i + 1}</td>
+                      <td className="p-2 font-mono text-xs">{item.sku}</td>
+                      <td className="p-2">{item.nome}</td>
+                      <td className="p-2 text-center text-xs text-muted-foreground">UN</td>
+                      <td className="p-2 text-right tabular-nums">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button variant="outline" size="icon" className="h-6 w-6"
+                            onClick={(e) => { e.stopPropagation(); atualizarQuantidade(item.produto_id, item.quantidade - 1); }}>
+                            <span className="text-xs">-</span>
+                          </Button>
+                          <span className="w-8 text-center">{item.quantidade}</span>
+                          <Button variant="outline" size="icon" className="h-6 w-6"
+                            onClick={(e) => { e.stopPropagation(); atualizarQuantidade(item.produto_id, item.quantidade + 1); }}>
+                            <Plus className="h-3 w-3" />
+                          </Button>
                         </div>
-                        {p.imagem_url && (
-                          <img src={p.imagem_url} alt="" className="h-10 w-10 object-cover rounded" />
-                        )}
-                      </div>
-                      <div className="flex items-center justify-between mt-2">
-                        <span className="font-semibold text-green-600">{brl(p.preco_venda)}</span>
-                        <Plus className="h-4 w-4 text-muted-foreground" />
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-              {filtrados.length === 0 && (
-                <div className="text-center py-12 text-muted-foreground">
-                  <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>Nenhum produto encontrado</p>
-                </div>
-              )}
+                      </td>
+                      <td className="p-2 text-right tabular-nums">{brl(item.preco_unitario)}</td>
+                      <td className="p-2 text-right font-semibold tabular-nums">{brl(item.preco_unitario * item.quantidade)}</td>
+                      <td className="p-2 text-right">
+                        <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive"
+                          onClick={(e) => { e.stopPropagation(); remover(item.produto_id); }} title="Cancelar item (F8)">
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Barra de atalhos, como no sistema antigo: o operador enxerga a
+                tecla sem decorar */}
+            <div className="flex flex-wrap items-center gap-1 border-t bg-muted/30 px-2 py-1.5 text-xs">
+              {ATALHOS_VISIVEIS.map((a) => (
+                <button key={a.tecla} type="button" onClick={a.acao} disabled={a.ativo === false}
+                  className="rounded px-2 py-1 hover:bg-accent disabled:opacity-40">
+                  <span className="font-mono font-semibold">{a.tecla}</span>
+                  <span className="ml-1 text-muted-foreground">{a.rotulo}</span>
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* Painel Direito: Carrinho e Pagamento */}
-          <div className="w-[420px] flex flex-col overflow-hidden bg-muted/30">
-            {/* Cliente */}
-            <div className="p-4 border-b">
-              <Label className="text-xs">Cliente</Label>
-              <div className="mt-1 flex gap-1">
+          {/* Painel Direito: quem vende, para quem, e o total */}
+          <div className="flex w-[420px] flex-col overflow-hidden bg-muted/30">
+            <div className="grid grid-cols-1 gap-2 border-b p-3">
+              <div data-campo="vendedor">
+                <Label className="text-xs">Vendedor <span className="text-muted-foreground">(F1)</span></Label>
                 <ComboboxBusca
-                  className="flex-1"
-                  itens={clientes.map((c: any) => ({
-                    id: c.id, rotulo: c.nome_razao,
-                    detalhe: [c.cpf_cnpj, c.celular ?? c.telefone].filter(Boolean).join(" · "),
+                  className="mt-1"
+                  itens={funcionarios.map((f: any) => ({
+                    id: f.id, rotulo: f.nome ?? f.cargo ?? "—", detalhe: f.cargo ?? undefined,
                   }))}
-                  value={clienteId}
-                  onChange={setClienteId}
-                  vazio="Consumidor Final"
+                  value={vendedorId}
+                  onChange={setVendedorId}
+                  vazio="Sem vendedor"
                 />
-                {/* cadastro pelo celular: acha no ERP ou no CRM, ou cria */}
-                <Button variant="outline" size="sm" className="h-9 shrink-0 px-2"
-                  onClick={() => setModalCliente(true)} title="Novo cliente pelo celular (busca no ERP e no CRM)">
-                  <UserPlus className="h-4 w-4" />
-                </Button>
               </div>
-              <ClienteRapidoPdvDialog
-                open={modalCliente} onOpenChange={setModalCliente} online={online}
-                onCliente={(id) => setClienteId(id)}
-              />
-            </div>
-            {/* Vendedor */}
-            <div className="p-4 border-b">
-              <Label className="text-xs">Vendedor</Label>
-              <ComboboxBusca
-                className="mt-1"
-                itens={funcionarios.map((f: any) => ({
-                  id: f.id, rotulo: f.nome ?? f.cargo ?? "—", detalhe: f.cargo ?? undefined,
-                }))}
-                value={vendedorId}
-                onChange={setVendedorId}
-                vazio="Sem vendedor"
-              />
+              <div>
+                <Label className="text-xs">Cliente <span className="text-muted-foreground">(F2)</span></Label>
+                <div className="mt-1 flex gap-1">
+                  <ComboboxBusca
+                    className="flex-1"
+                    itens={clientes.map((c: any) => ({
+                      id: c.id, rotulo: c.nome_razao,
+                      detalhe: [c.cpf_cnpj, c.celular ?? c.telefone].filter(Boolean).join(" · "),
+                    }))}
+                    value={clienteId}
+                    onChange={setClienteId}
+                    vazio="Cliente balcão"
+                  />
+                  <Button variant="outline" size="sm" className="h-9 shrink-0 px-2"
+                    onClick={() => setModalCliente(true)} title="Novo cliente pelo celular (busca no ERP e no CRM)">
+                    <UserPlus className="h-4 w-4" />
+                  </Button>
+                </div>
+                <ClienteRapidoPdvDialog
+                  open={modalCliente} onOpenChange={setModalCliente} online={online}
+                  onCliente={(id) => setClienteId(id)}
+                />
+              </div>
             </div>
 
             {/* Carrinho */}
@@ -892,6 +1058,75 @@ export function PDVPage() {
           </div>
         </div>
       )}
+
+      {/* Localizar produto (F5) — o catálogo continua aqui, para quando o
+          código de barras não se lê ou o operador não sabe o código */}
+      <Dialog open={modalLocalizar} onOpenChange={setModalLocalizar}>
+        <DialogContent className="max-w-3xl max-h-[85vh] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Search className="h-5 w-5" /> Localizar produto</DialogTitle>
+          </DialogHeader>
+          <div className="min-h-0 min-w-0 space-y-2 overflow-y-auto">
+            <Input autoFocus placeholder="Nome, SKU ou código de barras…"
+              value={search} onChange={(e) => setSearch(e.target.value)} />
+            <table className="w-full text-sm">
+              <thead className="border-b text-xs uppercase text-muted-foreground">
+                <tr>
+                  <th className="p-2 text-left">Código</th>
+                  <th className="p-2 text-left">Descrição</th>
+                  <th className="p-2 text-right">Estoque</th>
+                  <th className="p-2 text-right">Preço</th>
+                  <th className="p-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtrados.slice(0, 60).map((prod: any) => (
+                  <tr key={prod.id} className="border-b last:border-0 hover:bg-accent">
+                    <td className="p-2 font-mono text-xs">{prod.sku}</td>
+                    <td className="p-2">{prod.nome}</td>
+                    <td className={`p-2 text-right tabular-nums ${(saldoDe(prod) ?? 1) <= 0 ? "text-red-600" : ""}`}>
+                      {saldoDe(prod) ?? "—"}
+                    </td>
+                    <td className="p-2 text-right tabular-nums">{brl(prod.preco_venda)}</td>
+                    <td className="p-2 text-right">
+                      <Button size="sm" onClick={() => {
+                        setProdutoNaLinha(prod); setCodigo(prod.sku ?? ""); setModalLocalizar(false);
+                        setTimeout(() => campoQtd.current?.focus(), 50);
+                      }}>Escolher</Button>
+                    </td>
+                  </tr>
+                ))}
+                {filtrados.length === 0 && (
+                  <tr><td colSpan={5} className="p-8 text-center text-muted-foreground">Nenhum produto encontrado.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setModalLocalizar(false)}>Fechar (ESC)</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Atalhos (F12) */}
+      <Dialog open={modalAtalhos} onOpenChange={setModalAtalhos}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Keyboard className="h-5 w-5" /> Atalhos do teclado</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-1">
+            {ATALHOS.map((a) => (
+              <div key={a.tecla} className="flex items-center justify-between rounded px-2 py-1 text-sm hover:bg-accent">
+                <span>{a.rotulo}</span>
+                <kbd className="rounded border bg-muted px-2 py-0.5 font-mono text-xs">{a.tecla}</kbd>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setModalAtalhos(false)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal: Confirmação de Abertura de Caixa */}
       <Dialog open={modalAbertura} onOpenChange={setModalAbertura}>
