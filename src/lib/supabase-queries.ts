@@ -2454,6 +2454,31 @@ export function useFuncionarios(lojaId?: string) {
   });
 }
 
+/**
+ * Quem pode ser escolhido como vendedor. Vem de v_erp_vendedores — sem
+ * salário, comissão, PIS, CTPS ou RG.
+ *
+ * O PDV usava useFuncionarios, que é `select *` de erp_funcionarios: com o
+ * caixa logado o balcão recebia a folha de pagamento inteira. A leitura
+ * daquela tabela agora exige admin/gerente (migration 078), então o PDV
+ * pararia de listar vendedor se continuasse por lá.
+ */
+export function useVendedores() {
+  return useQuery<any[]>({
+    queryKey: ['erp_vendedores'],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      const { data, error } = await supabase
+        .from('v_erp_vendedores')
+        .select('*')
+        .is('data_demissao', null)
+        .order('nome');
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
 export function useCreateFuncionario() {
   const qc = useQueryClient();
   return useMutation({

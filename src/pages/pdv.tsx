@@ -14,7 +14,7 @@ import {
   Check, X, AlertCircle, Receipt, CloudOff, RefreshCw, Cloud, Camera,
   UserPlus,
 } from "lucide-react";
-import { useProdutos, useClientes, useCaixaAberto, useCreateCaixa, useFecharCaixa, useKits, useCaixas, useCreateSangria, useCreateEntradaExtra, useCaixaConfig, useUpdateCaixaConfig, useEmitirNFeVenda, isSupabaseConfigured, useFuncionarios } from "@/lib/supabase-queries";
+import { useProdutos, useClientes, useCaixaAberto, useCreateCaixa, useFecharCaixa, useKits, useCaixas, useCreateSangria, useCreateEntradaExtra, useCaixaConfig, useUpdateCaixaConfig, useEmitirNFeVenda, isSupabaseConfigured, useVendedores } from "@/lib/supabase-queries";
 import { toast } from "sonner";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { useAuth } from "@/lib/store/auth-store";
@@ -87,7 +87,7 @@ export function PDVPage() {
   // usuário logado; o caixa pode trocar quando vende para outro vendedor.
   const [vendedorId, setVendedorId] = useState("");
   const { user: usuarioLogado } = useAuth();
-  const { data: funcionarios = [] } = useFuncionarios(lojaId ?? undefined);
+  const { data: funcionarios = [] } = useVendedores();
   useEffect(() => {
     if (vendedorId || !usuarioLogado?.id) return;
     const meu = funcionarios.find((f: any) => f.usuario_id === usuarioLogado.id);
@@ -651,7 +651,7 @@ export function PDVPage() {
               <ComboboxBusca
                 className="mt-1"
                 itens={funcionarios.map((f: any) => ({
-                  id: f.id, rotulo: f.pessoa?.nome_razao ?? f.cargo ?? "—", detalhe: f.cargo ?? undefined,
+                  id: f.id, rotulo: f.nome ?? f.cargo ?? "—", detalhe: f.cargo ?? undefined,
                 }))}
                 value={vendedorId}
                 onChange={setVendedorId}

@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ModoDemonstracao, temDemonstracao } from "@/components/modo-demonstracao";
 import { FeatureGuard } from "@/components/feature-guard";
+import { PermissaoGuard } from "@/components/permissao-guard";
 import { NotificationIcons } from "@/components/notification-icons";
 import { Button } from "@/components/ui/button";
 import {
@@ -222,7 +223,9 @@ export function RootLayout() {
         <main className="flex-1">
           <div className="p-4 md:p-6">
             <FeatureGuard path={location.pathname}>
-              <Outlet />
+              <PermissaoGuard path={location.pathname}>
+                <Outlet />
+              </PermissaoGuard>
             </FeatureGuard>
           </div>
         </main>

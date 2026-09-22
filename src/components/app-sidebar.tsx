@@ -31,6 +31,35 @@ export type NavSection = {
   items: NavItem[];
 };
 
+/**
+ * Permissão exigida por uma rota, lida da MESMA estrutura que monta o menu.
+ *
+ * O guard de rota (root-layout) consulta isto. Manter um segundo mapa
+ * rota→permissão apodreceria: o menu esconderia um item que a URL abre, ou
+ * o contrário. Rota sem item de menu, ou item sem `perm`, é aberta a todo
+ * usuário logado — Dashboard, Ajuda e Tutoriais estão nesse caso de
+ * propósito.
+ */
+export function permissaoDaRota(pathname: string): Permission | null {
+  const folhas: NavItem[] = [];
+  const varre = (itens: NavItem[]) => {
+    for (const i of itens) {
+      if (i.children) varre(i.children);
+      else if (i.url && !i.external) folhas.push(i);
+    }
+  };
+  for (const s of sections) varre(s.items);
+
+  // a rota mais específica ganha: /gestao/clientes antes de /gestao
+  const casa = folhas
+    .filter((i) => {
+      const base = i.url.split("?")[0];
+      return pathname === base || pathname.startsWith(base + "/");
+    })
+    .sort((a, b) => b.url.length - a.url.length)[0];
+  return casa?.perm ?? null;
+}
+
 const SIDEBAR_BG =
   "linear-gradient(180deg, oklch(0.34 0.14 27) 0%, oklch(0.24 0.11 27) 100%)";
 
@@ -99,23 +128,23 @@ export const sections: NavSection[] = [
       {
         title: "Venda Mais", url: "", icon: Star,
         children: [
-          { title: "E-mail Marketing", url: "/email-marketing", icon: Mail },
-          { title: "Cartão Fidelidade", url: "/cartao-fidelidade", icon: CreditCard },
-          { title: "Crediário Próprio", url: "/crediario-proprio", icon: CreditCard },
-          { title: "Promissórias", url: "/promissoria", icon: ScrollText },
+          { title: "E-mail Marketing", url: "/email-marketing", icon: Mail, perm: "cliente.ver" },
+          { title: "Cartão Fidelidade", url: "/cartao-fidelidade", icon: CreditCard, perm: "cliente.ver" },
+          { title: "Crediário Próprio", url: "/crediario-proprio", icon: CreditCard, perm: "financeiro.ver" },
+          { title: "Promissórias", url: "/promissoria", icon: ScrollText, perm: "financeiro.ver" },
         ],
       },
       {
         title: "Controle Comercial", url: "", icon: Briefcase,
         children: [
-          { title: "Pedido / Pré-venda", url: "/controle-comercial/pedido", icon: ShoppingCart },
-          { title: "Orçamento", url: "/controle-comercial/orcamento", icon: FileText },
-          { title: "Ordem de Serviço", url: "/controle-comercial/os", icon: Wrench },
-          { title: "Venda Consignada", url: "/controle-comercial/consignacao", icon: Truck },
-          { title: "Locação", url: "/controle-comercial/locacao", icon: Store },
+          { title: "Pedido / Pré-venda", url: "/controle-comercial/pedido", icon: ShoppingCart, perm: "venda.criar" },
+          { title: "Orçamento", url: "/controle-comercial/orcamento", icon: FileText, perm: "venda.criar" },
+          { title: "Ordem de Serviço", url: "/controle-comercial/os", icon: Wrench, perm: "venda.criar" },
+          { title: "Venda Consignada", url: "/controle-comercial/consignacao", icon: Truck, perm: "venda.criar" },
+          { title: "Locação", url: "/controle-comercial/locacao", icon: Store, perm: "venda.criar" },
         ],
       },
-      { title: "TEF / SITEF", url: "/tef-sitef", icon: CreditCard },
+      { title: "TEF / SITEF", url: "/tef-sitef", icon: CreditCard, perm: "config.ver" },
     ],
   },
   {
@@ -126,7 +155,7 @@ export const sections: NavSection[] = [
         children: [
           { title: "Relatórios Financeiros", url: "/financeiro", icon: LineChart, perm: "financeiro.ver" },
           { title: "Contas a Pagar/Receber", url: "/financeiro?aba=apagar", icon: Banknote, perm: "financeiro.ver" },
-          { title: "Relatórios", url: "/relatorios", icon: LineChart },
+          { title: "Relatórios", url: "/relatorios", icon: LineChart, perm: "relatorio.ver" },
           { title: "Análise Gerencial", url: "/relatorios/analise", icon: LineChart, perm: "relatorio.ver" },
         ],
       },
@@ -137,7 +166,7 @@ export const sections: NavSection[] = [
           { title: "Fornecedores", url: "/gestao/fornecedores", icon: Truck, perm: "compra.ver" },
           { title: "Funcionários", url: "/gestao/funcionarios", icon: Building2, perm: "usuario.ver" },
           { title: "Comissões", url: "/gestao/comissoes", icon: Banknote, perm: "usuario.ver" },
-          { title: "Transportadoras", url: "/gestao/transportadoras", icon: Truck },
+          { title: "Transportadoras", url: "/gestao/transportadoras", icon: Truck, perm: "compra.ver" },
           { title: "Cadastro e Estoque", url: "/produtos-estoque-lotes", icon: Package, perm: "produto.ver" },
           { title: "Movimentações (Kardex)", url: "/estoque/movimentacoes", icon: ArrowLeftRight, perm: "produto.ver" },
           { title: "Inventário / Balanço", url: "/estoque/inventario", icon: Package, perm: "estoque.ajustar" },
@@ -145,33 +174,33 @@ export const sections: NavSection[] = [
           { title: "Compras", url: "/compras", icon: ShoppingBag, perm: "compra.criar" },
           { title: "Importar NFe", url: "/compras/importar-nfe", icon: Upload, perm: "compra.criar" },
           { title: "Kits & Combos", url: "/kits", icon: PackagePlus, perm: "produto.ver" },
-          { title: "Serviços", url: "/gestao/servicos", icon: Wrench },
-          { title: "Agenda Telefônica", url: "/gestao/agenda-telefonica", icon: Smartphone },
-          { title: "Documentos", url: "/gestao/documentos", icon: FolderTree },
-          { title: "Arquivos e Pastas", url: "/gestao/arquivos-pastas", icon: FolderTree },
-          { title: "Email Inteligente", url: "/gestao/email-inteligente", icon: Mail },
-          { title: "Agenda Compromissos", url: "/gestao/agenda-compromissos", icon: Calendar },
-          { title: "Regiões de Entrega", url: "/gestao/regioes-entrega", icon: MapPin },
+          { title: "Serviços", url: "/gestao/servicos", icon: Wrench, perm: "produto.ver" },
+          { title: "Agenda Telefônica", url: "/gestao/agenda-telefonica", icon: Smartphone, perm: "cliente.ver" },
+          { title: "Documentos", url: "/gestao/documentos", icon: FolderTree, perm: "cliente.ver" },
+          { title: "Arquivos e Pastas", url: "/gestao/arquivos-pastas", icon: FolderTree, perm: "cliente.ver" },
+          { title: "Email Inteligente", url: "/gestao/email-inteligente", icon: Mail, perm: "cliente.ver" },
+          { title: "Agenda Compromissos", url: "/gestao/agenda-compromissos", icon: Calendar, perm: "cliente.ver" },
+          { title: "Regiões de Entrega", url: "/gestao/regioes-entrega", icon: MapPin, perm: "config.ver" },
           { title: "Lojas", url: "/lojas", icon: Store, perm: "loja.ver" },
         ],
       },
       {
         title: "Gestão Cobrança", url: "", icon: AlertTriangle,
         children: [
-          { title: "Parcelar Débitos", url: "/gestao/parcelar-debitos", icon: ScrollText },
-          { title: "Localizar Pessoas", url: "/gestao/localizar-pessoas", icon: Search },
-          { title: "Negativar Devedores", url: "/gestao/negativar-devedores", icon: AlertTriangle },
-          { title: "Encaminhar Protesto", url: "/gestao/encaminhar-protesto", icon: Send },
-          { title: "Recomendações", url: "/gestao/recomendacoes", icon: ThumbsUp },
-          { title: "Solicitação de Parceria", url: "/gestao/solicitacao-parceria", icon: Network },
+          { title: "Parcelar Débitos", url: "/gestao/parcelar-debitos", icon: ScrollText, perm: "financeiro.ver" },
+          { title: "Localizar Pessoas", url: "/gestao/localizar-pessoas", icon: Search, perm: "financeiro.ver" },
+          { title: "Negativar Devedores", url: "/gestao/negativar-devedores", icon: AlertTriangle, perm: "financeiro.ver" },
+          { title: "Encaminhar Protesto", url: "/gestao/encaminhar-protesto", icon: Send, perm: "financeiro.ver" },
+          { title: "Recomendações", url: "/gestao/recomendacoes", icon: ThumbsUp, perm: "financeiro.ver" },
+          { title: "Solicitação de Parceria", url: "/gestao/solicitacao-parceria", icon: Network, perm: "financeiro.ver" },
         ],
       },
       {
         title: "Gestão Recebimentos", url: "", icon: Banknote,
         children: [
-          { title: "Crediário Próprio", url: "/crediario-proprio", icon: CreditCard },
-          { title: "Crediário (com juros)", url: "/gestao/gerar-crediario", icon: CreditCard },
-          { title: "Promissórias", url: "/promissoria", icon: ScrollText },
+          { title: "Crediário Próprio", url: "/crediario-proprio", icon: CreditCard, perm: "financeiro.ver" },
+          { title: "Crediário (com juros)", url: "/gestao/gerar-crediario", icon: CreditCard, perm: "financeiro.ver" },
+          { title: "Promissórias", url: "/promissoria", icon: ScrollText, perm: "financeiro.ver" },
       // { title: "Recebimento Cheque", url: "/gestao/recebimento-cheque", icon: ScrollText }, // desativado: o mesmo dado já aparece em Relatórios Financeiros › aba Formas
       // { title: "Dinheiro", url: "/gestao/dinheiro", icon: DollarSign }, // desativado: o mesmo dado já aparece em Relatórios Financeiros › aba Formas
       // { title: "Cartão de Débito", url: "/gestao/cartao-debito", icon: CreditCard }, // desativado: o mesmo dado já aparece em Relatórios Financeiros › aba Formas
@@ -181,9 +210,9 @@ export const sections: NavSection[] = [
       {
         title: "Análise de Crédito", url: "", icon: Search,
         children: [
-          { title: "Pessoa Física", url: "/gestao/consulta-pessoa-fisica", icon: Users },
-          { title: "Pessoa Jurídica", url: "/gestao/consulta-pessoa-juridica", icon: Building2 },
-          { title: "Cheques", url: "/gestao/consulta-cheque", icon: ScrollText },
+          { title: "Pessoa Física", url: "/gestao/consulta-pessoa-fisica", icon: Users, perm: "financeiro.ver" },
+          { title: "Pessoa Jurídica", url: "/gestao/consulta-pessoa-juridica", icon: Building2, perm: "financeiro.ver" },
+          { title: "Cheques", url: "/gestao/consulta-cheque", icon: ScrollText, perm: "financeiro.ver" },
         ],
       },
       {
@@ -194,16 +223,16 @@ export const sections: NavSection[] = [
           { title: "Escrituração (SPED)", url: "/fiscal/escrituracao", icon: Calculator, perm: "fiscal.emitir" },
           { title: "Certificado Digital", url: "/gestao/nfe-certificado", icon: Lock, perm: "fiscal.emitir" },
           { title: "Configurações SEFAZ", url: "/gestao/configuracoes-sefaz", icon: Settings, perm: "fiscal.emitir" },
-          { title: "Documentos Demonstrativos", url: "/gestao/documentos-demonstrativos", icon: LineChart },
+          { title: "Documentos Demonstrativos", url: "/gestao/documentos-demonstrativos", icon: LineChart, perm: "fiscal.emitir" },
         ],
       },
       {
         title: "Atendimento", url: "", icon: Bell,
         children: [
           { title: "Notificações", url: "/gestao/notificacoes", icon: Bell },
-          { title: "Ocorrências", url: "/gestao/ocorrencias", icon: MessageSquare },
-          { title: "Avaliações", url: "/gestao/avaliacoes", icon: Star },
-          { title: "Exclusão LGPD", url: "/gestao/exclusao-informacoes", icon: Shield },
+          { title: "Ocorrências", url: "/gestao/ocorrencias", icon: MessageSquare, perm: "cliente.ver" },
+          { title: "Avaliações", url: "/gestao/avaliacoes", icon: Star, perm: "cliente.ver" },
+          { title: "Exclusão LGPD", url: "/gestao/exclusao-informacoes", icon: Shield, perm: "config.editar" },
         ],
       },
       { title: "Usuários e Permissões", url: "/gestao/usuarios", icon: Users, perm: "usuario.ver" },
@@ -221,12 +250,12 @@ export const sections: NavSection[] = [
     items: [
       { title: "Configurações do Sistema", url: "/config/sistema", icon: Cog, perm: "config.ver" },
       { title: "Configurações Empresariais", url: "/config/empresarial", icon: Briefcase, perm: "config.editar" },
-      { title: "Dados Empresariais", url: "/gestao/dados-empresariais", icon: Building2 },
-      { title: "Configurações Gerais", url: "/gestao/configuracoes-gerais", icon: Settings },
-      { title: "Minhas Chaves PIX", url: "/config/minhas-chaves", icon: Key },
-      { title: "Painel do Contador", url: "/gestao/painel-contador", icon: Calculator },
-      { title: "Gerar Código de Barras", url: "/gestao/codigo-barras", icon: Barcode },
-      { title: "Equipamentos", url: "/equipamentos", icon: Barcode },
+      { title: "Dados Empresariais", url: "/gestao/dados-empresariais", icon: Building2, perm: "config.ver" },
+      { title: "Configurações Gerais", url: "/gestao/configuracoes-gerais", icon: Settings, perm: "config.editar" },
+      { title: "Minhas Chaves PIX", url: "/config/minhas-chaves", icon: Key, perm: "config.ver" },
+      { title: "Painel do Contador", url: "/gestao/painel-contador", icon: Calculator, perm: "fiscal.emitir" },
+      { title: "Gerar Código de Barras", url: "/gestao/codigo-barras", icon: Barcode, perm: "produto.ver" },
+      { title: "Equipamentos", url: "/equipamentos", icon: Barcode, perm: "config.ver" },
       {
         title: "Treinamento Sistema", url: "", icon: HelpCircle,
         children: [
