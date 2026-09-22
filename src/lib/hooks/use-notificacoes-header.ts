@@ -64,20 +64,26 @@ export function useNotificacoesHeader(lojaId?: string | null) {
             .eq("loja_id", lojaId);
 
           if (!error && estoqueBaixo) {
-            const itens = (estoqueBaixo as any[])
+            // O count sai da lista INTEIRA; só a amostra do balão é cortada.
+            // Antes o slice(0,5) vinha antes e o contador dizia "5" mesmo com
+            // quarenta produtos no mínimo — quem confia no número compra errado.
+            const abaixo = (estoqueBaixo as any[])
               .filter((e) => {
                 const min = Number(e.produto?.estoque_minimo ?? 0);
                 return min > 0 && Number(e.quantidade) <= min;
               })
-              .slice(0, 5)
-              .map((e, idx) => ({
-                id: `${e.produto?.id ?? idx}`,
-                titulo: e.produto?.nome ?? "Produto",
-                subtitulo: `Mín: ${e.produto?.estoque_minimo ?? 0}`,
-                valor: `${e.quantidade} ${e.produto?.sku ? "· " + e.produto.sku : ""}`,
-                link: "/produtos-estoque",
-              }));
-            data.estoque_baixo = { count: itens.length, itens };
+              // o mais crítico primeiro: quem está mais longe do mínimo
+              .sort((a, b) =>
+                (Number(a.quantidade) - Number(a.produto?.estoque_minimo ?? 0)) -
+                (Number(b.quantidade) - Number(b.produto?.estoque_minimo ?? 0)));
+            const itens = abaixo.slice(0, 5).map((e, idx) => ({
+              id: `${e.produto?.id ?? idx}`,
+              titulo: e.produto?.nome ?? "Produto",
+              subtitulo: `Mín: ${e.produto?.estoque_minimo ?? 0}`,
+              valor: `${e.quantidade} ${e.produto?.sku ? "· " + e.produto.sku : ""}`,
+              link: "/produtos-estoque-lotes",
+            }));
+            data.estoque_baixo = { count: abaixo.length, itens };
           }
         }
       } catch (_) {}
