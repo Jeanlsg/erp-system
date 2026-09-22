@@ -16,6 +16,9 @@ import {
 } from "lucide-react";
 import { useProdutos, useClientes, useCaixaAberto, useCreateCaixa, useFecharCaixa, useKits, useCaixas, useCreateSangria, useCreateEntradaExtra, useCaixaConfig, useUpdateCaixaConfig, useEmitirNFeVenda, isSupabaseConfigured, useVendedores } from "@/lib/supabase-queries";
 import { toast } from "sonner";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { useAuth } from "@/lib/store/auth-store";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
@@ -146,13 +149,17 @@ export function PDVPage() {
   // Troco só existe em pagamento em dinheiro
   const troco = forma === "dinheiro" ? Math.max(0, valorRec - total) : 0;
 
-  // Valor esperado em gaveta (para o fechamento de caixa)
+  // O que tem de estar na gaveta, calculado pelo banco (vw_caixa_resumo).
+  //
+  // Esta conta era refeita aqui somando TODAS as vendas: uma venda de R$ 189
+  // no cartão entrava no esperado da gaveta, e o operador que contava certo
+  // via o sistema acusar falta de 189. O banco agora separa por forma; o
+  // fallback existe só para caixa recém-aberto, antes da view responder.
+  const c = caixaAberto as any;
   const valorEsperadoCaixa =
-    (caixaAberto?.valor_inicial || 0) +
-    (caixaAberto?.total_vendas || 0) -
-    (caixaAberto?.total_sangrias || 0) +
-    (caixaAberto?.total_entradas_extras || 0) -
-    (caixaAberto?.valor_troco || 0);
+    c?.valor_esperado_gaveta != null
+      ? Number(c.valor_esperado_gaveta)
+      : (c?.valor_inicial || 0);
 
   // Carregar config de caixas
   useEffect(() => {
@@ -387,6 +394,9 @@ export function PDVPage() {
   const [sangriaValor, setSangriaValor] = useState("");
   const [sangriaMotivo, setSangriaMotivo] = useState("");
   const [modalSangria, setModalSangria] = useState(false);
+  // De onde saiu o dinheiro. Só "dinheiro" reduz o que se espera contar na
+  // gaveta: pagar o motoboy por PIX é saída do caixa, mas a gaveta não muda.
+  const [sangriaForma, setSangriaForma] = useState("dinheiro");
 
   const handleSangria = async () => {
     if (!caixaAberto || !user || !sangriaValor || !sangriaMotivo) return;
@@ -395,9 +405,16 @@ export function PDVPage() {
       usuario_id: user.id,
       valor: parseFloat(sangriaValor),
       motivo: sangriaMotivo,
+      forma_pagamento: sangriaForma,
     });
+    toast.success(
+      sangriaForma === "dinheiro"
+        ? `Sangria de ${brl(parseFloat(sangriaValor))} — sai da gaveta.`
+        : `Saída de ${brl(parseFloat(sangriaValor))} via ${sangriaForma.replace("_", " ")} — a gaveta não muda.`,
+    );
     setSangriaValor("");
     setSangriaMotivo("");
+    setSangriaForma("dinheiro");
     setModalSangria(false);
   };
 
@@ -1023,21 +1040,19 @@ export function PDVPage() {
               <span>Saldo Inicial:</span>
               <span>{brl(caixaAberto?.valor_inicial || 0)}</span>
             </div>
+            {/* Só o que é dinheiro vivo entra na conta da gaveta. O resto
+                aparece embaixo, para conferir maquininha e extrato do PIX. */}
             <div className="flex justify-between font-semibold">
-              <span>Vendas:</span>
-              <span className="text-green-600">{brl(caixaAberto?.total_vendas || 0)}</span>
+              <span>Vendas em dinheiro:</span>
+              <span className="text-green-600">+{brl(Number(c?.vendas_dinheiro || 0))}</span>
             </div>
             <div className="flex justify-between">
-              <span>Sangrias:</span>
-              <span className="text-red-600">-{brl(caixaAberto?.total_sangrias || 0)}</span>
+              <span>Sangrias em dinheiro:</span>
+              <span className="text-red-600">-{brl(Number(c?.sangrias_dinheiro || 0))}</span>
             </div>
             <div className="flex justify-between">
-              <span>Entradas:</span>
-              <span className="text-green-600">+{brl(caixaAberto?.total_entradas_extras || 0)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Troco:</span>
-              <span className="text-red-600">-{brl(caixaAberto?.valor_troco || 0)}</span>
+              <span>Entradas em dinheiro:</span>
+              <span className="text-green-600">+{brl(Number(c?.entradas_dinheiro || 0))}</span>
             </div>
             <div className="flex justify-between font-bold text-lg border-t pt-2">
               <span>Valor Esperado em Gaveta:</span>
@@ -1060,6 +1075,24 @@ export function PDVPage() {
                 </p>
               )}
             </div>
+
+            {/* Não passou pela gaveta: confira contra a maquininha e o extrato */}
+            {(Number(c?.vendas_pix || 0) + Number(c?.vendas_cartao_credito || 0)
+              + Number(c?.vendas_cartao_debito || 0) + Number(c?.vendas_outras || 0)) > 0 && (
+              <div className="rounded-md border p-2 text-xs">
+                <p className="mb-1 font-medium">Fora da gaveta — conferir no extrato</p>
+                {[
+                  ["PIX", Number(c?.vendas_pix || 0)],
+                  ["Cartão crédito", Number(c?.vendas_cartao_credito || 0)],
+                  ["Cartão débito", Number(c?.vendas_cartao_debito || 0)],
+                  ["Outras formas", Number(c?.vendas_outras || 0)],
+                ].filter(([, v]) => Number(v) > 0).map(([rotulo, v]) => (
+                  <div key={String(rotulo)} className="flex justify-between text-muted-foreground">
+                    <span>{rotulo}</span><span className="tabular-nums">{brl(Number(v))}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setModalFechamento(false)}>
@@ -1080,17 +1113,38 @@ export function PDVPage() {
       <Dialog open={modalSangria} onOpenChange={setModalSangria}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Registrar Sangria</DialogTitle>
+            <DialogTitle>Registrar saída de caixa</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-4">
-            <div>
-              <Label>Valor</Label>
-              <InputMoeda value={sangriaValor} onChange={(v) => setSangriaValor(String(v))} />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Valor</Label>
+                <InputMoeda value={sangriaValor} onChange={(v) => setSangriaValor(String(v))} />
+              </div>
+              <div>
+                <Label>Saiu de</Label>
+                <Select value={sangriaForma} onValueChange={setSangriaForma}>
+                  <SelectTrigger className="mt-0"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="dinheiro">Dinheiro da gaveta</SelectItem>
+                    <SelectItem value="pix">PIX</SelectItem>
+                    <SelectItem value="transferencia">Transferência</SelectItem>
+                    <SelectItem value="cartao_credito">Cartão de crédito</SelectItem>
+                    <SelectItem value="cartao_debito">Cartão de débito</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div>
               <Label>Motivo</Label>
-              <Input value={sangriaMotivo} onChange={(e) => setSangriaMotivo(e.target.value)} placeholder="Ex: Repasse ao gerente" />
+              <Input value={sangriaMotivo} onChange={(e) => setSangriaMotivo(e.target.value)}
+                placeholder="Ex.: pagamento do motoboy, repasse ao gerente" />
             </div>
+            <p className="rounded-md border bg-muted/40 p-2 text-xs text-muted-foreground">
+              {sangriaForma === "dinheiro"
+                ? "Sai da gaveta: o fechamento vai esperar este valor a menos em dinheiro."
+                : "Não sai da gaveta: fica registrado como saída do caixa, mas o dinheiro contado no fechamento não muda."}
+            </p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setModalSangria(false)}>Cancelar</Button>
