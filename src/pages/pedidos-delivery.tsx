@@ -14,6 +14,7 @@ import { useMemo, useState } from "react";
 import {
   Bike, CircleDollarSign, Loader2, PackageCheck, PackageOpen, Phone, XCircle,
   Info,
+  Plus,
 } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -24,6 +25,7 @@ import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { brl } from "@/lib/format";
 import { toast } from "sonner";
+import { NovoPedidoBalcaoDialog } from "@/components/novo-pedido-balcao";
 
 const COLUNAS = [
   {
@@ -64,6 +66,7 @@ function tempoCurto(min: number): string {
 export function PedidosDeliveryPage() {
   const { lojaId } = useAutoSelectLoja();
   const { data: pedidos = [], isLoading } = usePedidos({ lojaId: lojaId ?? undefined });
+  const [modalNovo, setModalNovo] = useState(false);
   const update = useUpdatePedidoStatus();
   const [arrastando, setArrastando] = useState<string | null>(null);
   const [sobre, setSobre] = useState<StatusCol | null>(null);
@@ -95,14 +98,21 @@ export function PedidosDeliveryPage() {
 
   return (
     <div className="flex h-full flex-col gap-4 p-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Ciclo de pedidos</h1>
-        <p className="text-sm text-muted-foreground">
-          Arraste o pedido pela esteira — ou use o botão do cartão. Pedido parado além do
-          normal fica marcado em vermelho.
-          {cancelados > 0 && ` · ${cancelados} cancelado(s) hoje fora do quadro.`}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Ciclo de pedidos</h1>
+          <p className="text-sm text-muted-foreground">
+            Arraste o pedido pela esteira — ou use o botão do cartão. Pedido parado além do
+            normal fica marcado em vermelho.
+            {cancelados > 0 && ` · ${cancelados} cancelado(s) hoje fora do quadro.`}
+          </p>
+        </div>
+        <Button onClick={() => setModalNovo(true)} title="Pedido vendido no balcão que vai ser entregue">
+          <Plus className="mr-1 h-4 w-4" /> Novo pedido
+        </Button>
       </div>
+
+      <NovoPedidoBalcaoDialog open={modalNovo} onOpenChange={setModalNovo} lojaId={lojaId} />
 
       {/* A esteira funciona, mas nenhuma tela do ERP cria pedido de ENTREGA com
           endereço e taxa. O único lugar que insere em erp_pedidos é a Pré-venda,
