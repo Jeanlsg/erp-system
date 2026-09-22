@@ -1376,6 +1376,59 @@ export function useFechamentosCaixa(caixaId?: string) {
   });
 }
 
+// ========================================
+// RELATÓRIOS
+//
+// Hooks próprios, separados dos da operação: o relatório precisa do
+// período inteiro, e os hooks de tela têm limit baixo (useVendas para em
+// 200 linhas) porque alimentam listas, não fechamento de mês. Um relatório
+// truncado em silêncio é pior que nenhum — some faturamento sem avisar.
+// ========================================
+
+export function useRelatorioVendas(f: { lojaId?: string; de: string; ate: string }) {
+  return useQuery<any[]>({
+    queryKey: ["erp_rel_vendas", f],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let q = supabase
+        .from("erp_vendas")
+        .select("*, itens:erp_venda_itens(id, nome, quantidade, preco_unitario, subtotal, produto_id), cliente:erp_pessoas(id, nome_razao, cpf_cnpj), loja:erp_lojas(id, apelido, nome)")
+        .gte("data_venda", f.de)
+        .lte("data_venda", f.ate + "T23:59:59")
+        .order("data_venda", { ascending: false })
+        .limit(5000);
+      if (f.lojaId) q = q.eq("loja_id", f.lojaId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!f.de && !!f.ate,
+  });
+}
+
+/** Fechamentos de caixa do período, com o caixa e quem operou. */
+export function useRelatorioFechamentos(f: { lojaId?: string; de: string; ate: string }) {
+  return useQuery<any[]>({
+    queryKey: ["erp_rel_fechamentos", f],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let q = supabase
+        .from("erp_fechamentos_caixa")
+        .select("*, caixa:erp_caixa(id, numero_caixa, loja_id, data_abertura, usuario_id)")
+        .gte("data_fechamento", f.de)
+        .lte("data_fechamento", f.ate + "T23:59:59")
+        .order("data_fechamento", { ascending: false })
+        .limit(2000);
+      const { data, error } = await q;
+      if (error) throw error;
+      const linhas = (data ?? []) as any[];
+      // o filtro de loja vive no caixa, não no fechamento
+      return f.lojaId ? linhas.filter((l) => l.caixa?.loja_id === f.lojaId) : linhas;
+    },
+    enabled: !!f.de && !!f.ate,
+  });
+}
+
 export function useCaixaConfig() {
   return useQuery<{ quantidade_caixas: number }>({
     queryKey: ['erp_caixa-config'],
