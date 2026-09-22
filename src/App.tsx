@@ -1,6 +1,7 @@
 import { Routes, Route } from "react-router-dom";
 
 import { RootLayout } from "@/components/root-layout";
+import { PdvLayout } from "@/components/pdv-layout";
 
 import { LoginPage } from "@/pages/login";
 import { RedefinirSenhaPage } from "@/pages/redefinir-senha";
@@ -84,11 +85,16 @@ export default function App() {
       <Route path="/auth/redefinir-senha" element={<RedefinirSenhaPage />} />
       <Route path="/setup" element={<SetupPage />} />
 
+      {/* O PDV tem casco próprio: tela cheia, sem menu lateral. Para quem só
+          opera o balcão é a única tela do sistema. */}
+      <Route element={<PdvLayout />}>
+        <Route path="/pdv" element={<PDVPage />} />
+      </Route>
+
       <Route path="/" element={<RootLayout />}>
         <Route index element={<DashboardPage />} />
 
         {/* ===== VENDAS E PEDIDOS ===== */}
-        <Route path="pdv" element={<PDVPage />} />
         <Route path="notas-fiscais" element={<NotasFiscaisPage />} />
         <Route path="pedidos-delivery" element={<PedidosDeliveryPage />} />
         {/* <Route path="ifood" element={<IFoodPage />} /> — desativado: cliente não usa iFood; reativar descomentando aqui, o import e o item do menu */}

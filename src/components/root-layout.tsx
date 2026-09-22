@@ -27,7 +27,7 @@ import {
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useAuth, roleLabels, logout } from "@/lib/store/auth-store";
+import { useAuth, roleLabels, logout, ehOperadorDeBalcao } from "@/lib/store/auth-store";
 import { ajudaDaRota } from "@/lib/ajuda-paginas";
 import { useLojaAtualStore } from "@/lib/store/loja-atual";
 import { useLojas, isSupabaseConfigured } from "@/lib/supabase-queries";
@@ -55,6 +55,15 @@ export function RootLayout() {
       navigate("/login", { replace: true });
     }
   }, [hydrated, isAuthenticated, navigate]);
+
+  // Operador de balcão não tem o que fazer no menu de gestão: qualquer rota
+  // daqui o devolve para a frente de caixa. É o mesmo teste do login, aqui
+  // de novo porque a URL digitada não passa pelo login.
+  useEffect(() => {
+    if (hydrated && isAuthenticated && ehOperadorDeBalcao()) {
+      navigate("/pdv", { replace: true });
+    }
+  }, [hydrated, isAuthenticated, location.pathname, navigate]);
 
   // Auto-selecionar primeira loja ao carregar
   useEffect(() => {

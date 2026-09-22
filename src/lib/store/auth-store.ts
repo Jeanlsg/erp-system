@@ -57,6 +57,15 @@ export type Permission =
   | "loja.criar"
   | "loja.editar";
 
+/**
+ * Permissões que caracterizam alguém de gestão. Quem não tem NENHUMA delas
+ * opera só o balcão: para essa pessoa o sistema é o PDV, e mais nada.
+ */
+const PERMISSOES_DE_GESTAO: Permission[] = [
+  "relatorio.ver", "financeiro.ver", "usuario.ver", "config.ver",
+  "compra.ver", "fiscal.emitir", "loja.ver", "produto.editar", "estoque.ajustar",
+];
+
 export interface User {
   id: string;
   email: string;
@@ -108,7 +117,9 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "config.ver", "loja.ver",
   ],
   caixa: [
-    "pdv.usar", "caixa.abrir", "venda.criar",
+    // fechar o próprio caixa faz parte do turno: quem abre, confere e fecha.
+    // Sem isto o operador dependia de um gerente no fim do expediente.
+    "pdv.usar", "caixa.abrir", "caixa.fechar", "venda.criar", "venda.desconto",
     "produto.ver", "estoque.ver",
     "cliente.ver", "cliente.criar",
   ],
@@ -249,4 +260,19 @@ export function logout() {
 // Hook auxiliar
 export function useAuth() {
   return useAuthStore();
+}
+/**
+ * O usuário só opera o balcão?
+ *
+ * Vendedor de loja não tem o que fazer no menu de gestão: para ele o
+ * sistema é a tela de venda, com abrir e fechar caixa. Em vez de listar
+ * cargos (que mudam), pergunta pelas permissões efetivas — assim um
+ * "caixa" que ganhou acesso a relatórios deixa de ser tratado como balcão
+ * sozinho, sem ninguém lembrar de mexer aqui.
+ */
+export function ehOperadorDeBalcao(): boolean {
+  const { user, can } = useAuthStore.getState();
+  if (!user || user.admin_principal) return false;
+  if (!can("pdv.usar")) return false;
+  return !PERMISSOES_DE_GESTAO.some((p) => can(p));
 }

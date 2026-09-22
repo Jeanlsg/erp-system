@@ -441,12 +441,11 @@ export function PDVPage() {
 
   // =================== RENDER ===================
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)]">
+    <div className="flex h-full flex-col">
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-3 border-b bg-background">
         <div className="flex items-center gap-3">
           <Calculator className="h-6 w-6" />
-          <h1 className="text-xl font-semibold">Frente de Caixa - PDV</h1>
           {caixaAberto ? (
             <Badge variant="default" className="bg-green-600">
               <Unlock className="h-3 w-3 mr-1" />

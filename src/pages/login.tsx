@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { login, useAuth } from "@/lib/store/auth-store";
+import { login, useAuth, ehOperadorDeBalcao } from "@/lib/store/auth-store";
 import { supabase } from "@/lib/supabase";
 
 export function LoginPage() {
@@ -19,7 +19,7 @@ export function LoginPage() {
   const [resetLoading, setResetLoading] = useState(false);
 
   useEffect(() => {
-    if (isAuthenticated) navigate("/", { replace: true });
+    if (isAuthenticated) navigate(ehOperadorDeBalcao() ? "/pdv" : "/", { replace: true });
   }, [isAuthenticated, navigate]);
 
   const submit = async (e: React.FormEvent) => {
@@ -32,7 +32,8 @@ export function LoginPage() {
       return;
     }
     toast.success(`Bem-vindo, ${res.user.nome}`);
-    navigate("/", { replace: true });
+    // quem só opera o balcão entra direto na venda
+    navigate(ehOperadorDeBalcao() ? "/pdv" : "/", { replace: true });
   };
 
   const handleForgotPassword = async () => {
