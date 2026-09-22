@@ -277,7 +277,10 @@ export function LotesProdutoDialog({ open, onOpenChange, produto, lojas, lojaIdI
 
   return (
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) limpar(); }}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+      {/* O DialogContent base é grid: linhas cabeçalho / conteúdo / rodapé, e o
+          meio rola. min-w-0 no filho é o que impede os inputs de data (largura
+          intrínseca grande) de alargarem o conteúdo além do modal. */}
+      <DialogContent className="max-w-2xl max-h-[90vh] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CalendarClock className="h-5 w-5" /> Validade e lotes
@@ -288,7 +291,7 @@ export function LotesProdutoDialog({ open, onOpenChange, produto, lojas, lojaIdI
         </DialogHeader>
 
         {/* rola por dentro: com vários lotes o modal passava do viewport e a lista saía da tela */}
-        <div className="space-y-4 overflow-y-auto pr-1 min-h-0 flex-1">
+        <div className="min-w-0 min-h-0 overflow-y-auto overflow-x-hidden pr-1 space-y-4">
           {/* ---- novo lote ---- */}
           <div className="rounded-md border p-3 space-y-3">
             <p className="text-sm font-medium">Novo lote</p>
