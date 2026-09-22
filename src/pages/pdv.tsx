@@ -111,6 +111,9 @@ export function PDVPage() {
   const [itemSelecionado, setItemSelecionado] = useState<string | null>(null);
   const [modalLocalizar, setModalLocalizar] = useState(false);
   const [modalAtalhos, setModalAtalhos] = useState(false);
+  // Sair da frente de caixa NÃO fecha o caixa: volta para a tela de seleção,
+  // com o turno em aberto, como no sistema anterior da loja (F12).
+  const [saiuDaFrente, setSaiuDaFrente] = useState(false);
   // Vendedor da venda: é dele a comissão. Começa no funcionário ligado ao
   // usuário logado; o caixa pode trocar quando vende para outro vendedor.
   const [vendedorId, setVendedorId] = useState("");
@@ -501,12 +504,17 @@ export function PDVPage() {
     { tecla: "Ctrl+S", rotulo: "Sangria", acao: () => setModalSangria(true), ativo: !!caixaAberto },
     { tecla: "Ctrl+E", rotulo: "Entrada de valores", acao: () => setModalEntrada(true), ativo: !!caixaAberto },
     { tecla: "Ctrl+X", rotulo: "Fechar caixa", acao: () => setModalFechamento(true), ativo: !!caixaAberto },
-    { tecla: "F12", rotulo: "Atalhos", acao: () => setModalAtalhos(true) },
+    // F12 no sistema anterior sai da frente de caixa (leva para a seleção de
+    // caixa, sem fechar o turno). O navegador reserva F12 para as ferramentas
+    // de desenvolvedor e não deixa interceptar, então Ctrl+F12 faz o mesmo.
+    { tecla: "F12", rotulo: "Sair da frente de caixa", acao: () => setSaiuDaFrente(true) },
+    { tecla: "Ctrl+F12", rotulo: "Sair da frente de caixa", acao: () => setSaiuDaFrente(true) },
+    { tecla: "Ctrl+H", rotulo: "Ver todos os atalhos", acao: () => setModalAtalhos(true) },
   ];
-  useAtalhosPdv(ATALHOS, !!caixaAberto || true);
+  useAtalhosPdv(ATALHOS);
   // a barra de baixo mostra só o que o operador usa a todo momento
   const ATALHOS_VISIVEIS = ATALHOS.filter((a) =>
-    ["F4", "F5", "F8", "F10", "F11", "Ctrl+S", "Ctrl+X", "F12"].includes(a.tecla));
+    ["F4", "F5", "F8", "F10", "F11", "Ctrl+S", "Ctrl+X", "F12", "Ctrl+H"].includes(a.tecla));
 
   if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="PDV / Frente de Caixa" />;
 
@@ -554,9 +562,29 @@ export function PDVPage() {
       </div>
 
       {/* Sem caixa aberto - mostrar abertura */}
-      {!caixaAberto ? (
+      {!caixaAberto || saiuDaFrente ? (
         <div className="flex-1 overflow-auto p-6">
           <div className="max-w-4xl mx-auto space-y-6">
+            {/* Saiu da frente com o turno em aberto: o caminho de volta tem de
+                estar à vista, senão o operador abre um segundo caixa por engano */}
+            {caixaAberto && saiuDaFrente && (
+              <Card className="border-green-600 bg-green-50 dark:bg-green-950/20">
+                <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+                  <div>
+                    <p className="font-medium">
+                      Caixa #{caixaAberto.numero_caixa} continua aberto no seu nome.
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Sair da frente de caixa não encerra o turno — o movimento segue registrado.
+                    </p>
+                  </div>
+                  <Button onClick={() => setSaiuDaFrente(false)}>
+                    Voltar para a venda
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Card 1: Selecionar Caixa */}
             <Card>
               <CardHeader>
