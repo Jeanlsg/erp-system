@@ -36,7 +36,11 @@ import { brl, num } from "@/lib/format";
 
 const TODOS = "__todos__";
 
-export function RelatoriosPage() {
+/**
+ * @param embutido quando renderizada como aba dentro de Relatórios
+ *   Financeiros, o cabeçalho próprio sai — a tela já tem o dela.
+ */
+export function RelatoriosPage({ embutido = false }: { embutido?: boolean } = {}) {
   const { lojaId } = useAutoSelectLoja();
   const [aba, setAba] = useState("vendas");
   const [caixaDetalhe, setCaixaDetalhe] = useState<string | null>(null);
@@ -176,14 +180,16 @@ export function RelatoriosPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-          <BarChart3 className="h-6 w-6" /> Relatórios
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Todo número aqui abre linha a linha, ordena por qualquer coluna e vira planilha.
-        </p>
-      </div>
+      {!embutido && (
+        <div>
+          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+            <BarChart3 className="h-6 w-6" /> Relatórios
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Todo número aqui abre linha a linha, ordena por qualquer coluna e vira planilha.
+          </p>
+        </div>
+      )}
 
       <FiltrosRelatorio periodo={periodo} aoMudarPeriodo={setPeriodo} aoLimpar={limpar}>
         <div>

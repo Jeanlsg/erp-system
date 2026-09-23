@@ -296,7 +296,7 @@ export function DashboardPage() {
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-base">Produtos mais vendidos</CardTitle>
                 <Button asChild variant="ghost" size="sm">
-                  <Link to="/relatorios">Relatórios <ArrowUpRight className="ml-1 h-3.5 w-3.5" /></Link>
+                  <Link to="/financeiro?aba=relatorios">Relatórios <ArrowUpRight className="ml-1 h-3.5 w-3.5" /></Link>
                 </Button>
               </CardHeader>
               <CardContent className="p-0">

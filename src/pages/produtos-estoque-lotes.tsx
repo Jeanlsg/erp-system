@@ -268,7 +268,7 @@ export function ProdutosEstoqueLotesPage() {
         navigate("/estoque/inventario");
         break;
       case "relatorios":
-        navigate("/relatorios");
+        navigate("/financeiro?aba=relatorios");
         break;
       case "produtos-excluidos":
         setModalExcluidos(true);

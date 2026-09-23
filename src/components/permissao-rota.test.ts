@@ -10,7 +10,6 @@ describe("permissaoDaRota", () => {
     expect(permissaoDaRota("/produtos-estoque-lotes")).toBe("produto.ver");
     expect(permissaoDaRota("/gestao/dados-empresariais")).toBe("config.ver");
     expect(permissaoDaRota("/gestao/consulta-pessoa-fisica")).toBe("financeiro.ver");
-    expect(permissaoDaRota("/relatorios")).toBe("relatorio.ver");
   });
   it("deixa o PDV e o caixa para quem opera", () => {
     expect(permissaoDaRota("/pdv")).toBe("pdv.usar");
@@ -25,12 +24,16 @@ describe("permissaoDaRota", () => {
     // /gestao/clientes não pode herdar de um prefixo mais curto
     expect(permissaoDaRota("/gestao/clientes")).toBe("cliente.editar");
   });
-  it("as telas de relatório financeiro herdam a permissão de /relatorios", () => {
-    // /relatorios/financeiro/sangrias não tem item de menu próprio; quem
-    // protege é o prefixo. Sem isso, qualquer usuário abriria o financeiro
-    // pela URL do relatório.
-    expect(permissaoDaRota("/relatorios/financeiro/sangrias")).toBe("relatorio.ver");
-    expect(permissaoDaRota("/relatorios/financeiro/fechamentos")).toBe("relatorio.ver");
+  it("as telas de relatório financeiro herdam a permissão do financeiro", () => {
+    // não têm item de menu próprio; quem protege é o prefixo /financeiro.
+    // Sem isso, qualquer usuário abriria o financeiro pela URL do relatório —
+    // foi o que aconteceu quando o item "Relatórios" saiu do menu.
+    expect(permissaoDaRota("/financeiro/relatorio/sangrias")).toBe("financeiro.ver");
+    expect(permissaoDaRota("/financeiro/relatorio/fechamentos")).toBe("financeiro.ver");
+  });
+
+  it("as abas do financeiro continuam sob financeiro.ver", () => {
+    expect(permissaoDaRota("/financeiro")).toBe("financeiro.ver");
   });
 
   it("rota desconhecida não trava o sistema", () => {

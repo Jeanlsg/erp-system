@@ -23,6 +23,8 @@ import {
 } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { RelatoriosPage } from "@/pages/relatorios";
+import { RelatoriosBiPage } from "@/pages/relatorios.bi";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { ImportarContasDialog } from "@/components/importar-contas";
 import { chart } from "@/lib/chart";
@@ -34,7 +36,8 @@ const FORMA_ROTULO: Record<string, string> = {
   cheque: "Cheque", transferencia: "Transferência",
 };
 
-type AbaAtiva = "fluxo" | "vendas" | "graficos" | "formas" | "taxas" | "pagas" | "apagar" | "recebidas" | "areceber" | "nf";
+type AbaAtiva = "fluxo" | "vendas" | "graficos" | "formas" | "taxas" | "pagas" | "apagar"
+  | "recebidas" | "areceber" | "nf" | "relatorios" | "gerencial";
 
 export function FinanceiroPage() {
   const { lojaId } = useAutoSelectLoja();
@@ -49,7 +52,7 @@ export function FinanceiroPage() {
   // na URL, e o próximo clique no menu "Contas a Pagar/Receber" — que aponta
   // para a MESMA URL — não mudava nada. Derivando da URL, o clique no menu
   // sempre vale, e F5 mantém a aba.
-  const ABAS: AbaAtiva[] = ["fluxo", "vendas", "graficos", "formas", "taxas", "pagas", "apagar", "recebidas", "areceber", "nf"];
+  const ABAS: AbaAtiva[] = ["fluxo", "vendas", "graficos", "formas", "taxas", "pagas", "apagar", "recebidas", "areceber", "nf", "relatorios", "gerencial"];
   const abaParam = searchParams.get("aba") as AbaAtiva | null;
   const aba: AbaAtiva = abaParam && ABAS.includes(abaParam) ? abaParam : "fluxo";
   const setAba = (v: AbaAtiva) =>
@@ -362,17 +365,17 @@ export function FinanceiroPage() {
       {/* BOTÕES DE AÇÃO RÁPIDA (12 botões em grid 4x3) */}
       <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 md:grid-cols-4">
         <BotaoAcao titulo="Incluir Contas P/R" icone={Plus} onClick={() => setModalConta({ tipo: "pagar" })} />
-        <BotaoAcao titulo="Sangrias de Caixa" icone={TrendingDown} onClick={() => navigate("/relatorios/financeiro/sangrias")} />
-        <BotaoAcao titulo="Entradas Extra Caixa" icone={TrendingUp} onClick={() => navigate("/relatorios/financeiro/entradas_extra")} />
-        <BotaoAcao titulo="Extrato de Serviços" icone={ClipboardList} onClick={() => navigate("/relatorios/financeiro/servicos")} />
-        <BotaoAcao titulo="Fechamento Caixa" icone={Receipt} onClick={() => navigate("/relatorios/financeiro/fechamentos")} />
+        <BotaoAcao titulo="Sangrias de Caixa" icone={TrendingDown} onClick={() => navigate("/financeiro/relatorio/sangrias")} />
+        <BotaoAcao titulo="Entradas Extra Caixa" icone={TrendingUp} onClick={() => navigate("/financeiro/relatorio/entradas_extra")} />
+        <BotaoAcao titulo="Extrato de Serviços" icone={ClipboardList} onClick={() => navigate("/financeiro/relatorio/servicos")} />
+        <BotaoAcao titulo="Fechamento Caixa" icone={Receipt} onClick={() => navigate("/financeiro/relatorio/fechamentos")} />
         <BotaoAcao titulo="Conta Bancária" icone={Banknote} onClick={() => setModalContaBancaria(true)} />
         <BotaoAcao titulo="Ações de NF" icone={FileText} onClick={() => setAba("nf")} />
-        <BotaoAcao titulo="Vendas Excluídas" icone={Trash2} onClick={() => navigate("/relatorios/financeiro/vendas_excluidas")} />
-        <BotaoAcao titulo="Contas Excluídas" icone={Trash2} onClick={() => navigate("/relatorios/financeiro/contas_excluidas")} />
+        <BotaoAcao titulo="Vendas Excluídas" icone={Trash2} onClick={() => navigate("/financeiro/relatorio/vendas_excluidas")} />
+        <BotaoAcao titulo="Contas Excluídas" icone={Trash2} onClick={() => navigate("/financeiro/relatorio/contas_excluidas")} />
         <BotaoAcao titulo="Relatório Gerencial" icone={BarChart3} onClick={() => navigate("/relatorios/analise")} />
         <BotaoAcao titulo="Entregas Delivery" icone={ShoppingCart} onClick={() => navigate("/pedidos-delivery")} />
-        <BotaoAcao titulo="Entradas Canceladas" icone={X} onClick={() => navigate("/relatorios/financeiro/entradas_canceladas")} />
+        <BotaoAcao titulo="Entradas Canceladas" icone={X} onClick={() => navigate("/financeiro/relatorio/entradas_canceladas")} />
       </div>
 
       {/* ABAS */}
@@ -388,6 +391,11 @@ export function FinanceiroPage() {
           <TabsTrigger value="recebidas">Recebidas</TabsTrigger>
           <TabsTrigger value="areceber">À Receber</TabsTrigger>
           <TabsTrigger value="nf">NF</TabsTrigger>
+          {/* Eram dois itens de menu à parte (Relatórios e Análise Gerencial)
+              que respondiam o mesmo tipo de pergunta desta tela. Viraram abas:
+              o financeiro inteiro num lugar só. */}
+          <TabsTrigger value="relatorios">Relatórios</TabsTrigger>
+          <TabsTrigger value="gerencial">Gerencial</TabsTrigger>
         </TabsList>
 
         {/* ===== ABA FLUXO DE CAIXA ===== */}
@@ -738,6 +746,14 @@ export function FinanceiroPage() {
             </CardContent>
           </Card>
         </TabsContent>
+        <TabsContent value="relatorios">
+          <RelatoriosPage embutido />
+        </TabsContent>
+
+        <TabsContent value="gerencial">
+          <RelatoriosBiPage embutido />
+        </TabsContent>
+
       </Tabs>
 
       {/* MODAL: Incluir Conta */}

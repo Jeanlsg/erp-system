@@ -150,15 +150,11 @@ export const sections: NavSection[] = [
   {
     label: "Gestão",
     items: [
-      {
-        title: "Financeiro", url: "", icon: LineChart,
-        children: [
-          { title: "Relatórios Financeiros", url: "/financeiro", icon: LineChart, perm: "financeiro.ver" },
-          { title: "Contas a Pagar/Receber", url: "/financeiro?aba=apagar", icon: Banknote, perm: "financeiro.ver" },
-          { title: "Relatórios", url: "/relatorios", icon: LineChart, perm: "relatorio.ver" },
-          { title: "Análise Gerencial", url: "/relatorios/analise", icon: LineChart, perm: "relatorio.ver" },
-        ],
-      },
+      // Eram quatro itens para a MESMA tela ou para telas que respondem o
+      // mesmo tipo de pergunta: "Contas a Pagar/Receber" era /financeiro com
+      // ?aba=apagar, e Relatórios e Análise Gerencial viraram abas de lá.
+      // Um item só; a navegação acontece dentro da tela.
+      { title: "Relatórios Financeiros", url: "/financeiro", icon: LineChart, perm: "financeiro.ver" },
       {
         title: "Gestão Empresarial", url: "", icon: Building2,
         children: [

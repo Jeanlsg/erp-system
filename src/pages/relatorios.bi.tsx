@@ -33,7 +33,7 @@ const CLASSE_COR: Record<string, string> = {
   C: "border-muted-foreground/40 text-muted-foreground",
 };
 
-export function RelatoriosBiPage() {
+export function RelatoriosBiPage({ embutido = false }: { embutido?: boolean } = {}) {
   const { data: lojas = [] } = useLojas();
   const [loja, setLoja] = useState("todas");
   const [desde, setDesde] = useState("");
@@ -54,13 +54,15 @@ export function RelatoriosBiPage() {
   const capitalParado = parados.reduce((s: number, p: any) => s + Number(p.capital_parado || 0), 0);
 
   return (
-    <div className="space-y-6 p-6">
-      <div>
-        <h1 className="text-2xl font-bold">Análise gerencial</h1>
-        <p className="text-muted-foreground">
-          Sobre venda registrada e custo médio real — não sobre preço de tabela.
-        </p>
-      </div>
+    <div className={embutido ? "space-y-6" : "space-y-6 p-6"}>
+      {!embutido && (
+        <div>
+          <h1 className="text-2xl font-bold">Análise gerencial</h1>
+          <p className="text-muted-foreground">
+            Sobre venda registrada e custo médio real — não sobre preço de tabela.
+          </p>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-end gap-3">
         <div className="w-56">

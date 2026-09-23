@@ -42,8 +42,6 @@ import { LojasPage } from "@/pages/lojas";
 import { VendasPage } from "@/pages/vendas";
 import { KitsPage } from "@/pages/kits";
 import { ComprasPage } from "@/pages/compras";
-import { RelatoriosPage } from "@/pages/relatorios";
-import { RelatoriosBiPage } from "@/pages/relatorios.bi";
 import { RelatorioDetalhePage } from "@/pages/relatorio-detalhe";
 import { DevolucoesPage } from "@/pages/devolucoes";
 import { FiscalPage } from "@/pages/fiscal";
@@ -252,9 +250,13 @@ export default function App() {
         <Route path="fiscal" element={<FiscalPage />} />
         <Route path="fiscal/notas-recebidas" element={<FiscalDfePage />} />
         <Route path="fiscal/escrituracao" element={<FiscalSpedPage />} />
-        <Route path="relatorios" element={<RelatoriosPage />} />
-        <Route path="relatorios/analise" element={<RelatoriosBiPage />} />
+        {/* viraram abas de Relatórios Financeiros; o link antigo continua valendo */}
+        <Route path="relatorios" element={<Navigate to="/financeiro?aba=relatorios" replace />} />
+        <Route path="relatorios/analise" element={<Navigate to="/financeiro?aba=gerencial" replace />} />
         {/* cada relatório financeiro é uma tela, não um pop-up */}
+        {/* sob /financeiro: herda financeiro.ver do item de menu. Em
+            /relatorios/* ficaria sem dono depois que aquele item saiu. */}
+        <Route path="financeiro/relatorio/:tipo" element={<RelatorioDetalhePage />} />
         <Route path="relatorios/financeiro/:tipo" element={<RelatorioDetalhePage />} />
         <Route path="lojas" element={<LojasPage />} />
         <Route path="configuracoes" element={<ConfiguracoesPage />} />
