@@ -8,6 +8,12 @@ describe("seletor de loja do cabeçalho", () => {
     }
   });
 
+  it("a frente de caixa não usa esta lista — tem casco próprio", () => {
+    // /pdv roda em PdvLayout, que nunca mostra seletor: a loja se troca fora
+    // da frente de caixa, e com caixa aberto quem manda é o caixa.
+    expect(ROTAS_COM_FILTRO_DE_LOJA).not.toContain("/pdv");
+  });
+
   it("continua nas telas que dependem da loja do cabeçalho", () => {
     // estas leem useAutoSelectLoja e não têm seletor próprio: sem o do topo,
     // ficariam presas numa loja só
