@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Star, Loader2, Plus, ThumbsUp, MessageSquare,
   Bell, CheckCircle, Settings, Briefcase,
@@ -529,10 +530,23 @@ export function ConfiguracoesGeraisPage() {
                   <Label className="text-xs font-mono">{c.chave}</Label>
                   {c.descricao && <p className="text-xs text-muted-foreground">{c.descricao}</p>}
                 </div>
-                <Input
-                  defaultValue={c.valor ?? ""}
-                  onBlur={(e) => handleSalvar(c, e.target.value)}
-                />
+                {/* Chave booleana com caixa de texto vira "true"/"TRUE"/"1"
+                    digitados à mão, e aí a regra não liga. Marcar é mais
+                    honesto com quem opera a tela. */}
+                {c.tipo === "booleano" ? (
+                  <label className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={String(c.valor ?? "").trim().toLowerCase() === "true"}
+                      onCheckedChange={(v) => void handleSalvar(c, v === true ? "true" : "false")}
+                    />
+                    {String(c.valor ?? "").trim().toLowerCase() === "true" ? "Ligado" : "Desligado"}
+                  </label>
+                ) : (
+                  <Input
+                    defaultValue={c.valor ?? ""}
+                    onBlur={(e) => handleSalvar(c, e.target.value)}
+                  />
+                )}
                 <span className="text-xs text-muted-foreground">{c.tipo}</span>
               </div>
             ))}

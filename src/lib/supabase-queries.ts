@@ -3773,6 +3773,27 @@ export function useConfiguracoesGerais() {
   });
 }
 
+/**
+ * As duas regras de conferência do caixa (migration 090), lidas pelo PDV.
+ *
+ * Reaproveita a MESMA queryKey de useConfiguracoesGerais: quando o
+ * administrador muda a chave na tela de configurações, o PDV de quem já
+ * está logado recebe o valor novo na próxima invalidação, sem relogar.
+ *
+ * Qualquer usuário do ERP tem SELECT nesta tabela; só admin escreve.
+ */
+export function useConfigsCaixa() {
+  const { data = [] } = useConfiguracoesGerais();
+  const ligada = (chave: string) => {
+    const v = (data as any[]).find((c) => c.chave === chave)?.valor;
+    return String(v ?? "").trim().toLowerCase() === "true";
+  };
+  return {
+    exigirValoresPorForma: ligada("caixa_exigir_valores_por_forma"),
+    ocultarEsperado: ligada("caixa_ocultar_esperado"),
+  };
+}
+
 export function useUpsertConfiguracao() {
   const qc = useQueryClient();
   return useMutation({

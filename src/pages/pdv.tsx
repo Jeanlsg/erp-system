@@ -17,7 +17,8 @@ import {
   Search, Keyboard,
   Bike,
 } from "lucide-react";
-import { useProdutos, useClientes, useCaixaAberto, useCreateCaixa, useFecharCaixa, useKits, useCaixas, useCreateSangria, useCreateEntradaExtra, useEmitirNFeVenda, isSupabaseConfigured, useVendedores, useEstoqueLoja, usePontosVenda, useCriarPontoVenda } from "@/lib/supabase-queries";
+import { useProdutos, useClientes, useCaixaAberto, useCreateCaixa, useFecharCaixa, useKits, useCaixas, useCreateSangria, useCreateEntradaExtra, useEmitirNFeVenda, isSupabaseConfigured, useVendedores, useEstoqueLoja, usePontosVenda, useCriarPontoVenda, useConfigsCaixa } from "@/lib/supabase-queries";
+import { formasParaDeclarar as escolherFormas, faltaDeclarar as temFormaPendente, argumentosDeFechamento } from "@/lib/fechamento-por-forma";
 import { toast } from "sonner";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -63,6 +64,8 @@ export function PDVPage() {
   const emitirNFCe = useEmitirNFeVenda();
   const createCaixa = useCreateCaixa();
   const fecharCaixa = useFecharCaixa();
+  // Regras de conferência ligadas pelo dono em Configurações Gerais (090)
+  const { exigirValoresPorForma, ocultarEsperado } = useConfigsCaixa();
   const createSangria = useCreateSangria();
   const createEntrada = useCreateEntradaExtra();
 
@@ -429,10 +432,37 @@ export function PDVPage() {
 
   // Fechar caixa (valor final = valor contado em gaveta pelo operador)
   const [valorContado, setValorContado] = useState("");
+  /** valor declarado pelo operador em cada forma, quando a conferência por forma está ligada */
+  const [declarados, setDeclarados] = useState<Record<string, string>>({});
+
+  // "Ocultar valores do fechamento, exceto para o Funcionário Master": o
+  // operador conta a gaveta SEM ver o esperado. É controle de rotina contra o
+  // ajuste do valor informado — quem vê que faltam R$ 50 tem a tentação de
+  // declarar o número que fecha. Não é barreira de segurança: o esperado
+  // continua legível na view para quem chamar a API direto.
+  const podeVerEsperado = !ocultarEsperado || !!(user as any)?.admin_principal;
+
+  const formasParaDeclarar = escolherFormas(c, podeVerEsperado);
+  const faltaDeclarar = temFormaPendente(formasParaDeclarar, declarados, exigirValoresPorForma);
 
   const handleFecharCaixa = async () => {
     if (!caixaAberto) return;
-    const contado = parseFloat(valorContado);
+
+    // Por forma: a gaveta é o que o operador declarou em dinheiro; as outras
+    // formas vão para o fechamento para conferir maquininha e extrato.
+    let porForma: Record<string, number> = {};
+    if (exigirValoresPorForma) {
+      const args = argumentosDeFechamento(formasParaDeclarar, declarados);
+      if (!args) {
+        toast.error("Informe o valor conferido em todas as formas de pagamento.");
+        return;
+      }
+      porForma = args;
+    }
+
+    const contado = exigirValoresPorForma
+      ? (porForma.valorDinheiro ?? 0)
+      : parseFloat(valorContado);
     if (isNaN(contado) || contado < 0) {
       toast.error("Informe o valor contado em gaveta para fechar o caixa.");
       return;
@@ -442,6 +472,7 @@ export function PDVPage() {
         caixaId: caixaAberto.id,
         valorFinal: contado,
         valorDinheiro: contado,
+        ...porForma,
         observacoes: "",
         encerradoPor: user?.id,
       });
@@ -464,6 +495,7 @@ export function PDVPage() {
 
       setModalFechamento(false);
       setValorContado("");
+      setDeclarados({});
       limparCarrinho();
       toast.success(
         saiu
@@ -1688,43 +1720,90 @@ export function PDVPage() {
               <span>{brl(caixaAberto?.valor_inicial || 0)}</span>
             </div>
             {/* Só o que é dinheiro vivo entra na conta da gaveta. O resto
-                aparece embaixo, para conferir maquininha e extrato do PIX. */}
-            <div className="flex justify-between font-semibold">
-              <span>Vendas em dinheiro:</span>
-              <span className="text-green-600">+{brl(Number(c?.vendas_dinheiro || 0))}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Sangrias em dinheiro:</span>
-              <span className="text-red-600">-{brl(Number(c?.sangrias_dinheiro || 0))}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Entradas em dinheiro:</span>
-              <span className="text-green-600">+{brl(Number(c?.entradas_dinheiro || 0))}</span>
-            </div>
-            <div className="flex justify-between font-bold text-lg border-t pt-2">
-              <span>Valor Esperado em Gaveta:</span>
-              <span className="text-primary">{brl(valorEsperadoCaixa)}</span>
-            </div>
-            <div className="border-t pt-3">
-              <Label>Valor contado em gaveta</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="R$ 0,00"
-                value={valorContado}
-                onChange={(e) => setValorContado(e.target.value)}
-                className="mt-1"
-              />
-              {valorContado !== "" && !isNaN(parseFloat(valorContado)) && (
-                <p className={`text-xs mt-1 ${parseFloat(valorContado) - valorEsperadoCaixa === 0 ? "text-green-600" : "text-orange-600"}`}>
-                  Diferença: {brl(parseFloat(valorContado) - valorEsperadoCaixa)}
-                </p>
-              )}
-            </div>
+                aparece embaixo, para conferir maquininha e extrato do PIX.
+
+                Com "ocultar valores" ligado, todo este bloco some para quem
+                não é master: mostrar vendas em dinheiro e sangrias entregaria
+                o esperado somado de cabeça. */}
+            {podeVerEsperado && (
+              <>
+                <div className="flex justify-between font-semibold">
+                  <span>Vendas em dinheiro:</span>
+                  <span className="text-green-600">+{brl(Number(c?.vendas_dinheiro || 0))}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Sangrias em dinheiro:</span>
+                  <span className="text-red-600">-{brl(Number(c?.sangrias_dinheiro || 0))}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Entradas em dinheiro:</span>
+                  <span className="text-green-600">+{brl(Number(c?.entradas_dinheiro || 0))}</span>
+                </div>
+                <div className="flex justify-between font-bold text-lg border-t pt-2">
+                  <span>Valor Esperado em Gaveta:</span>
+                  <span className="text-primary">{brl(valorEsperadoCaixa)}</span>
+                </div>
+              </>
+            )}
+
+            {!podeVerEsperado && (
+              <p className="rounded-md border border-dashed p-2 text-xs text-muted-foreground">
+                Conferência às cegas: conte a gaveta e informe o valor encontrado.
+                O comprovante com a diferença sai na impressora ao fechar.
+              </p>
+            )}
+
+            {exigirValoresPorForma ? (
+              <div className="border-t pt-3 space-y-2">
+                <Label>Valores conferidos por forma de pagamento</Label>
+                {formasParaDeclarar.map((f) => (
+                  <div key={f.chave} className="grid grid-cols-2 items-center gap-2">
+                    <span className="text-sm">{f.rotulo}</span>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="R$ 0,00"
+                      value={declarados[f.chave] ?? ""}
+                      onChange={(e) => setDeclarados((d) => ({ ...d, [f.chave]: e.target.value }))}
+                    />
+                    {podeVerEsperado && (
+                      <p className="col-span-2 -mt-1 text-xs text-muted-foreground">
+                        Sistema registrou {brl(Number((c as any)?.[f.campo] || 0))}
+                      </p>
+                    )}
+                  </div>
+                ))}
+                {podeVerEsperado && declarados.dinheiro != null && declarados.dinheiro !== ""
+                  && !isNaN(parseFloat(declarados.dinheiro)) && (
+                  <p className={`text-xs ${parseFloat(declarados.dinheiro) - valorEsperadoCaixa === 0 ? "text-green-600" : "text-orange-600"}`}>
+                    Diferença na gaveta: {brl(parseFloat(declarados.dinheiro) - valorEsperadoCaixa)}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="border-t pt-3">
+                <Label>Valor contado em gaveta</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="R$ 0,00"
+                  value={valorContado}
+                  onChange={(e) => setValorContado(e.target.value)}
+                  className="mt-1"
+                />
+                {podeVerEsperado && valorContado !== "" && !isNaN(parseFloat(valorContado)) && (
+                  <p className={`text-xs mt-1 ${parseFloat(valorContado) - valorEsperadoCaixa === 0 ? "text-green-600" : "text-orange-600"}`}>
+                    Diferença: {brl(parseFloat(valorContado) - valorEsperadoCaixa)}
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Não passou pela gaveta: confira contra a maquininha e o extrato */}
-            {(Number(c?.vendas_pix || 0) + Number(c?.vendas_cartao_credito || 0)
+            {podeVerEsperado && !exigirValoresPorForma
+              && (Number(c?.vendas_pix || 0) + Number(c?.vendas_cartao_credito || 0)
               + Number(c?.vendas_cartao_debito || 0) + Number(c?.vendas_outras || 0)) > 0 && (
               <div className="rounded-md border p-2 text-xs">
                 <p className="mb-1 font-medium">Fora da gaveta — conferir no extrato</p>
@@ -1748,7 +1827,8 @@ export function PDVPage() {
             <Button
               variant="destructive"
               onClick={handleFecharCaixa}
-              disabled={fecharCaixa.isPending || valorContado === ""}
+              disabled={fecharCaixa.isPending
+                || (exigirValoresPorForma ? faltaDeclarar : valorContado === "")}
             >
               {fecharCaixa.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Fechar Caixa"}
             </Button>
