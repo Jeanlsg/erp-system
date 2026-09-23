@@ -18,7 +18,9 @@ import { Button } from "@/components/ui/button";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { useAuth, logout, roleLabels, type Role } from "@/lib/store/auth-store";
+import { useAuth, logout, roleLabels, ehOperadorDeBalcao, type Role } from "@/lib/store/auth-store";
+import { usePdvModo } from "@/lib/store/pdv-modo";
+import { AppSidebar } from "@/components/app-sidebar";
 import { useLojaAtualStore } from "@/lib/store/loja-atual";
 import { useLojas, isSupabaseConfigured } from "@/lib/supabase-queries";
 import { useConexao } from "@/lib/offline/conexao";
@@ -30,6 +32,14 @@ export function PdvLayout() {
   const currentLojaId = useLojaAtualStore((s) => s.currentLojaId);
   const setCurrentLojaId = useLojaAtualStore((s) => s.setCurrentLojaId);
   const online = useConexao();
+  const vendendo = usePdvModo((s) => s.vendendo);
+
+  // Fora da venda a tela é administrativa (escolher caixa, conferir
+  // fechamento) e o menu ajuda. Com a venda aberta ele sai: o balcão quer a
+  // tela inteira, e um menu ao lado é convite a sair da venda sem querer.
+  // Quem só opera o balcão não vê o menu em momento nenhum — clicar nele o
+  // devolveria para cá de qualquer forma.
+  const mostrarMenu = !vendendo && !ehOperadorDeBalcao();
   const [hidratado, setHidratado] = useState(false);
 
   useEffect(() => { setHidratado(true); }, []);
@@ -48,7 +58,10 @@ export function PdvLayout() {
   const papeis = (user?.papeis?.length ? user.papeis : [user?.role]) as Role[];
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-background">
+    <div className="flex h-screen w-full overflow-hidden bg-background">
+      {mostrarMenu && <AppSidebar />}
+
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
       <header className="flex shrink-0 items-center justify-between gap-3 border-b bg-card px-4 py-2">
         <div className="flex items-center gap-3 min-w-0">
           <span className="font-semibold tracking-tight">Frente de caixa</span>
@@ -92,6 +105,7 @@ export function PdvLayout() {
       <main className="min-h-0 flex-1 overflow-hidden">
         <Outlet />
       </main>
+      </div>
     </div>
   );
 }

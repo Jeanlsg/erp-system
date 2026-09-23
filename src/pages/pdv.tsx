@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { useAuth, useAuthStore } from "@/lib/store/auth-store";
+import { usePdvModo } from "@/lib/store/pdv-modo";
 import { supabase } from "@/lib/supabase";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { brl } from "@/lib/format";
@@ -116,6 +117,13 @@ export function PDVPage() {
   // Sair da frente de caixa NÃO fecha o caixa: volta para a tela de seleção,
   // com o turno em aberto, como no sistema anterior da loja (F12).
   const [saiuDaFrente, setSaiuDaFrente] = useState(false);
+
+  // avisa o casco: com a venda aberta, a tela é do balcão e o menu sai
+  const setVendendo = usePdvModo((s) => s.setVendendo);
+  useEffect(() => {
+    setVendendo(!!caixaAberto && !saiuDaFrente);
+    return () => setVendendo(false);   // sair do PDV devolve o menu
+  }, [caixaAberto, saiuDaFrente, setVendendo]);
 
   // ---- caixas cadastrados desta loja ----
   const { data: pontosVenda = [] } = usePontosVenda(lojaId ?? undefined);
