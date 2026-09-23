@@ -607,6 +607,8 @@ export interface Caixa {
   encerrado_por: string | null;
   created_at: string;
   updated_at: string;
+  /** caixa físico (erp_pontos_venda) a que este turno pertence */
+  ponto_venda_id?: string | null;
 }
 
 export interface CaixaCompleto extends Caixa {

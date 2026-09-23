@@ -123,7 +123,9 @@ export function RelatoriosPage() {
 
   const colFechamentos: Coluna<any>[] = [
     { chave: "data_fechamento", titulo: "Fechamento", tipo: "data" },
-    { chave: "caixa", titulo: "Caixa", valor: (f) => f.caixa?.numero_caixa != null ? `#${f.caixa.numero_caixa}` : "—" },
+    // o nome do caixa cadastrado; o número é a reserva para turno antigo
+    { chave: "caixa", titulo: "Caixa", valor: (f) =>
+        f.caixa?.ponto?.nome ?? (f.caixa?.numero_caixa != null ? `Caixa ${f.caixa.numero_caixa}` : "—") },
     { chave: "operador", titulo: "Operador", valor: (f) => {
         const v = (vendedores as any[]).find((x) => x.usuario_id === f.usuario_id);
         return v?.nome ?? "—";

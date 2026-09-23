@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -14,14 +15,16 @@ import {
   Check, X, AlertCircle, Receipt, CloudOff, RefreshCw, Cloud, Camera,
   UserPlus,
   Search, Keyboard,
+  Bike,
 } from "lucide-react";
-import { useProdutos, useClientes, useCaixaAberto, useCreateCaixa, useFecharCaixa, useKits, useCaixas, useCreateSangria, useCreateEntradaExtra, useCaixaConfig, useUpdateCaixaConfig, useEmitirNFeVenda, isSupabaseConfigured, useVendedores, useEstoqueLoja } from "@/lib/supabase-queries";
+import { useProdutos, useClientes, useCaixaAberto, useCreateCaixa, useFecharCaixa, useKits, useCaixas, useCreateSangria, useCreateEntradaExtra, useEmitirNFeVenda, isSupabaseConfigured, useVendedores, useEstoqueLoja, usePontosVenda, useCriarPontoVenda } from "@/lib/supabase-queries";
 import { toast } from "sonner";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
-import { useAuth } from "@/lib/store/auth-store";
+import { useAuth, useAuthStore } from "@/lib/store/auth-store";
+import { supabase } from "@/lib/supabase";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { brl } from "@/lib/format";
 import { useConexao } from "@/lib/offline/conexao";
@@ -47,13 +50,13 @@ interface CartItem {
 
 export function PDVPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { lojaId } = useAutoSelectLoja();
   const emitirNFCe = useEmitirNFeVenda();
   const createCaixa = useCreateCaixa();
   const fecharCaixa = useFecharCaixa();
   const createSangria = useCreateSangria();
   const createEntrada = useCreateEntradaExtra();
-  const updateCaixaConfig = useUpdateCaixaConfig();
 
   // Conexão e fila offline: o caixa não pode parar quando a internet cai.
   const online = useConexao();
@@ -92,7 +95,6 @@ export function PDVPage() {
   const { data: clientes = [] } = useClientes();
   const { data: caixaAberto } = useCaixaAberto(user?.id);
   const { data: caixas = [] } = useCaixas(lojaId ?? undefined);
-  const { data: configCaixa } = useCaixaConfig();
 
   const caixasAbertos = caixas.filter((c) => c.status === "aberto");
 
@@ -114,6 +116,30 @@ export function PDVPage() {
   // Sair da frente de caixa NÃO fecha o caixa: volta para a tela de seleção,
   // com o turno em aberto, como no sistema anterior da loja (F12).
   const [saiuDaFrente, setSaiuDaFrente] = useState(false);
+
+  // ---- caixas cadastrados desta loja ----
+  const { data: pontosVenda = [] } = usePontosVenda(lojaId ?? undefined);
+  const criarPonto = useCriarPontoVenda();
+  const [pontoSelecionado, setPontoSelecionado] = useState<string | null>(null);
+  const [modalNovoPonto, setModalNovoPonto] = useState(false);
+  const [nomeNovoPonto, setNomeNovoPonto] = useState("");
+
+  // Com um caixa só na loja, escolher é burocracia: já vem marcado.
+  useEffect(() => {
+    if (!pontoSelecionado && pontosVenda.length === 1) {
+      setPontoSelecionado(pontosVenda[0].id);
+      setCaixaSelecionado(pontosVenda[0].numero);
+    }
+  }, [pontosVenda, pontoSelecionado]);
+
+  // ---- senha do operador na abertura ----
+  const CHAVE_SENHA_LEMBRADA = `erp-senha-caixa-${user?.id ?? ""}`;
+  const [senhaAbertura, setSenhaAbertura] = useState("");
+  const [lembrarSenha, setLembrarSenha] = useState(false);
+  const [senhaLembrada, setSenhaLembrada] = useState(() => {
+    try { return localStorage.getItem(`erp-senha-caixa-${useAuthStore.getState().user?.id ?? ""}`) === "1"; }
+    catch { return false; }
+  });
   // Vendedor da venda: é dele a comissão. Começa no funcionário ligado ao
   // usuário logado; o caixa pode trocar quando vende para outro vendedor.
   const [vendedorId, setVendedorId] = useState("");
@@ -165,7 +191,6 @@ export function PDVPage() {
   // "É CPF na nota?" — consumidor identificado sem precisar de cadastro
   const [cpfNota, setCpfNota] = useState("");
   const [nomeNota, setNomeNota] = useState("");
-  const [quantidadeCaixas, setQuantidadeCaixas] = useState(2);
 
   // Calculados
   const subtotal = cart.reduce((s, i) => s + i.preco_unitario * i.quantidade, 0);
@@ -190,11 +215,6 @@ export function PDVPage() {
       : (c?.valor_inicial || 0);
 
   // Carregar config de caixas
-  useEffect(() => {
-    if (configCaixa) {
-      setQuantidadeCaixas(configCaixa.quantidade_caixas ?? 2);
-    }
-  }, [configCaixa]);
 
   // Filtrar produtos
   const filtrados = useMemo(() => {
@@ -303,18 +323,46 @@ export function PDVPage() {
   }, []);
 
   // Abrir caixa
+  /**
+   * Confere a senha de quem está assumindo o caixa.
+   *
+   * O relatório de fechamento mostra o nome do operador; sem confirmar,
+   * bastaria uma sessão esquecida aberta para o turno sair no nome errado.
+   * A checagem é o próprio login do Supabase — não guardamos senha.
+   */
+  const conferirSenha = async (): Promise<boolean> => {
+    if (senhaLembrada) return true;
+    if (!user?.email) return false;
+    if (senhaAbertura.length < 4) { toast.error("Informe a senha para assumir o caixa."); return false; }
+    const { error } = await supabase.auth.signInWithPassword({ email: user.email, password: senhaAbertura });
+    if (error) { toast.error("Senha incorreta."); return false; }
+    if (lembrarSenha) {
+      try { localStorage.setItem(CHAVE_SENHA_LEMBRADA, "1"); setSenhaLembrada(true); } catch { /* aba anônima */ }
+    }
+    setSenhaAbertura("");
+    return true;
+  };
+
+  const abrirCaixa = async () => {
+    if (!user || !lojaId || !caixaSelecionado) return;
+    if (!(await conferirSenha())) return;
+    setModalAbertura(true);
+  };
+
   const handleAbrirCaixa = async () => {
     if (!user || !lojaId || !caixaSelecionado) return;
     await createCaixa.mutateAsync({
       loja_id: lojaId,
       usuario_id: user.id,
       numero_caixa: caixaSelecionado,
+      ponto_venda_id: pontoSelecionado,
       valor_inicial: parseFloat(saldoInicial) || 0,
       data_abertura: new Date().toISOString(),
       status: "aberto",
     });
     setModalAbertura(false);
     setSaldoInicial("");
+    setSaiuDaFrente(false);
   };
 
   // Fechar caixa (valor final = valor contado em gaveta pelo operador)
@@ -585,23 +633,54 @@ export function PDVPage() {
               </Card>
             )}
 
-            {/* Card 1: Selecionar Caixa */}
+            {/* Card 1: os caixas DESTA loja.
+
+                Antes a lista vinha de uma configuração global ("2 caixas") e
+                o mesmo número existia em toda loja — o Caixa 1 de Petrolina e
+                o de Juazeiro eram indistinguíveis no relatório. Agora cada
+                caixa é um cadastro com nome e dono. */}
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Selecione o Caixa</CardTitle>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-base">Selecione o caixa</CardTitle>
+                <Button variant="outline" size="sm" onClick={() => setModalNovoPonto(true)}
+                  title="Cadastrar um caixa nesta loja">
+                  <Plus className="mr-1 h-4 w-4" /> Adicionar caixa
+                </Button>
               </CardHeader>
               <CardContent>
-                <div className="flex flex-wrap gap-2">
-                  {Array.from({ length: quantidadeCaixas }, (_, i) => i + 1).map((n) => (
-                    <Button
-                      key={n}
-                      variant={caixaSelecionado === n ? "default" : "outline"}
-                      onClick={() => setCaixaSelecionado(n)}
-                    >
-                      CAIXA {String(n).padStart(3, "0")}
-                    </Button>
-                  ))}
-                </div>
+                {pontosVenda.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Esta loja ainda não tem caixa cadastrado. Use <b>Adicionar caixa</b>.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {pontosVenda.map((pv: any) => (
+                      <Button
+                        key={pv.id}
+                        variant={pontoSelecionado === pv.id ? "default" : "outline"}
+                        onClick={() => { setPontoSelecionado(pv.id); setCaixaSelecionado(pv.numero); }}
+                      >
+                        {pv.nome}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Tipo de frente: o delivery é o Ciclo de pedidos, tela própria */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Tipo de frente de caixa</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-wrap items-center gap-3">
+                <Button variant="default" disabled>Convencional</Button>
+                <Button variant="outline" onClick={() => navigate("/pedidos-delivery")}>
+                  <Bike className="mr-1 h-4 w-4" /> Delivery
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  Delivery abre o Ciclo de pedidos, onde o pedido anda pela esteira até a entrega.
+                </span>
               </CardContent>
             </Card>
 
@@ -615,6 +694,32 @@ export function PDVPage() {
                   <div>
                     <Label>Operador</Label>
                     <Input value={user?.nome || ""} disabled />
+                    {/* A senha confirma QUEM está assumindo o caixa: o
+                        relatório de fechamento mostra esse nome, e sem
+                        confirmação bastaria uma sessão esquecida aberta. */}
+                    {!senhaLembrada && (
+                      <div className="mt-2">
+                        <Label className="text-xs">Senha do usuário</Label>
+                        <Input type="password" className="mt-1" value={senhaAbertura}
+                          onChange={(e) => setSenhaAbertura(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter") void abrirCaixa(); }}
+                          placeholder="confirme para assumir o caixa" />
+                        <label className="mt-1 flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+                          <input type="checkbox" className="h-3.5 w-3.5" checked={lembrarSenha}
+                            onChange={(e) => setLembrarSenha(e.target.checked)} />
+                          Lembrar neste computador
+                        </label>
+                      </div>
+                    )}
+                    {senhaLembrada && (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Senha lembrada neste computador.{" "}
+                        <button type="button" className="underline hover:no-underline"
+                          onClick={() => { localStorage.removeItem(CHAVE_SENHA_LEMBRADA); setSenhaLembrada(false); }}>
+                          esquecer
+                        </button>
+                      </p>
+                    )}
                   </div>
                   <div>
                     <Label>Saldo Inicial (Troco)</Label>
@@ -644,8 +749,8 @@ export function PDVPage() {
                 </div>
                 <Button
                   className="mt-4"
-                  disabled={!caixaSelecionado}
-                  onClick={() => setModalAbertura(true)}
+                  disabled={!caixaSelecionado || !pontoSelecionado}
+                  onClick={() => void abrirCaixa()}
                 >
                   <Lock className="h-4 w-4 mr-2" />
                   Abrir Caixa
@@ -1136,6 +1241,42 @@ export function PDVPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Adicionar caixa a esta loja */}
+      <Dialog open={modalNovoPonto} onOpenChange={setModalNovoPonto}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Adicionar caixa</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              O caixa pertence a esta loja e recebe o próximo número livre — é esse número
+              que sai no cupom e separa os turnos no relatório.
+            </p>
+            <div>
+              <Label>Nome do caixa</Label>
+              <Input autoFocus value={nomeNovoPonto} onChange={(e) => setNomeNovoPonto(e.target.value)}
+                placeholder="Ex.: Caixa do balcão, Caixa 2" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setModalNovoPonto(false)}>Cancelar</Button>
+            <Button disabled={criarPonto.isPending || !lojaId}
+              onClick={async () => {
+                if (!lojaId) return;
+                try {
+                  const novo = await criarPonto.mutateAsync({ lojaId, nome: nomeNovoPonto });
+                  setPontoSelecionado(novo.id); setCaixaSelecionado(novo.numero);
+                  setNomeNovoPonto(""); setModalNovoPonto(false);
+                  toast.success(`${novo.nome} criado.`);
+                } catch (e: any) {
+                  toast.error(`Não foi possível criar: ${e.message ?? e}`);
+                }
+              }}>
+              {criarPonto.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="mr-1 h-4 w-4" />}
+              Criar caixa
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Atalhos (F12) */}
       <Dialog open={modalAtalhos} onOpenChange={setModalAtalhos}>
         <DialogContent className="max-w-md">
@@ -1455,41 +1596,33 @@ export function PDVPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal: Configurações de Caixa */}
+      {/* Modal: Caixas desta loja.
+
+          Era "Quantidade de Caixas": um número global que criava os mesmos
+          caixas em toda loja. Com o cadastro por loja (erp_pontos_venda) o
+          número perdeu sentido — aqui se vê e se cria o que existe. */}
       <Dialog open={modalConfigCaixa} onOpenChange={setModalConfigCaixa}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Configurações de Caixa</DialogTitle>
+            <DialogTitle>Caixas desta loja</DialogTitle>
           </DialogHeader>
-          <div className="py-4">
-            <Label>Quantidade de Caixas</Label>
-            <Input
-              type="number"
-              min="1"
-              max="99"
-              value={quantidadeCaixas}
-              onChange={(e) => setQuantidadeCaixas(parseInt(e.target.value) || 2)}
-              className="mt-1"
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              Quantidade máxima de caixas operacionais no sistema.
+          <div className="space-y-2 py-2">
+            {pontosVenda.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nenhum caixa cadastrado nesta loja.</p>
+            ) : pontosVenda.map((pv: any) => (
+              <div key={pv.id} className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
+                <span>{pv.nome}</span>
+                <span className="text-xs text-muted-foreground">nº {pv.numero}</span>
+              </div>
+            ))}
+            <p className="text-xs text-muted-foreground">
+              O número acompanha o cupom e separa os turnos no relatório de fechamento.
             </p>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setModalConfigCaixa(false)}>Cancelar</Button>
-            <Button
-              disabled={updateCaixaConfig.isPending}
-              onClick={async () => {
-                try {
-                  await updateCaixaConfig.mutateAsync(quantidadeCaixas);
-                  setModalConfigCaixa(false);
-                  toast.success("Configuração de caixas salva.");
-                } catch (err: any) {
-                  toast.error(`Erro ao salvar configuração: ${err?.message ?? "erro desconhecido"}`);
-                }
-              }}
-            >
-              {updateCaixaConfig.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar"}
+            <Button variant="outline" onClick={() => setModalConfigCaixa(false)}>Fechar</Button>
+            <Button onClick={() => { setModalConfigCaixa(false); setModalNovoPonto(true); }}>
+              <Plus className="mr-1 h-4 w-4" /> Adicionar caixa
             </Button>
           </DialogFooter>
         </DialogContent>

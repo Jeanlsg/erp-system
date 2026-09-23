@@ -1414,7 +1414,7 @@ export function useRelatorioFechamentos(f: { lojaId?: string; de: string; ate: s
       if (!isSupabaseConfigured()) return [];
       let q = supabase
         .from("erp_fechamentos_caixa")
-        .select("*, caixa:erp_caixa(id, numero_caixa, loja_id, data_abertura, usuario_id)")
+        .select("*, caixa:erp_caixa(id, numero_caixa, loja_id, data_abertura, usuario_id, ponto:erp_pontos_venda(nome, numero))")
         .gte("data_fechamento", f.de)
         .lte("data_fechamento", f.ate + "T23:59:59")
         .order("data_fechamento", { ascending: false })
@@ -1426,6 +1426,42 @@ export function useRelatorioFechamentos(f: { lojaId?: string; de: string; ate: s
       return f.lojaId ? linhas.filter((l) => l.caixa?.loja_id === f.lojaId) : linhas;
     },
     enabled: !!f.de && !!f.ate,
+  });
+}
+
+// ---- pontos de venda: os caixas fisicos de cada loja ----
+
+export function usePontosVenda(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ["erp_pontos_venda", lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let q = supabase.from("erp_pontos_venda").select("*").eq("ativo", true).order("numero");
+      if (lojaId) q = q.eq("loja_id", lojaId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!lojaId,
+  });
+}
+
+export function useCriarPontoVenda() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ lojaId, nome }: { lojaId: string; nome: string }) => {
+      // o número é sequencial DENTRO da loja: é ele que sai no cupom
+      const { data: existentes, error: e1 } = await supabase
+        .from("erp_pontos_venda").select("numero").eq("loja_id", lojaId);
+      if (e1) throw e1;
+      const proximo = Math.max(0, ...(existentes ?? []).map((p: any) => Number(p.numero) || 0)) + 1;
+      const { data, error } = await supabase.from("erp_pontos_venda")
+        .insert({ loja_id: lojaId, numero: proximo, nome: nome.trim() || `Caixa ${proximo}` })
+        .select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["erp_pontos_venda"] }),
   });
 }
 
