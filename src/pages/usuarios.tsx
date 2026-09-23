@@ -399,7 +399,6 @@ export function UsuariosPage() {
   }, [usuarios, search, roleFilter, statusFilter]);
 
   // Depois de TODOS os hooks — ver comentário equivalente em produtos.
-  if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="Gestão de Usuários" />;
 
   // ===== KPIs =====
   const totalUsuarios = usuarios.length;
@@ -717,6 +716,8 @@ export function UsuariosPage() {
   const papeisSelecionados = papeisDe(usuarioSelecionado);
   const permissoesPadrao = permissoesDosPapeis(papeisSelecionados);
 
+  // depois de todos os hooks: return antes de hook quebra a ordem deles
+  if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="Gestão de Usuários" />;
   return (
     <div className="space-y-4">
       {/* Header */}

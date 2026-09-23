@@ -58,7 +58,6 @@ export function InventarioPage() {
   const aoLerRef = useRef<(codigo: string) => void>(() => {});
   useLeitorUsb((codigo) => aoLerRef.current(codigo));
 
-  if (!isSupabaseConfigured()) return <SupabaseNotConfigured />;
 
   const inventarioAtual = inventarios.find((i: any) => i.id === selecionado);
   const divergencias = itens.filter(
@@ -130,6 +129,8 @@ export function InventarioPage() {
     }
   };
 
+  // depois de todos os hooks: return antes de hook quebra a ordem deles
+  if (!isSupabaseConfigured()) return <SupabaseNotConfigured />;
   return (
     <div className="space-y-6 p-6">
       <div className="flex flex-wrap items-start justify-between gap-4">

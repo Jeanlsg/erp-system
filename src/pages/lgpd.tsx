@@ -48,7 +48,6 @@ export function ExclusaoInformacoesPage() {
   const atender = useAtenderSolicitacaoLgpd();
   const recusar = useRecusarSolicitacaoLgpd();
 
-  if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="Exclusão de Informações" />;
 
   const pendentes = solicitacoes.filter((s: any) => s.status === "pendente");
   const encerradas = solicitacoes.filter((s: any) => s.status !== "pendente");
@@ -121,6 +120,8 @@ export function ExclusaoInformacoesPage() {
     }
   };
 
+  // depois de todos os hooks: return antes de hook quebra a ordem deles
+  if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="Exclusão de Informações" />;
   return (
     <div className="space-y-6">
       <div>

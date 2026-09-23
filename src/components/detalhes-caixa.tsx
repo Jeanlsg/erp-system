@@ -65,6 +65,12 @@ export function DetalhesCaixaDialog({
   const nomeDe = (usuarioId?: string) =>
     (vendedores as any[]).find((v) => v.usuario_id === usuarioId)?.nome;
 
+  // Todo hook ANTES deste retorno. O useState da reimpressão vinha depois
+  // dele: com o diálogo fechado o componente saía antes de chamá-lo, ao
+  // abrir chamava um hook a mais, e o React derrubava a tela inteira —
+  // tela branca na Caixa e no relatório de fechamentos.
+  const [imprimindo, setImprimindo] = useState(false);
+
   if (!caixaId) return null;
 
   const aberto = c?.status === "aberto";
@@ -72,7 +78,6 @@ export function DetalhesCaixaDialog({
   const esperado = Number(c?.valor_esperado_gaveta ?? 0);
   const diferenca = informado - esperado;
 
-  const [imprimindo, setImprimindo] = useState(false);
   const reimprimir = async () => {
     if (!caixaId) return;
     setImprimindo(true);
