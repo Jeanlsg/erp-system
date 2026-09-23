@@ -11,8 +11,8 @@ import {
 } from "@/components/ui/dialog";
 import {
   Calculator, Plus, Trash2, Loader2, ShoppingCart,
-  CreditCard, Banknote, QrCode, Lock, Unlock, Settings,
-  Check, X, AlertCircle, Receipt, CloudOff, RefreshCw, Cloud, Camera,
+  Lock, Unlock, Settings,
+  Check, X, AlertCircle, CloudOff, RefreshCw, Cloud, Camera,
   UserPlus,
   Search, Keyboard,
   Bike,
@@ -44,7 +44,7 @@ import { documentoValido, mascaraDocumento } from "@/lib/documento";
 import { ComboboxBusca } from "@/components/ui/combobox-busca";
 import { ClienteRapidoPdvDialog } from "@/components/cliente-rapido-pdv";
 import {
-  PagamentosVenda, faltaPagar, trocoDe, type Pagamento,
+  PagamentosVenda, faltaPagar, trocoDe, aplicarDigitado, prepararFinalizacao, NOME_FORMA, type Pagamento,
 } from "@/components/pagamentos-venda";
 
 interface CartItem {
@@ -259,6 +259,8 @@ export function PDVPage() {
   // Formas com que esta venda está sendo paga. Vazio = uma forma só, pelo
   // seletor de sempre; com linhas, a venda é mista e vai detalhada ao banco.
   const [pagamentos, setPagamentos] = useState<Pagamento[]>([]);
+  const [parcelasPagamento, setParcelasPagamento] = useState("1");
+  const campoValorPagamento = useRef<HTMLInputElement>(null);
   const [emitirCupom, setEmitirCupom] = useState(false);
   // "É CPF na nota?" — consumidor identificado sem precisar de cadastro
   const [cpfNota, setCpfNota] = useState("");
@@ -273,15 +275,17 @@ export function PDVPage() {
   const acresc = parseFloat(acrescimo) || 0;
   const totalDesconto = (descontoPercentual ? subtotal * (desc / 100) : desc) + descontoItens;
   const total = Math.max(0, subtotal - totalDesconto + acresc);
-  const valorRec = parseFloat(valorRecebido) || 0;
-  // Troco só existe em pagamento em dinheiro
-  const trocoSimples = forma === "dinheiro" ? Math.max(0, valorRec - total) : 0;
-  const temPagamentosDetalhados = pagamentos.length > 0;
-  const troco = temPagamentosDetalhados ? trocoDe(pagamentos) : trocoSimples;
-  // Venda mista não fecha enquanto a soma não cobre o total: dinheiro que
-  // falta aqui vira divergência de caixa no fim do dia, e aí ninguém lembra
-  // de qual venda foi.
-  const faltaReceber = temPagamentosDetalhados ? faltaPagar(total, pagamentos) : 0;
+  // Tudo do pagamento sai das linhas lançadas no painel. Antes havia um
+  // caminho "simples" com um campo de valor recebido, e ele gravava a venda
+  // inteira na forma escolhida mesmo quando o valor digitado era menor: 20
+  // em dinheiro numa venda de 89 virava 89 em dinheiro, e a gaveta passava a
+  // esperar 69 que nunca entraram.
+  const troco = trocoDe(pagamentos);
+  // Venda não fecha enquanto a soma não cobre o total: dinheiro que falta
+  // aqui vira divergência de caixa no fim do dia, e aí ninguém lembra de
+  // qual venda foi. Sem linha nenhuma, falta tudo.
+  const faltaReceber = pagamentos.length > 0 ? faltaPagar(total, pagamentos) : total;
+  const recebidoTotal = pagamentos.reduce((t, p) => t + (Number(p.valor_recebido ?? p.valor) || 0), 0);
 
   // O que tem de estar na gaveta, calculado pelo banco (vw_caixa_resumo).
   //
@@ -432,6 +436,48 @@ export function PDVPage() {
     setCart((prev) => prev.filter((i) => i.produto_id !== id));
   }, []);
 
+  // ---------------------------------------------------------------
+  // Pagamento: digita quanto o cliente dá nesta forma, o sistema lança e
+  // pede o que falta, até bater o total. Enter no campo e o Finalizar usam a
+  // mesma regra (aplicarDigitado / prepararFinalizacao).
+  // ---------------------------------------------------------------
+  const focarValorPagamento = () =>
+    requestAnimationFrame(() => {
+      campoValorPagamento.current?.focus();
+      campoValorPagamento.current?.select();
+    });
+
+  /** Depois de lançar, o campo já vem com o que falta, selecionado. */
+  const pedirORestante = (pags: Pagamento[]) => {
+    const falta = faltaPagar(total, pags);
+    setValorRecebido(falta > 0 ? String(falta) : "");
+    if (falta > 0) focarValorPagamento();
+  };
+
+  const lancarDigitado = () => {
+    const r = aplicarDigitado(total, pagamentos, forma as any, valorRecebido, Number(parcelasPagamento) || 1);
+    if (!r.ok) { toast.error(r.erro); focarValorPagamento(); return; }
+    if (!r.lancou) return;
+    setPagamentos(r.pagamentos);
+    setParcelasPagamento("1");
+    pedirORestante(r.pagamentos);
+  };
+
+  const finalizar = () => {
+    if (cart.length === 0) return;
+    const r = prepararFinalizacao(total, pagamentos, forma as any, valorRecebido, Number(parcelasPagamento) || 1);
+    if (!r.ok) { toast.error(r.erro); return; }
+    setPagamentos(r.pagamentos);
+    setParcelasPagamento("1");
+    if (r.falta > 0) {
+      pedirORestante(r.pagamentos);
+      toast.info(`Falta ${brl(r.falta)}. Escolha a forma e informe o valor.`);
+      return;
+    }
+    setValorRecebido("");
+    setModalConfirmarVenda(true);
+  };
+
   // Limpar carrinho
   const limparCarrinho = useCallback(() => {
     setCart([]);
@@ -442,6 +488,7 @@ export function PDVPage() {
     setValorRecebido("");
     setForma("dinheiro");
     setPagamentos([]);
+    setParcelasPagamento("1");
   }, []);
 
   // Abrir caixa
@@ -579,6 +626,12 @@ export function PDVPage() {
   const [finalizando, setFinalizando] = useState(false);
   const handleFinalizarVenda = async () => {
     if (!lojaId || !user || cart.length === 0 || finalizando) return;
+    if (pagamentos.length === 0 || faltaReceber > 0) {
+      toast.error(`Ainda falta receber ${brl(faltaReceber)}.`);
+      setModalConfirmarVenda(false);
+      focarValorPagamento();
+      return;
+    }
     // CPF digitado mas inválido: recusa AGORA, com o cliente na frente —
     // deixar passar viraria rejeição da SEFAZ na hora do cupom.
     if (!clienteId && cpfNota.trim() && !documentoValido(cpfNota)) {
@@ -602,15 +655,15 @@ export function PDVPage() {
         desconto_percentual: descontoPercentual ? desc : 0,
         acrescimo: acresc,
         troco,
-        valor_recebido: valorRec,
+        valor_recebido: Math.round(recebidoTotal * 100) / 100,
         total,
         custo_total: custoTotal,
         lucro_total: total - custoTotal,
-        forma_pagamento: temPagamentosDetalhados
-          // a forma "principal" é a de maior valor; o banco reconfere
-          ? [...pagamentos].sort((x, y) => y.valor - x.valor)[0].forma
-          : forma,
-        ...(temPagamentosDetalhados ? { pagamentos } : {}),
+        // a forma "principal" é a de maior valor; o banco reconfere
+        forma_pagamento: [...pagamentos].sort((x, y) => y.valor - x.valor)[0].forma,
+        // sempre por linha: é por elas que a gaveta sabe quanto entrou em
+        // dinheiro, e o banco recusa soma menor que o total
+        pagamentos,
         // sem cliente cadastrado, vale o CPF digitado no balcão
         ...(!clienteId && cpfNota.trim()
           ? { consumidor_cpf: cpfNota, consumidor_nome: nomeNota.trim() || undefined }
@@ -796,13 +849,10 @@ export function PDVPage() {
     { tecla: "F8", rotulo: "Cancelar item", acao: () => { if (itemSelecionado) { remover(itemSelecionado); setItemSelecionado(null); } else toast.info("Escolha o item no cupom antes."); }, ativo: cart.length > 0 },
     { tecla: "F10", rotulo: "Add Pagamento", acao: () => {
         if (!cart.length) return;
-        setModalConfirmarVenda(true);
-        // F10 é "adicionar pagamento": já abre o painel de formas
-        if (!pagamentos.length) {
-          setPagamentos([{ forma, valor: total,
-            ...(forma === "dinheiro" && valorRec > total
-                ? { valor_recebido: valorRec, troco: valorRec - total } : {}) }]);
-        }
+        // "Adicionar pagamento" é ir ao campo de valor do painel, já com o
+        // que falta — Enter lança, e o resto é pedido em seguida.
+        if (valorRecebido === "") setValorRecebido(String(faltaReceber));
+        focarValorPagamento();
       }, ativo: cart.length > 0 },
     { tecla: "F11", rotulo: "Cancelar venda", acao: () => { if (cart.length && confirm("Cancelar a venda e limpar o cupom?")) limparCarrinho(); }, ativo: cart.length > 0 },
     { tecla: "Ctrl+S", rotulo: "Sangria", acao: () => setModalSangria(true), ativo: !!caixaAberto },
@@ -1415,55 +1465,22 @@ export function PDVPage() {
                 <span className="text-green-600">{brl(total)}</span>
               </div>
 
-              {/* Forma de Pagamento */}
-              <div>
-                <Label className="text-xs">Forma de Pagamento</Label>
-                <div className="grid grid-cols-3 gap-2 mt-1">
-                  {[
-                    { value: "dinheiro", label: "Dinheiro", icon: Banknote },
-                    { value: "pix", label: "PIX", icon: QrCode },
-                    { value: "cartao_credito", label: "Crédito", icon: CreditCard },
-                    { value: "cartao_debito", label: "Débito", icon: CreditCard },
-                    { value: "crediario", label: "Crediário", icon: Receipt },
-                    { value: "boleto", label: "Boleto", icon: Receipt },
-                  ].map(({ value, label, icon: Icon }) => (
-                    <Button
-                      key={value}
-                      variant={forma === value ? "default" : "outline"}
-                      size="sm"
-                      className="h-auto py-2 flex-col gap-1"
-                      onClick={() => {
-                        if (forma !== value) setValorRecebido("");
-                        setForma(value as any);
-                      }}
-                    >
-                      <Icon className="h-4 w-4" />
-                      <span className="text-xs">{label}</span>
-                    </Button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Valor Recebido (para dinheiro) */}
-              {forma === "dinheiro" && (
-                <div>
-                  <Label className="text-xs">Valor Recebido</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    placeholder="R$ 0,00"
-                    value={valorRecebido}
-                    onChange={(e) => setValorRecebido(e.target.value)}
-                    className="h-9 text-base"
-                  />
-                  {troco > 0 && (
-                    <div className="flex justify-between mt-1 text-sm text-muted-foreground">
-                      <span>Troco</span>
-                      <span className="text-orange-600 font-semibold">{brl(troco)}</span>
-                    </div>
-                  )}
-                </div>
-              )}
+              {/* Pagamento: um lugar só para a forma, o valor e a divisão em
+                  várias formas. Antes a forma ficava aqui e a divisão num
+                  modal à parte, com dois caminhos que não concordavam. */}
+              <PagamentosVenda
+                total={total}
+                pagamentos={pagamentos}
+                aoMudar={(p) => { setPagamentos(p); pedirORestante(p); }}
+                forma={forma as any}
+                aoMudarForma={(f) => { setForma(f as any); focarValorPagamento(); }}
+                valor={valorRecebido}
+                aoMudarValor={setValorRecebido}
+                parcelas={parcelasPagamento}
+                aoMudarParcelas={setParcelasPagamento}
+                aoLancar={lancarDigitado}
+                campoValorRef={campoValorPagamento}
+              />
 
               {/* Botões de Ação */}
               <div className="flex gap-2 pt-2">
@@ -1482,7 +1499,7 @@ export function PDVPage() {
                 <Button
                   className="flex-1 bg-green-600 hover:bg-green-700"
                   disabled={cart.length === 0}
-                  onClick={() => setModalConfirmarVenda(true)}
+                  onClick={finalizar}
                 >
                   <Check className="h-4 w-4 mr-1" />
                   Finalizar
@@ -1751,43 +1768,24 @@ export function PDVPage() {
               <span>Total:</span>
               <span className="text-green-600">{brl(total)}</span>
             </div>
-            {/* Pagamentos (F10): uma ou várias formas. Enquanto não houver
-                linha lançada, vale o seletor simples da tela de venda. */}
-            <div className="mt-2 rounded-md border p-3">
-              <div className="mb-2 flex items-center justify-between">
-                <p className="text-sm font-medium">
-                  Pagamento <span className="font-normal text-muted-foreground">(F10)</span>
-                </p>
-                {!temPagamentosDetalhados && (
-                  <Button variant="outline" size="sm"
-                    onClick={() => setPagamentos([{ forma, valor: total,
-                      ...(forma === "dinheiro" && valorRec > total
-                          ? { valor_recebido: valorRec, troco: valorRec - total } : {}) }])}>
-                    Dividir em mais de uma forma
-                  </Button>
-                )}
-              </div>
-
-              {temPagamentosDetalhados ? (
-                <PagamentosVenda total={total} pagamentos={pagamentos} aoMudar={setPagamentos} />
-              ) : (
-                <div className="space-y-1 text-sm">
-                  <div className="flex justify-between">
-                    <span>Forma:</span>
-                    <span className="capitalize">{String(forma).replace("_", " ")}</span>
-                  </div>
-                  {forma === "dinheiro" && (
-                    <>
-                      <div className="flex justify-between">
-                        <span>Recebido:</span>
-                        <span>{brl(valorRec)}</span>
-                      </div>
-                      <div className="flex justify-between font-semibold text-orange-600">
-                        <span>Troco:</span>
-                        <span>{brl(troco)}</span>
-                      </div>
-                    </>
-                  )}
+            {/* Só conferência. Forma e divisão se fazem no painel da venda —
+                um lugar só; aqui o operador vê o que vai ser gravado. */}
+            <div className="mt-2 space-y-1 rounded-md border p-3 text-sm">
+              <p className="font-medium">Pagamento</p>
+              {pagamentos.map((p, i) => (
+                <div key={i} className="flex justify-between">
+                  <span>
+                    {NOME_FORMA[p.forma]}
+                    {p.parcelas && p.parcelas > 1 ? ` · ${p.parcelas}x` : ""}
+                    {p.troco ? <span className="text-muted-foreground"> · recebeu {brl(p.valor_recebido ?? 0)}</span> : null}
+                  </span>
+                  <span className="tabular-nums">{brl(p.valor)}</span>
+                </div>
+              ))}
+              {troco > 0 && (
+                <div className="flex justify-between border-t pt-1 font-semibold text-orange-600">
+                  <span>Troco</span>
+                  <span className="tabular-nums">{brl(troco)}</span>
                 </div>
               )}
             </div>
