@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ComboboxBusca } from "@/components/ui/combobox-busca";
 import { supabase } from "@/lib/supabase";
-import { useFuncionarios, useMetas, useCriarMeta, useExcluirMeta, useLancarComissoesEmContas, isSupabaseConfigured } from "@/lib/supabase-queries";
+import { useFuncionarios, useMetas, useCriarMeta, useExcluirMeta, useLancarComissoesEmContas, isSupabaseConfigured, useSituacaoFaixaServico, useFaixasServico } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { brl, date } from "@/lib/format";
@@ -72,6 +72,11 @@ export function ComissoesPage() {
     },
   });
 
+  // Faixa de serviço do vendedor escolhido, no mês do fim do período:
+  // quanto vendeu de serviço, em que faixa está e quanto falta para a próxima.
+  const { data: faixasDoVendedor = [] } = useFaixasServico(funcionarioId || null);
+  const { data: situacaoFaixa } = useSituacaoFaixaServico(
+    faixasDoVendedor.length ? funcionarioId : null, fim);
   const nomeDe = (c: any) => c.funcionario?.pessoa?.nome_razao ?? c.funcionario?.cargo ?? "—";
 
   // totais por vendedor, só do que está na tela
@@ -183,6 +188,31 @@ export function ComissoesPage() {
           )}
         </CardContent></Card>
       </div>
+
+      {/* Faixa de comissão de serviço do vendedor filtrado */}
+      {situacaoFaixa && (
+        <Card>
+          <CardContent className="flex flex-wrap items-center gap-x-8 gap-y-2 p-4 text-sm">
+            <div>
+              <p className="text-xs uppercase text-muted-foreground">Serviços no mês</p>
+              <p className="text-lg font-semibold tabular-nums">{brl(Number(situacaoFaixa.total))}</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase text-muted-foreground">Faixa atual</p>
+              <p className="text-lg font-semibold tabular-nums">{Number(situacaoFaixa.percentual)}%</p>
+            </div>
+            <div className="text-muted-foreground">
+              {situacaoFaixa.proxima_venda_minima != null ? (
+                <>Faltam <b className="text-foreground">{brl(Number(situacaoFaixa.falta))}</b> em serviços para
+                  subir para <b className="text-foreground">{Number(situacaoFaixa.proximo_percentual)}%</b> — e o mês
+                  inteiro passa a esse percentual.</>
+              ) : (
+                <>Na faixa mais alta.</>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Metas do período */}
       <Card>
@@ -323,6 +353,7 @@ export function ComissoesPage() {
                   <th className="text-left p-3">Vendedor</th>
                   <th className="text-right p-3">Valor venda</th>
                   <th className="text-right p-3">%</th>
+                  <th className="text-right p-3">Serviço</th>
                   <th className="text-right p-3">Comissão</th>
                   <th className="text-center p-3">Situação</th>
                   <th className="text-center p-3">Conta</th>
@@ -341,6 +372,11 @@ export function ComissoesPage() {
                     <td className="p-3">{nomeDe(c)}</td>
                     <td className="p-3 text-right tabular-nums">{brl(c.valor_venda)}</td>
                     <td className="p-3 text-right tabular-nums">{Number(c.percentual_comissao).toFixed(2)}%</td>
+                    <td className="p-3 text-right text-xs tabular-nums text-muted-foreground">
+                      {Number(c.valor_servicos ?? 0) > 0
+                        ? <>{brl(Number(c.valor_servicos))} a {Number(c.percentual_servico ?? 0)}%{c.faixa_servico ? " (faixa)" : ""}</>
+                        : "—"}
+                    </td>
                     <td className="p-3 text-right tabular-nums font-medium">{brl(c.valor_comissao)}</td>
                     <td className="p-3 text-center">
                       <Badge variant={c.status === "paga" ? "default" : c.status === "cancelada" ? "destructive" : "outline"}>

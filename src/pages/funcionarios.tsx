@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { validarFaixas, faixaAtingida } from "@/lib/faixas-comissao";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Building2, Plus, Search, Loader2, UserCheck, UserX, Mail, Phone, Pencil, UserMinus, RotateCcw, KeyRound } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { useFuncionarios, useCreateFuncionario, useUpdateFuncionario, isSupabaseConfigured } from "@/lib/supabase-queries";
+import { useFuncionarios, useCreateFuncionario, useUpdateFuncionario, isSupabaseConfigured, useFaixasServico, useDefinirFaixasServico } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
@@ -42,6 +43,18 @@ export function FuncionariosPage() {
   // Status dependem de data_demissao, que nenhum caminho de tela preenchia;
   // e demitir só por acesso ao banco.
   const [editando, setEditando] = useState<any | null>(null);
+  // Faixas de comissão de serviço (migration 097): bateu X em serviços no
+  // mês, ganha Y% sobre todos os serviços do mês. Sem faixa, vale o % fixo.
+  const { data: faixasSalvas = [] } = useFaixasServico(editando?.id ?? null);
+  const definirFaixas = useDefinirFaixasServico();
+  const [faixas, setFaixas] = useState<{ venda_minima: string; percentual: string }[]>([]);
+  useEffect(() => {
+    setFaixas(faixasSalvas.map((f) => ({ venda_minima: String(f.venda_minima), percentual: String(f.percentual) })));
+  }, [editando?.id, JSON.stringify(faixasSalvas)]); // eslint-disable-line react-hooks/exhaustive-deps
+  const faixasNumericas = faixas
+    .filter((f) => f.venda_minima !== "" || f.percentual !== "")
+    .map((f) => ({ venda_minima: Number(String(f.venda_minima).replace(",", ".")), percentual: Number(String(f.percentual).replace(",", ".")) }));
+  const checagemFaixas = validarFaixas(faixasNumericas);
   const [form, setForm] = useState({
     nome: "",
     cpf: "",
@@ -205,6 +218,7 @@ export function FuncionariosPage() {
   const handleSalvarEdicao = async () => {
     if (!editando) return;
     if (!form.nome) { toast.error("Informe o nome do funcionário."); return; }
+    if (checagemFaixas.erros.length) { toast.error(checagemFaixas.erros[0]); return; }
     if (!validarAcesso()) return;
     try {
       const usuarioId = await garantirAcesso();
@@ -220,6 +234,7 @@ export function FuncionariosPage() {
         ...camposDaFicha(),
         usuario_id: usuarioId,
       });
+      await definirFaixas.mutateAsync({ funcionarioId: editando.id, faixas: faixasNumericas });
       void qc.invalidateQueries({ queryKey: ["erp_usuarios_vinculo"] });
       void qc.invalidateQueries({ queryKey: ["erp_usuarios"] });
       toast.success(usuarioId && !editando.usuario_id ? "Funcionário atualizado e acesso criado." : "Funcionário atualizado.");
@@ -262,6 +277,7 @@ export function FuncionariosPage() {
   };
 
   const handleCriar = async () => {
+    if (checagemFaixas.erros.length) { toast.error(checagemFaixas.erros[0]); return; }
     if (!form.nome) {
       toast.error("Informe o nome do funcionário.");
       return;
@@ -314,6 +330,11 @@ export function FuncionariosPage() {
       usuario_id: null,
       gerente: false,
     });
+
+    if (criado?.id && faixasNumericas.length) {
+      try { await definirFaixas.mutateAsync({ funcionarioId: criado.id, faixas: faixasNumericas }); }
+      catch (e: any) { toast.warning(`Funcionário salvo, mas as faixas de comissão não: ${e.message ?? e}`); }
+    }
 
     // 3) acesso ao sistema — depois do funcionário existir, para uma falha
     // aqui não deixar a pessoa sem cadastro: ele fica salvo e o acesso pode
@@ -564,8 +585,49 @@ export function FuncionariosPage() {
                     onChange={(e) => setForm({ ...form, comissao_servico: e.target.value })} />
                   <p className="mt-1 text-xs text-muted-foreground">
                     Serviço comissiona diferente de produto: mão de obra não tem custo de
-                    mercadoria. Em branco, vale o percentual geral acima.
+                    mercadoria. Em branco, vale o percentual geral acima. Com faixas
+                    cadastradas abaixo, são elas que valem.
                   </p>
+                </div>
+                <div className="rounded-md border bg-background p-3">
+                  <Label>Faixas de comissão de serviço</Label>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    O total de serviços que a pessoa vender no mês define a faixa, e o
+                    percentual dela vale para todos os serviços do mês.
+                  </p>
+                  <div className="mt-2 space-y-2">
+                    {faixas.map((f, i) => (
+                      <div key={i} className="flex flex-wrap items-center gap-2 text-sm">
+                        <span className="text-muted-foreground">Vendeu a partir de R$</span>
+                        <Input className="h-8 w-28" inputMode="decimal" value={f.venda_minima}
+                          onChange={(e) => setFaixas((l) => l.map((x, k) => k === i ? { ...x, venda_minima: e.target.value } : x))} />
+                        <span className="text-muted-foreground">no mês, ganha</span>
+                        <Input className="h-8 w-20" inputMode="decimal" value={f.percentual}
+                          onChange={(e) => setFaixas((l) => l.map((x, k) => k === i ? { ...x, percentual: e.target.value } : x))} />
+                        <span className="text-muted-foreground">%</span>
+                        <Button type="button" variant="ghost" size="sm" className="h-8 text-destructive"
+                          onClick={() => setFaixas((l) => l.filter((_, k) => k !== i))}>
+                          Remover
+                        </Button>
+                      </div>
+                    ))}
+                    <Button type="button" variant="outline" size="sm"
+                      onClick={() => setFaixas((l) => [...l, { venda_minima: "", percentual: "" }])}>
+                      Adicionar faixa
+                    </Button>
+                  </div>
+                  {checagemFaixas.erros.map((e) => (
+                    <p key={e} className="mt-2 text-xs text-destructive">{e}</p>
+                  ))}
+                  {checagemFaixas.avisos.map((a) => (
+                    <p key={a} className="mt-2 text-xs text-amber-700 dark:text-amber-400">{a}</p>
+                  ))}
+                  {faixasNumericas.length > 0 && checagemFaixas.erros.length === 0 && (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Exemplo: com R$ 1.500 em serviços no mês, a comissão de serviço é{" "}
+                      <b>{faixaAtingida(faixasNumericas, 1500)}%</b> sobre os R$ 1.500.
+                    </p>
+                  )}
                 </div>
               </div>
             </details>

@@ -4099,6 +4099,70 @@ export function useDefinirLojasDoUsuario() {
 }
 
 // ========================================
+// FAIXAS DE COMISSÃO DE SERVIÇO (migration 097)
+// ========================================
+
+export function useFaixasServico(funcionarioId?: string | null) {
+  return useQuery<{ venda_minima: number; percentual: number }[]>({
+    queryKey: ["erp_comissao_servico_faixas", funcionarioId],
+    enabled: !!funcionarioId,
+    queryFn: async () => {
+      if (!isSupabaseConfigured() || !funcionarioId) return [];
+      const { data, error } = await supabase.from("erp_comissao_servico_faixas")
+        .select("venda_minima, percentual").eq("funcionario_id", funcionarioId)
+        .order("venda_minima");
+      if (error) throw error;
+      return (data ?? []).map((f: any) => ({ venda_minima: Number(f.venda_minima), percentual: Number(f.percentual) }));
+    },
+  });
+}
+
+/**
+ * Grava as faixas de um funcionário (troca a lista inteira). O banco refaz
+ * as comissões pendentes do mês dele com as faixas novas.
+ */
+export function useDefinirFaixasServico() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ funcionarioId, faixas }: {
+      funcionarioId: string; faixas: { venda_minima: number; percentual: number }[];
+    }) => {
+      const { error: e1 } = await supabase.from("erp_comissao_servico_faixas")
+        .delete().eq("funcionario_id", funcionarioId);
+      if (e1) throw e1;
+      if (faixas.length) {
+        const { error } = await supabase.from("erp_comissao_servico_faixas")
+          .insert(faixas.map((f) => ({ funcionario_id: funcionarioId, ...f })));
+        if (error) throw error;
+      }
+      return faixas;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["erp_comissao_servico_faixas"] });
+      qc.invalidateQueries({ queryKey: ["erp_faixa_servico_situacao"] });
+      qc.invalidateQueries({ queryKey: ["erp_comissoes"] });
+    },
+  });
+}
+
+/** Quanto o funcionário vendeu de serviço no mês, a faixa atual e a próxima. */
+export function useSituacaoFaixaServico(funcionarioId?: string | null, referencia?: string) {
+  return useQuery<any | null>({
+    queryKey: ["erp_faixa_servico_situacao", funcionarioId, referencia],
+    enabled: !!funcionarioId,
+    queryFn: async () => {
+      if (!isSupabaseConfigured() || !funcionarioId) return null;
+      const { data, error } = await supabase.schema("erp").rpc("situacao_faixa_servico", {
+        p_funcionario: funcionarioId,
+        p_ref: referencia ?? new Date().toISOString().slice(0, 10),
+      });
+      if (error) throw error;
+      return (data as any[])?.[0] ?? null;
+    },
+  });
+}
+
+// ========================================
 // METAS E COMISSÕES (frente 5 do plano)
 // ========================================
 
