@@ -40,7 +40,10 @@ interface ItemForm {
 }
 
 export function RemessasPage() {
-  const { lojaId } = useAutoSelectLoja();
+  // Origem só entre as filiais do usuário: tirar mercadoria do estoque da
+  // filial vizinha não é decisão de quem trabalha em uma só. O destino segue
+  // sendo qualquer loja — mandar para a outra filial é o próprio objetivo.
+  const { lojaId, lojas: minhasLojas } = useAutoSelectLoja();
   const { user } = useAuth();
   const { data: lojas = [] } = useLojas();
   const { data: produtos = [] } = useProdutos();
@@ -473,7 +476,7 @@ export function RemessasPage() {
                   onChange={(e) => setForm({ ...form, loja_origem_id: e.target.value })}
                 >
                   <option value="">Selecione...</option>
-                  {lojasAtivas.map((l) => (
+                  {lojasAtivas.filter((l) => (minhasLojas as any[]).some((m) => m.id === l.id)).map((l) => (
                     <option key={l.id} value={l.id}>
                       {l.apelido} ({l.uf})
                     </option>

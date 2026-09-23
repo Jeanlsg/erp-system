@@ -22,15 +22,18 @@ import { useAuth, logout, roleLabels, ehOperadorDeBalcao, type Role } from "@/li
 import { usePdvModo } from "@/lib/store/pdv-modo";
 import { AppSidebar } from "@/components/app-sidebar";
 import { useLojaAtualStore } from "@/lib/store/loja-atual";
-import { useLojas, isSupabaseConfigured } from "@/lib/supabase-queries";
+import { isSupabaseConfigured } from "@/lib/supabase-queries";
+import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
+import { alternaFiliais } from "@/lib/lojas-permitidas";
 import { useConexao } from "@/lib/offline/conexao";
 import { podeTrocarDeLoja } from "@/lib/loja-do-caixa";
 
 export function PdvLayout() {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
-  const { data: lojas = [] } = useLojas();
-  const currentLojaId = useLojaAtualStore((s) => s.currentLojaId);
+  // só as filiais do usuário: o dono vê todas, os demais as cadastradas
+  // para eles; uma filial = sem seletor (migration 095)
+  const { lojaId: currentLojaId, lojas, semFilial } = useAutoSelectLoja();
   const setCurrentLojaId = useLojaAtualStore((s) => s.setCurrentLojaId);
   const online = useConexao();
   const vendendo = usePdvModo((s) => s.vendendo);
@@ -58,11 +61,6 @@ export function PdvLayout() {
     if (hidratado && !isAuthenticated) navigate("/login", { replace: true });
   }, [hidratado, isAuthenticated, navigate]);
 
-  useEffect(() => {
-    if (lojas.length > 0 && !currentLojaId) {
-      setCurrentLojaId((lojas.find((l: any) => l.matriz) ?? lojas[0]).id);
-    }
-  }, [lojas, currentLojaId, setCurrentLojaId]);
 
 
   if (!hidratado || !isAuthenticated) return null;
@@ -92,7 +90,7 @@ export function PdvLayout() {
                 ?? "—"}
               <Lock className="h-3 w-3 text-muted-foreground" />
             </span>
-          ) : isSupabaseConfigured() && lojas.length > 1 ? (
+          ) : isSupabaseConfigured() && alternaFiliais(lojas) ? (
             <Select value={currentLojaId ?? ""} onValueChange={setCurrentLojaId}>
               <SelectTrigger className="h-8 w-56">
                 <Store className="mr-2 h-3.5 w-3.5" />
@@ -133,7 +131,15 @@ export function PdvLayout() {
       {/* overflow-hidden: o PDV controla o próprio scroll (catálogo e carrinho
           rolam separados) */}
       <main className="min-h-0 flex-1 overflow-hidden">
-        <Outlet />
+        {semFilial ? (
+          <div className="mx-auto mt-16 max-w-md rounded-lg border p-6 text-center">
+            <p className="font-medium">Seu usuário não está em nenhuma filial.</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Peça ao administrador para cadastrar em qual filial você trabalha, em
+              Usuários e Permissões.
+            </p>
+          </div>
+        ) : <Outlet />}
       </main>
       </div>
     </div>

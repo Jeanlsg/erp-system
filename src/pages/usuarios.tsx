@@ -4,6 +4,7 @@
 // ============================================================
 
 import { useState, useMemo, useEffect } from "react";
+import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import {
   Card, CardContent, CardHeader, CardTitle,
 } from "@/components/ui/card";
@@ -29,6 +30,7 @@ import {
   usePapelPermissoes, useSalvarPapelPermissoes,
   useFuncionarios, useCreateFuncionario, useUpdateFuncionario,
   useCaixasPermitidos, useDefinirCaixasPermitidos, useTodosPontosVenda,
+  useUsuarioLojas, useDefinirLojasDoUsuario,
   isSupabaseConfigured,
 } from "@/lib/supabase-queries";
 import { supabase } from "@/lib/supabase";
@@ -354,6 +356,8 @@ export function UsuariosPage() {
     papeis: ["caixa"] as Role[],
     ativo: true,
     loja_default_id: "",
+    /** filiais em que trabalha (erp_usuario_lojas); o dono trabalha em todas */
+    filiais: [] as string[],
     telefone: "",
     senha: "",
     definirSenha: false,
@@ -368,6 +372,12 @@ export function UsuariosPage() {
   const isAdmin = currentUser?.role === "admin";
 
   const lojaMap = Object.fromEntries(lojas.map((l) => [l.id, l.apelido || l.nome]));
+  // Em quais filiais cada usuário trabalha. Fora o dono, ninguém alterna
+  // entre as lojas se não estiver em mais de uma (migration 095).
+  const { data: vinculos = [] } = useUsuarioLojas();
+  const definirFiliais = useDefinirLojasDoUsuario();
+  const { lojaId: lojaIdAtual } = useAutoSelectLoja();
+  const filiaisDe = (id: string) => vinculos.filter((v) => v.usuario_id === id).map((v) => v.loja_id);
 
   // ===== Filtros =====
   const filtered = useMemo(() => {
@@ -406,6 +416,8 @@ export function UsuariosPage() {
       papeis: ["caixa"] as Role[],
       ativo: true,
       loja_default_id: "",
+      // usuário novo começa na filial que está no topo
+      filiais: lojaIdAtual ? [lojaIdAtual] : [],
       telefone: "",
       senha: "",
       // sem convite por e-mail: o link cairia na tela do CRM (SITE_URL é
@@ -426,6 +438,7 @@ export function UsuariosPage() {
       papeis: papeisDe(u),
       ativo: u.ativo ?? true,
       loja_default_id: u.loja_default_id ?? "",
+      filiais: vinculos.filter((v) => v.usuario_id === u.id).map((v) => v.loja_id),
       telefone: u.telefone ?? "",
       senha: "",
       definirSenha: false,
@@ -497,6 +510,15 @@ export function UsuariosPage() {
       toast.error("A senha deve ter pelo menos 6 caracteres");
       return;
     }
+    const editandoDono = !!editId && !!(usuarios.find((x: any) => x.id === editId) as any)?.admin_principal;
+    if (!editandoDono && formUsuario.filiais.length === 0) {
+      toast.error("Marque ao menos uma filial em que o usuário trabalha.");
+      return;
+    }
+    // a filial padrão tem de ser uma das dele; senão, a primeira marcada
+    const lojaPadrao = formUsuario.filiais.includes(formUsuario.loja_default_id)
+      ? formUsuario.loja_default_id
+      : (formUsuario.filiais[0] ?? "");
     try {
       if (editId) {
         // Edição: atualiza via hook normal
@@ -507,9 +529,12 @@ export function UsuariosPage() {
           role: papelPrincipal(formUsuario.papeis),
           papeis: formUsuario.papeis,
           ativo: formUsuario.ativo,
-          loja_default_id: formUsuario.loja_default_id || null,
+          loja_default_id: lojaPadrao || null,
           telefone: formUsuario.telefone || null,
         });
+        if (!editandoDono) {
+          await definirFiliais.mutateAsync({ usuarioId: editId, lojas: formUsuario.filiais });
+        }
 
         // Se admin pediu para trocar a senha do usuário
         if (formUsuario.definirSenha && formUsuario.senha.length >= 6) {
@@ -543,7 +568,7 @@ export function UsuariosPage() {
             nome: formUsuario.nome,
             role: papelPrincipal(formUsuario.papeis),
             papeis: formUsuario.papeis,
-            loja_default_id: formUsuario.loja_default_id || null,
+            loja_default_id: lojaPadrao || null,
             telefone: formUsuario.telefone || null,
             senha: formUsuario.senha,
             send_invite: false,
@@ -554,6 +579,8 @@ export function UsuariosPage() {
         if (!data?.success) throw new Error("Erro desconhecido ao criar usuário");
         toast.success(`Usuário criado. Já pode entrar com ${formUsuario.email} e a senha definida.`);
         if (data.user_id) {
+          try { await definirFiliais.mutateAsync({ usuarioId: data.user_id, lojas: formUsuario.filiais }); }
+          catch (e: any) { toast.warning(`Usuário criado, mas as filiais não: ${e.message ?? e}`, { duration: 10000 }); }
           try { await sincronizarFuncionario(data.user_id); }
           catch (e: any) { toast.warning(`Usuário criado, mas o funcionário não: ${e.message ?? e}`, { duration: 10000 }); }
         }
@@ -827,7 +854,7 @@ export function UsuariosPage() {
                     <th className="text-left p-2">Nome</th>
                     <th className="text-left p-2">Email</th>
                     <th className="text-center p-2">Papel</th>
-                    <th className="text-left p-2">Loja Padrão</th>
+                    <th className="text-left p-2">Filiais</th>
                     <th className="text-center p-2">Permissões</th>
                     <th className="text-center p-2">Status</th>
                     <th className="text-center p-2">Último Login</th>
@@ -881,7 +908,11 @@ export function UsuariosPage() {
                           </div>
                         </td>
                         <td className="p-2 text-sm">
-                          {u.loja_default_id ? lojaMap[u.loja_default_id] ?? "—" : "—"}
+                          {(u as any).admin_principal
+                            ? <span className="text-muted-foreground">todas (dono)</span>
+                            : filiaisDe(u.id).length === 0
+                              ? <span className="text-destructive">nenhuma</span>
+                              : filiaisDe(u.id).map((id) => lojaMap[id] ?? "—").join(", ")}
                         </td>
                         <td className="p-2 text-center">
                           {temCustom ? (
@@ -1046,24 +1077,53 @@ export function UsuariosPage() {
                   <b>{roleLabels[papelPrincipal(formUsuario.papeis)]}</b>.
                 </p>
               </div>
-              <div>
-                <Label>Loja Padrão</Label>
-                <Select
-                  value={formUsuario.loja_default_id || "nenhuma"}
-                  onValueChange={(v) => setFormUsuario({ ...formUsuario, loja_default_id: v === "nenhuma" ? "" : v })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="nenhuma">— Nenhuma —</SelectItem>
-                    {lojas.map((l) => (
-                      <SelectItem key={l.id} value={l.id}>
-                        {l.apelido || l.nome}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="col-span-2">
+                <Label>Filiais em que trabalha</Label>
+                {editId && (usuarios.find((x: any) => x.id === editId) as any)?.admin_principal ? (
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Dono do sistema: trabalha em todas as filiais e alterna entre elas no topo.
+                  </p>
+                ) : (
+                  <>
+                    <div className="mt-1 flex flex-wrap gap-3">
+                      {lojas.map((l) => {
+                        const marcada = formUsuario.filiais.includes(l.id);
+                        return (
+                          <label key={l.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                            <input type="checkbox" className="h-4 w-4" checked={marcada}
+                              onChange={(e) => setFormUsuario({
+                                ...formUsuario,
+                                filiais: e.target.checked
+                                  ? [...formUsuario.filiais, l.id]
+                                  : formUsuario.filiais.filter((x) => x !== l.id),
+                              })} />
+                            {l.apelido || l.nome}
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      Com uma filial, o usuário não vê o seletor de loja. Com duas ou mais, alterna
+                      entre elas no topo. O banco recusa abrir caixa em filial que não é dele.
+                    </p>
+                    {formUsuario.filiais.length > 1 && (
+                      <div className="mt-2 max-w-xs">
+                        <Label className="text-xs">Filial que abre primeiro</Label>
+                        <Select
+                          value={formUsuario.filiais.includes(formUsuario.loja_default_id) ? formUsuario.loja_default_id : formUsuario.filiais[0]}
+                          onValueChange={(v) => setFormUsuario({ ...formUsuario, loja_default_id: v })}
+                        >
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {lojas.filter((l) => formUsuario.filiais.includes(l.id)).map((l) => (
+                              <SelectItem key={l.id} value={l.id}>{l.apelido || l.nome}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">

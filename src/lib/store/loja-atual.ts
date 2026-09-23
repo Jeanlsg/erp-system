@@ -3,7 +3,8 @@ import { persist } from "zustand/middleware";
 
 interface LojaAtualState {
   currentLojaId: string | null;
-  setCurrentLojaId: (id: string) => void;
+  /** null = nenhuma filial (usuário sem filial cadastrada) */
+  setCurrentLojaId: (id: string | null) => void;
 }
 
 export const useLojaAtualStore = create<LojaAtualState>()(

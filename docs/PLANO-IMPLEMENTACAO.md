@@ -127,6 +127,17 @@ liga a venda ao pedido porque o carrinho do PDV ainda não tem esse vínculo.
 memória da tela. Guardá-lo no navegador é possível e pequeno, mas é decisão à
 parte.
 
+**5. A leitura dos dados ainda não é separada por filial no banco.** Desde a
+095, cada usuário trabalha só nas filiais cadastradas para ele: as telas só
+mostram essas, e o banco recusa abrir caixa em filial que não é dele — é por
+aí que o dinheiro entra. Mas as regras de LEITURA das tabelas de movimento
+ainda deixam qualquer usuário do ERP ler as duas filiais pela API.
+
+A correção é trocar as policies de SELECT das tabelas com `loja_id` para
+`erp.usuario_tem_loja(erp.current_erp_user_id(), loja_id)`. São dezenas de
+tabelas e muda o que cada usuário enxerga, então espera aprovação e um teste
+logado como cada papel.
+
 ### O que falta para fechar os ajustes
 
 Em ordem de quem está esperando o quê.

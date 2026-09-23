@@ -19,7 +19,7 @@ import {
   useFluxoCaixaKpis, useFormasRecebimento, useTopProdutosVendidos,
   useTaxasCartao, useSangriasPorPeriodo, useEntradasExtrasPorPeriodo,
   useVendasPorPeriodo, useContas, useNotasFiscais, useVendas,
-  useCreateConta, useBaixarConta, useLojas, isSupabaseConfigured,
+  useCreateConta, useBaixarConta, isSupabaseConfigured,
 } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
@@ -40,8 +40,9 @@ type AbaAtiva = "fluxo" | "vendas" | "graficos" | "formas" | "taxas" | "pagas" |
   | "recebidas" | "areceber" | "nf" | "relatorios" | "gerencial";
 
 export function FinanceiroPage() {
-  const { lojaId } = useAutoSelectLoja();
-  const { data: lojas = [] } = useLojas();
+  // só as filiais do usuário: importar conta para a filial vizinha não é
+  // decisão de quem trabalha em uma só
+  const { lojaId, lojas } = useAutoSelectLoja();
   const baixar = useBaixarConta();
   const [searchParams, setSearchParams] = useSearchParams();
   const qc = useQueryClient();

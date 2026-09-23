@@ -31,6 +31,8 @@ import { useAuth, roleLabels, logout, ehOperadorDeBalcao } from "@/lib/store/aut
 import { ajudaDaRota } from "@/lib/ajuda-paginas";
 import { useLojaAtualStore } from "@/lib/store/loja-atual";
 import { useLojas, isSupabaseConfigured } from "@/lib/supabase-queries";
+import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
+import { alternaFiliais } from "@/lib/lojas-permitidas";
 
 /**
  * Telas de cadastro comum a todas as filiais.
@@ -61,8 +63,12 @@ export function RootLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, isAuthenticated } = useAuth();
-  const { data: lojas = [], isSuccess: lojasCarregadas } = useLojas();
-  const currentLojaId = useLojaAtualStore((s) => s.currentLojaId);
+  // todas as lojas do sistema: só para saber se o setup já foi feito
+  const { data: todasLojas = [], isSuccess: lojasCarregadas } = useLojas();
+  // as filiais DESTE usuário: o dono vê todas; os demais, só as cadastradas
+  // para eles. Uma filial = sem seletor. O hook também corrige a loja
+  // guardada no navegador quando ela deixa de ser do usuário.
+  const { lojaId: currentLojaId, lojas, semFilial } = useAutoSelectLoja();
   const setCurrentLojaId = useLojaAtualStore((s) => s.setCurrentLojaId);
 
   const dadoDaEmpresa = ROTAS_DA_EMPRESA.includes(location.pathname);
@@ -92,22 +98,14 @@ export function RootLayout() {
     }
   }, [hydrated, isAuthenticated, location.pathname, navigate]);
 
-  // Auto-selecionar primeira loja ao carregar
-  useEffect(() => {
-    if (lojas.length > 0 && !currentLojaId) {
-      const matriz = lojas.find((l) => l.matriz) ?? lojas[0];
-      setCurrentLojaId(matriz.id);
-    }
-  }, [lojas, currentLojaId, setCurrentLojaId]);
-
   // Redirecionar para setup se não houver nenhuma loja cadastrada.
   // Só depois da query RESOLVER: enquanto carrega, `lojas` é [] e o
   // redirect mandava usuário com loja cadastrada para o /setup.
   useEffect(() => {
-    if (hydrated && isAuthenticated && lojasCarregadas && lojas.length === 0) {
+    if (hydrated && isAuthenticated && lojasCarregadas && todasLojas.length === 0) {
       navigate("/setup", { replace: true });
     }
-  }, [hydrated, isAuthenticated, lojasCarregadas, lojas.length, navigate]);
+  }, [hydrated, isAuthenticated, lojasCarregadas, todasLojas.length, navigate]);
 
   function handleLogout() {
     logout();
@@ -127,7 +125,7 @@ export function RootLayout() {
     );
   }
 
-  const lojaAtual = lojas.find((l) => l.id === currentLojaId);
+  const lojaAtual = (lojas as any[]).find((l) => l.id === currentLojaId);
 
   return (
     <div className="flex min-h-screen w-full bg-background">
@@ -136,7 +134,8 @@ export function RootLayout() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-10 flex h-14 items-center justify-between gap-3 border-b bg-background/95 px-4 backdrop-blur">
           <div className="flex items-center gap-3">
-            {isSupabaseConfigured() && lojas.length > 0 ? (
+            {/* Seletor só para quem trabalha em mais de uma filial (ou o dono). */}
+            {isSupabaseConfigured() && alternaFiliais(lojas) ? (
               <Select value={currentLojaId ?? ""} onValueChange={setCurrentLojaId}>
                 <SelectTrigger className="w-48">
                   <Store className="mr-2 h-4 w-4" />
@@ -266,7 +265,15 @@ export function RootLayout() {
           <div className="p-4 md:p-6">
             <FeatureGuard path={location.pathname}>
               <PermissaoGuard path={location.pathname}>
-                <Outlet />
+                {semFilial ? (
+                  <div className="mx-auto mt-16 max-w-md rounded-lg border p-6 text-center">
+                    <p className="font-medium">Seu usuário não está em nenhuma filial.</p>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Peça ao administrador para cadastrar em qual filial você trabalha, em
+                      Usuários e Permissões.
+                    </p>
+                  </div>
+                ) : <Outlet />}
               </PermissaoGuard>
             </FeatureGuard>
           </div>

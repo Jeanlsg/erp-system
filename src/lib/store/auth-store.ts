@@ -76,6 +76,8 @@ export interface User {
   ativo: boolean;
   /** Dono do sistema: só ele vê página desativada e troca o conjunto de telas. */
   admin_principal?: boolean;
+  /** Filial que abre primeiro, entre as do usuário (migration 095). */
+  loja_default_id?: string | null;
   /**
    * Permissões customizadas deste usuário, gravadas na tela Usuários e
    * Permissões. Vazio ou ausente = usa o padrão do papel.
@@ -216,7 +218,7 @@ export async function login(
     // O id do erp_usuarios == auth.users.id (FK direta)
     const { data: perfil, error: perfilError } = await supabase
       .from("erp_usuarios")
-      .select("id, email, nome, role, papeis, ativo, admin_principal, permissoes")
+      .select("id, email, nome, role, papeis, ativo, admin_principal, permissoes, loja_default_id")
       .eq("id", data.user.id)
       .single();
 
@@ -238,6 +240,7 @@ export async function login(
       papeis: ((perfil as any).papeis ?? []) as Role[],
       ativo: perfil.ativo,
       admin_principal: !!(perfil as any).admin_principal,
+      loja_default_id: (perfil as any).loja_default_id ?? null,
       permissoes: ((perfil as any).permissoes ?? null) as Record<string, boolean> | null,
     };
     useAuthStore.getState().setUser(user);

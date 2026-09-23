@@ -34,8 +34,7 @@ import {
   useProdutosCompleto, useProdutos, useCreateProduto, useUpdateProduto, invalidarProdutos,
   useAjustarEstoque,
   useCreateCategoria, useUpdateCategoria, useDeleteCategoria,
-  useCategorias, useLojas,
-  isSupabaseConfigured,
+  useCategorias, isSupabaseConfigured,
 } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
@@ -76,7 +75,7 @@ export function ProdutosEstoqueLotesPage() {
   // que começava na loja do topo e depois se descolava dele: trocar a loja
   // no topo não mudava a lista, e "Todas as lojas" somava saldos de gavetas
   // que não se misturam.
-  const { lojaId: lojaIdHook } = useAutoSelectLoja();
+  const { lojaId: lojaIdHook, lojas } = useAutoSelectLoja();
   const lojaFiltro = lojaIdHook ?? "";
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -129,7 +128,6 @@ export function ProdutosEstoqueLotesPage() {
   };
 
   // ===== Queries =====
-  const { data: lojas = [] } = useLojas();
   const { data: categorias = [] } = useCategorias();
   const { data: produtos = [] } = useProdutos({});
   // View consolidada: 1 linha por produto+loja

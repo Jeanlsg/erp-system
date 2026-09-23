@@ -3985,6 +3985,47 @@ export function useUpsertConfiguracao() {
 }
 
 // ========================================
+// FILIAIS DE CADA USUÁRIO (migration 095)
+// ========================================
+
+/** Todos os vínculos usuário × filial — a tela de usuários (só admin lê todos). */
+export function useUsuarioLojas() {
+  return useQuery<{ usuario_id: string; loja_id: string }[]>({
+    queryKey: ["erp_usuario_lojas"],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      const { data, error } = await supabase.from("erp_usuario_lojas").select("usuario_id, loja_id");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+/**
+ * Grava a lista inteira de filiais de um usuário. Invalida também as filiais
+ * do usuário logado: se o admin editou a si mesmo, o seletor muda na hora.
+ */
+export function useDefinirLojasDoUsuario() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ usuarioId, lojas }: { usuarioId: string; lojas: string[] }) => {
+      const { error: errDel } = await supabase.from("erp_usuario_lojas").delete().eq("usuario_id", usuarioId);
+      if (errDel) throw errDel;
+      if (lojas.length > 0) {
+        const { error } = await supabase.from("erp_usuario_lojas")
+          .insert(lojas.map((loja_id) => ({ usuario_id: usuarioId, loja_id })));
+        if (error) throw error;
+      }
+      return { usuarioId, lojas };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["erp_usuario_lojas"] });
+      qc.invalidateQueries({ queryKey: ["erp_lojas_do_usuario"] });
+    },
+  });
+}
+
+// ========================================
 // METAS E COMISSÕES (frente 5 do plano)
 // ========================================
 
