@@ -26,6 +26,7 @@ import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { useAuth, useAuthStore } from "@/lib/store/auth-store";
 import { usePdvModo } from "@/lib/store/pdv-modo";
 import { imprimirComprovante } from "@/lib/comprovante-fechamento";
+import { montarDadosFechamento } from "@/lib/dados-fechamento";
 import { supabase } from "@/lib/supabase";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { brl } from "@/lib/format";
@@ -53,7 +54,7 @@ interface CartItem {
 export function PDVPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { lojaId, lojas } = useAutoSelectLoja();
+  const { lojaId } = useAutoSelectLoja();
   const emitirNFCe = useEmitirNFeVenda();
   const createCaixa = useCreateCaixa();
   const fecharCaixa = useFecharCaixa();
@@ -392,37 +393,22 @@ export function PDVPage() {
         observacoes: "",
         encerradoPor: user?.id,
       });
-      // O comprovante sai AGORA, com os números na tela — conferência que
-      // depende de alguém abrir um relatório depois não acontece no fim do
-      // expediente. Os dados vêm do que o operador acabou de ver.
-      const lojaNome = (lojas.find((l: any) => l.id === lojaId) as any)?.apelido
-        ?? (lojas.find((l: any) => l.id === lojaId) as any)?.nome ?? "";
-      const pontoNome = (pontosVenda.find((pv: any) => pv.id === c?.ponto_venda_id) as any)?.nome
-        ?? `Caixa ${caixaAberto.numero_caixa}`;
-      const abriu = (funcionarios.find((f: any) => f.usuario_id === caixaAberto.usuario_id) as any)?.nome
-        ?? user?.nome ?? "—";
-
-      const saiu = imprimirComprovante({
-        loja: lojaNome,
-        caixaNome: pontoNome,
-        aberturaEm: caixaAberto.data_abertura ?? null,
-        fechamentoEm: new Date().toISOString(),
-        operadorAbertura: abriu,
-        operadorFechamento: user?.nome ?? "—",
-        valorInicial: Number(caixaAberto.valor_inicial ?? 0),
-        vendasDinheiro: Number(c?.vendas_dinheiro ?? 0),
-        entradas: Number(c?.entradas_dinheiro ?? 0),
-        sangrias: Number(c?.sangrias_dinheiro ?? 0),
-        esperado: valorEsperadoCaixa,
-        informado: contado,
-        formas: [
-          { nome: "Dinheiro (contado)", valor: contado },
-          { nome: "PIX", valor: Number(c?.vendas_pix ?? 0) },
-          { nome: "Cartão crédito", valor: Number(c?.vendas_cartao_credito ?? 0) },
-          { nome: "Cartão débito", valor: Number(c?.vendas_cartao_debito ?? 0) },
-          { nome: "Outras formas", valor: Number(c?.vendas_outras ?? 0) },
-        ].filter((f) => f.valor > 0 || f.nome.startsWith("Dinheiro")),
-      });
+      // O comprovante sai AGORA — conferência que depende de alguém lembrar
+      // de abrir um relatório depois não acontece no fim do expediente. Os
+      // dados vêm do banco, no formato do comprovante que a loja já conhece.
+      let saiu = false;
+      try {
+        const dados = await montarDadosFechamento(caixaAberto.id, {
+          informado: contado,
+          fechamentoEm: new Date().toISOString(),
+          operadorFechamento: user?.nome,
+        });
+        saiu = imprimirComprovante(dados);
+      } catch (e: any) {
+        // o caixa JÁ fechou; falha no papel não desfaz isso
+        toast.warning(`Caixa fechado, mas o comprovante falhou: ${e.message ?? e}. Reimprima em Caixa › histórico.`,
+          { duration: 12000 });
+      }
 
       setModalFechamento(false);
       setValorContado("");

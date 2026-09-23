@@ -10,7 +10,7 @@
 // do fechamento: conferir depois tem de dar no mesmo papel de antes.
 // ============================================================
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Loader2, Printer, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -19,10 +19,11 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose,
 } from "@/components/ui/dialog";
 import {
-  useCaixaPorId, useSangrias, useEntradasExtras, useFechamentosCaixa,
+  useCaixaPorId, useSangrias, useEntradasExtras,
   useVendas, useVendedores,
 } from "@/lib/supabase-queries";
 import { imprimirComprovante } from "@/lib/comprovante-fechamento";
+import { montarDadosFechamento } from "@/lib/dados-fechamento";
 import { brl, dateTime } from "@/lib/format";
 
 const NOME_FORMA: Record<string, string> = {
@@ -49,14 +50,12 @@ export function DetalhesCaixaDialog({
   const { data: caixa, isLoading } = useCaixaPorId(caixaId ?? undefined);
   const { data: sangrias = [] } = useSangrias(caixaId ?? undefined);
   const { data: entradas = [] } = useEntradasExtras(caixaId ?? undefined);
-  const { data: fechamentos = [] } = useFechamentosCaixa(caixaId ?? undefined);
   const { data: vendedores = [] } = useVendedores();
   // as vendas deste turno; o filtro por caixa é feito aqui porque o hook
   // de vendas é por loja e período
   const { data: vendas = [] } = useVendas({ lojaId: (caixa as any)?.loja_id });
 
   const c = caixa as any;
-  const fechamento = (fechamentos as any[])[0];
 
   const vendasDoCaixa = useMemo(
     () => (vendas as any[]).filter((v) => v.caixa_id === caixaId && v.status === "finalizada"),
@@ -73,40 +72,22 @@ export function DetalhesCaixaDialog({
   const esperado = Number(c?.valor_esperado_gaveta ?? 0);
   const diferenca = informado - esperado;
 
-  const reimprimir = () => {
-    if (!c) return;
-    const ok = imprimirComprovante({
-      loja: c.loja?.apelido ?? c.loja?.nome ?? "",
-      caixaNome: c.ponto?.nome ?? `Caixa ${c.numero_caixa}`,
-      aberturaEm: c.data_abertura ?? null,
-      fechamentoEm: c.data_fechamento ?? null,
-      operadorAbertura: c.usuario?.nome ?? nomeDe(c.usuario_id) ?? "—",
-      operadorFechamento: nomeDe(c.encerrado_por) ?? c.usuario?.nome ?? "—",
-      valorInicial: Number(c.valor_inicial ?? 0),
-      vendasDinheiro: Number(c.vendas_dinheiro ?? 0),
-      entradas: Number(c.entradas_dinheiro ?? 0),
-      sangrias: Number(c.sangrias_dinheiro ?? 0),
-      esperado, informado,
-      formas: [
-        { nome: "Dinheiro (contado)", valor: informado },
-        { nome: "PIX", valor: Number(c.vendas_pix ?? 0) },
-        { nome: "Cartão crédito", valor: Number(c.vendas_cartao_credito ?? 0) },
-        { nome: "Cartão débito", valor: Number(c.vendas_cartao_debito ?? 0) },
-        { nome: "Outras formas", valor: Number(c.vendas_outras ?? 0) },
-      ],
-      movimentos: [
-        ...(sangrias as any[]).map((s) => ({
-          tipo: "sangria" as const, descricao: s.motivo ?? "sangria",
-          valor: Number(s.valor), forma: s.forma_pagamento,
-        })),
-        ...(entradas as any[]).map((e) => ({
-          tipo: "entrada" as const, descricao: e.motivo ?? "entrada",
-          valor: Number(e.valor), forma: e.forma_pagamento,
-        })),
-      ],
-      observacoes: c.observacoes ?? fechamento?.observacoes ?? null,
-    });
-    if (!ok) toast.error("O comprovante não abriu — libere pop-ups deste site.");
+  const [imprimindo, setImprimindo] = useState(false);
+  const reimprimir = async () => {
+    if (!caixaId) return;
+    setImprimindo(true);
+    try {
+      // MESMA função do fechamento: o papel de hoje e o de amanhã têm de
+      // sair iguais, senão conferir depois não prova nada
+      const dados = await montarDadosFechamento(caixaId);
+      if (!imprimirComprovante(dados)) {
+        toast.error("O comprovante não abriu — libere pop-ups deste site.");
+      }
+    } catch (e: any) {
+      toast.error(`Não foi possível montar o comprovante: ${e.message ?? e}`);
+    } finally {
+      setImprimindo(false);
+    }
   };
 
   return (
@@ -218,8 +199,9 @@ export function DetalhesCaixaDialog({
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
           {!aberto && c && (
-            <Button onClick={reimprimir}>
-              <Printer className="mr-1 h-4 w-4" /> Reimprimir comprovante
+            <Button onClick={() => void reimprimir()} disabled={imprimindo}>
+              {imprimindo ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Printer className="mr-1 h-4 w-4" />}
+              Reimprimir comprovante
             </Button>
           )}
         </DialogFooter>
