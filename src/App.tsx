@@ -44,6 +44,7 @@ import { KitsPage } from "@/pages/kits";
 import { ComprasPage } from "@/pages/compras";
 import { RelatoriosPage } from "@/pages/relatorios";
 import { RelatoriosBiPage } from "@/pages/relatorios.bi";
+import { RelatorioDetalhePage } from "@/pages/relatorio-detalhe";
 import { DevolucoesPage } from "@/pages/devolucoes";
 import { FiscalPage } from "@/pages/fiscal";
 import { FiscalDfePage } from "@/pages/fiscal.dfe";
@@ -253,6 +254,8 @@ export default function App() {
         <Route path="fiscal/escrituracao" element={<FiscalSpedPage />} />
         <Route path="relatorios" element={<RelatoriosPage />} />
         <Route path="relatorios/analise" element={<RelatoriosBiPage />} />
+        {/* cada relatório financeiro é uma tela, não um pop-up */}
+        <Route path="relatorios/financeiro/:tipo" element={<RelatorioDetalhePage />} />
         <Route path="lojas" element={<LojasPage />} />
         <Route path="configuracoes" element={<ConfiguracoesPage />} />
         <Route path="ajuda" element={<AjudaPage />} />

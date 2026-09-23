@@ -25,6 +25,14 @@ describe("permissaoDaRota", () => {
     // /gestao/clientes não pode herdar de um prefixo mais curto
     expect(permissaoDaRota("/gestao/clientes")).toBe("cliente.editar");
   });
+  it("as telas de relatório financeiro herdam a permissão de /relatorios", () => {
+    // /relatorios/financeiro/sangrias não tem item de menu próprio; quem
+    // protege é o prefixo. Sem isso, qualquer usuário abriria o financeiro
+    // pela URL do relatório.
+    expect(permissaoDaRota("/relatorios/financeiro/sangrias")).toBe("relatorio.ver");
+    expect(permissaoDaRota("/relatorios/financeiro/fechamentos")).toBe("relatorio.ver");
+  });
+
   it("rota desconhecida não trava o sistema", () => {
     expect(permissaoDaRota("/rota-que-nao-existe")).toBeNull();
   });
