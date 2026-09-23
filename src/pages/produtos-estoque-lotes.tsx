@@ -10,7 +10,7 @@
 //   4. Tabela unificada de produtos/estoque/lotes
 // ============================================================
 
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Card, CardContent, CardHeader, CardTitle,
@@ -72,10 +72,17 @@ const ACOES_RAPIDAS = [
 type AcaoId = typeof ACOES_RAPIDAS[number]["id"];
 
 export function ProdutosEstoqueLotesPage() {
+  // Estoque é da filial do seletor do topo. A tela tinha um filtro próprio
+  // que começava na loja do topo e depois se descolava dele: trocar a loja
+  // no topo não mudava a lista, e "Todas as lojas" somava saldos de gavetas
+  // que não se misturam.
   const { lojaId: lojaIdHook } = useAutoSelectLoja();
-  const [lojaFiltro, setLojaFiltro] = useState<string>(lojaIdHook ?? "");
+  const lojaFiltro = lojaIdHook ?? "";
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  // página volta ao início quando a filial muda — a 5ª página de uma loja
+  // não é a 5ª da outra
+  useEffect(() => { setPage(1); }, [lojaFiltro]);
   const [pageSize, setPageSize] = useState(25);
   const [categoriaFiltro, setCategoriaFiltro] = useState<string>("todas");
 
@@ -500,20 +507,6 @@ export function ProdutosEstoqueLotesPage() {
                   onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                 />
               </div>
-            </div>
-            <div>
-              <Label className="text-xs">Filtrar por Loja</Label>
-              <Select value={lojaFiltro || "todas"} onValueChange={(v) => { setLojaFiltro(v === "todas" ? "" : v); setPage(1); }}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todas">Todas as lojas</SelectItem>
-                  {lojas.map((l) => (
-                    <SelectItem key={l.id} value={l.id}>{l.apelido || l.nome}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
             <div>
               <Label className="text-xs">Classificação</Label>

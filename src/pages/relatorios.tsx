@@ -14,7 +14,7 @@
 // que saiu da prateleira, o que passou pelo caixa e o que está a receber.
 // ============================================================
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { BarChart3, Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -28,7 +28,7 @@ import { TabelaRelatorio } from "@/components/relatorio/tabela-relatorio";
 import { DetalhesCaixaDialog } from "@/components/detalhes-caixa";
 import type { Coluna } from "@/lib/exportar-csv";
 import {
-  useRelatorioVendas, useRelatorioFechamentos, useContas, useVendedores, useLojas,
+  useRelatorioVendas, useRelatorioFechamentos, useContas, useVendedores,
   isSupabaseConfigured,
 } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
@@ -45,16 +45,14 @@ export function RelatoriosPage({ embutido = false }: { embutido?: boolean } = {}
   const [aba, setAba] = useState("vendas");
   const [caixaDetalhe, setCaixaDetalhe] = useState<string | null>(null);
   const [periodo, setPeriodo] = useState<Periodo>(periodoPadrao(30));
-  // começa na loja do cabeçalho: é a que o operador está olhando
-  const [loja, setLoja] = useState<string>(TODOS);
-  useEffect(() => { if (lojaId && loja === TODOS) setLoja(lojaId); }, [lojaId]);
+  // A filial é a do seletor do topo. Havia um filtro de loja próprio que
+  // só copiava o topo na primeira vez e depois se descolava dele.
   const [vendedor, setVendedor] = useState<string>(TODOS);
   const [forma, setForma] = useState<string>(TODOS);
   const [status, setStatus] = useState<string>("finalizada");
 
-  const { data: lojas = [] } = useLojas();
   const { data: vendedores = [] } = useVendedores();
-  const lojaFiltro = loja === TODOS ? undefined : loja;
+  const lojaFiltro = lojaId ?? undefined;
 
   const { data: vendas = [], isLoading: carregandoVendas } =
     useRelatorioVendas({ lojaId: lojaFiltro, de: periodo.de, ate: periodo.ate });
@@ -175,7 +173,7 @@ export function RelatoriosPage({ embutido = false }: { embutido?: boolean } = {}
 
   const limpar = () => {
     setPeriodo(periodoPadrao(30));
-    setLoja(TODOS); setVendedor(TODOS); setForma(TODOS); setStatus("finalizada");
+    setVendedor(TODOS); setForma(TODOS); setStatus("finalizada");
   };
 
   return (
@@ -192,18 +190,6 @@ export function RelatoriosPage({ embutido = false }: { embutido?: boolean } = {}
       )}
 
       <FiltrosRelatorio periodo={periodo} aoMudarPeriodo={setPeriodo} aoLimpar={limpar}>
-        <div>
-          <Label className="text-xs">Loja</Label>
-          <Select value={loja} onValueChange={setLoja}>
-            <SelectTrigger className="mt-1 w-44"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value={TODOS}>Todas as lojas</SelectItem>
-              {lojas.map((l: any) => (
-                <SelectItem key={l.id} value={l.id}>{l.apelido || l.nome}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
         <div>
           <Label className="text-xs">Vendedor</Label>
           <Select value={vendedor} onValueChange={setVendedor}>

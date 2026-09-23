@@ -6,8 +6,10 @@
 // Quem queria saber como a loja ia precisava olhar as duas e conciliar de
 // cabeça — e "Estoque baixo" aparecia nas duas, com contas diferentes.
 //
-// Aqui é uma tela só, com período e lojas escolhidos no topo: o mesmo
-// filtro vale para tudo que está abaixo, dos KPIs ao comparativo.
+// Aqui é uma tela só, com o período escolhido na página e a filial escolhida
+// no seletor do topo — como em todas as telas de movimento. Cada filial tem
+// os próprios dados; a tela tinha caixas de seleção de loja próprias, que
+// discordavam do topo e deixavam o número da tela sem dono claro.
 //
 // As vendas vêm de useRelatorioVendas, não de useVendas: aquele para em
 // 200 linhas e a Visão Geral avisava, em letra miúda, que o faturamento
@@ -16,25 +18,24 @@
 
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import {
   Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import {
-  AlertTriangle, ArrowUpRight, PackageX, Receipt, Store, TrendingUp, Wallet,
+  AlertTriangle, ArrowUpRight, PackageX, Receipt, TrendingUp, Wallet,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { FiltrosRelatorio, periodoPadrao, type Periodo } from "@/components/relatorio/filtros-relatorio";
 import {
-  useLojas, useProdutosComEstoque, useRelatorioVendas, useContasVencidas,
+  useProdutosComEstoque, useRelatorioVendas, useContasVencidas,
   isSupabaseConfigured,
 } from "@/lib/supabase-queries";
 import { brl, num, pct } from "@/lib/format";
@@ -75,15 +76,18 @@ function Kpi({ label, value, hint, icon: Icon, tone = "default", para }: any) {
 
 export function DashboardPage() {
   const [periodo, setPeriodo] = useState<Periodo>(periodoPadrao(30));
-  const [selecionadas, setSelecionadas] = useState<string[]>([]);
 
-  const { data: lojas = [] } = useLojas();
-  const { data: produtos = [] } = useProdutosComEstoque();
-  const { data: contasVencidas = [] } = useContasVencidas();
-  const { data: vendas = [], isLoading } = useRelatorioVendas({ de: periodo.de, ate: periodo.ate });
+  // A filial é a do seletor do topo. Consulta já filtrada no banco, não
+  // filtrada depois na tela: buscar as duas lojas para jogar uma fora é
+  // trazer o dobro de venda para mostrar metade.
+  const { lojaId, lojas } = useAutoSelectLoja();
+  const loja = lojaId ?? undefined;
+  const { data: produtos = [] } = useProdutosComEstoque(loja);
+  const { data: contasVencidas = [] } = useContasVencidas(loja);
+  const { data: vendas = [], isLoading } = useRelatorioVendas({ lojaId: loja, de: periodo.de, ate: periodo.ate });
+  const nomeLoja = (lojas as any[]).find((l) => l.id === lojaId)?.apelido ?? "filial";
 
-  // nenhuma marcada = todas: abrir a tela já mostrando a rede inteira
-  const lojasAtivas = selecionadas.length === 0 ? lojas.map((l: any) => l.id) : selecionadas;
+  const lojasAtivas = useMemo(() => (lojaId ? [lojaId] : []), [lojaId]);
 
   const vendasFiltradas = useMemo(
     () => (vendas as any[]).filter((v) => lojasAtivas.includes(v.loja_id) && v.status === "finalizada"),
@@ -167,23 +171,18 @@ export function DashboardPage() {
     return [...m.values()].sort((a, b) => b.total - a.total).slice(0, 8);
   }, [vendasFiltradas]);
 
-  const porLoja = useMemo(() => {
-    return lojasAtivas.map((lojaId: string) => {
-      const loja = lojas.find((l: any) => l.id === lojaId);
-      const vs = vendasFiltradas.filter((v) => v.loja_id === lojaId);
-      const receita = vs.reduce((s, v) => s + Number(v.total || 0), 0);
-      const custo = vs.reduce((s, v) => s + Number(v.custo_total || 0), 0);
-      const lucro = receita - custo;
-      return {
-        id: lojaId, nome: loja?.apelido ?? lojaId, vendas: vs.length, receita, lucro,
-        margem: receita > 0 ? lucro / receita : 0,
-        ticket: vs.length ? receita / vs.length : 0,
-      };
-    }).sort((a, b) => b.receita - a.receita);
-  }, [vendasFiltradas, lojasAtivas, lojas]);
 
-  const alternarLoja = (id: string) =>
-    setSelecionadas((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
+  // O que repor primeiro: esgotados antes, depois os mais abaixo do mínimo.
+  // Substitui o "comparativo por loja", que com uma filial por vez teria
+  // sempre uma linha só, com 100% de participação.
+  const paraRepor = useMemo(() => {
+    if (!lojaId) return [];
+    return (produtos as any[])
+      .map((p) => ({ p, q: Number(p.estoque_por_loja?.[lojaId] ?? 0), min: Number(p.estoque_minimo ?? 0) }))
+      .filter((x) => x.q === 0 || (x.min > 0 && x.q <= x.min))
+      .sort((a, b) => (a.q === 0 ? -1 : 0) - (b.q === 0 ? -1 : 0) || (a.q - a.min) - (b.q - b.min))
+      .slice(0, 8);
+  }, [produtos, lojaId]);
 
   if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="Visão geral" />;
 
@@ -192,37 +191,17 @@ export function DashboardPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Visão geral</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Visão geral · {nomeLoja}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          O período e as lojas escolhidos aqui valem para tudo nesta tela.
+          Números só desta filial. Para ver a outra, troque a loja no topo.
         </p>
       </div>
 
       <FiltrosRelatorio
         periodo={periodo}
         aoMudarPeriodo={setPeriodo}
-        aoLimpar={() => { setPeriodo(periodoPadrao(30)); setSelecionadas([]); }}
+        aoLimpar={() => setPeriodo(periodoPadrao(30))}
       >
-        {lojas.length > 1 && (
-          <div>
-            <p className="mb-1 flex items-center gap-1 text-xs text-muted-foreground">
-              <Store className="h-3.5 w-3.5" /> Lojas
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {lojas.map((l: any) => {
-                const on = lojasAtivas.includes(l.id);
-                return (
-                  <label key={l.id}
-                    className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition ${
-                      on ? "border-primary bg-primary/10" : "border-border bg-card text-muted-foreground"}`}>
-                    <Checkbox checked={on} onCheckedChange={() => alternarLoja(l.id)} />
-                    <span>{l.apelido ?? l.nome}</span>
-                  </label>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </FiltrosRelatorio>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -248,7 +227,7 @@ export function DashboardPage() {
       {semVenda ? (
         <Card>
           <CardContent className="p-12 text-center text-sm text-muted-foreground">
-            Nenhuma venda no período e nas lojas escolhidas.
+            Nenhuma venda desta filial no período.
           </CardContent>
         </Card>
       ) : (
@@ -315,36 +294,38 @@ export function DashboardPage() {
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-base">Comparativo por loja</CardTitle>
-                <Badge variant="outline">{porLoja.length} unidade(s)</Badge>
+                <CardTitle className="text-base">Repor em {nomeLoja}</CardTitle>
+                <Button asChild variant="ghost" size="sm">
+                  <Link to="/produtos-estoque-lotes">Estoque <ArrowUpRight className="ml-1 h-3.5 w-3.5" /></Link>
+                </Button>
               </CardHeader>
               <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Loja</TableHead>
-                      <TableHead className="text-right">Vendas</TableHead>
-                      <TableHead className="text-right">Faturamento</TableHead>
-                      <TableHead className="text-right">Ticket</TableHead>
-                      <TableHead className="text-right">Margem</TableHead>
-                      <TableHead className="text-right">Parte</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {porLoja.map((l) => (
-                      <TableRow key={l.id}>
-                        <TableCell className="font-medium">{l.nome}</TableCell>
-                        <TableCell className="text-right tabular-nums">{num(l.vendas)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{brl(l.receita)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{brl(l.ticket)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{pct(l.margem)}</TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {pct(kpis.total > 0 ? l.receita / kpis.total : 0)}
-                        </TableCell>
+                {paraRepor.length === 0 ? (
+                  <p className="px-4 py-6 text-center text-sm text-muted-foreground">
+                    Nada esgotado nem abaixo do mínimo nesta filial.
+                  </p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Produto</TableHead>
+                        <TableHead className="text-right">Saldo</TableHead>
+                        <TableHead className="text-right">Mínimo</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {paraRepor.map(({ p, q, min }) => (
+                        <TableRow key={p.id}>
+                          <TableCell className="max-w-[16rem] truncate font-medium">{p.nome}</TableCell>
+                          <TableCell className={`text-right tabular-nums ${q === 0 ? "font-semibold text-red-600" : "text-amber-600"}`}>
+                            {q === 0 ? "esgotado" : num(q)}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums text-muted-foreground">{num(min)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
               </CardContent>
             </Card>
           </div>

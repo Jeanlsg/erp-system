@@ -11,6 +11,7 @@
 // ============================================================
 
 import { useState } from "react";
+import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { useNavigate } from "react-router-dom";
 import {
   AlertTriangle, CheckCircle2, Download, FileSearch, Loader2,
@@ -26,12 +27,11 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AvisoAmbienteHomologacao } from "@/components/aviso-ambiente-homologacao";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 import {
-  useLojas, useDfePendentes, useDfeStatus, useDfeConsultas,
+  useDfePendentes, useDfeStatus, useDfeConsultas,
   useSincronizarDfe, useManifestarDfe, useBaixarNfePorChave,
 } from "@/lib/supabase-queries";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
@@ -64,9 +64,10 @@ const MANIFESTACOES: Record<TipoManifestacao, { label: string; ajuda: string; de
 
 export function FiscalDfePage() {
   const navigate = useNavigate();
-  const { data: lojas = [] } = useLojas();
-  const [lojaId, setLojaId] = useState<string>("");
-  const lojaAtual = lojaId || lojas[0]?.id || "";
+  // DF-e é por CNPJ, e cada filial tem o seu: a filial é a do seletor do
+  // topo. A tela abria sempre na primeira loja da lista, com seletor próprio.
+  const { lojaId: lojaTopo } = useAutoSelectLoja();
+  const lojaAtual = lojaTopo ?? "";
 
   const { data: pendentes = [], isLoading } = useDfePendentes(lojaAtual || undefined);
   const { data: statusNsu = [] } = useDfeStatus();
@@ -186,19 +187,6 @@ export function FiscalDfePage() {
           "Última consulta: nunca" pareciam "ainda não chegou nota". */}
       <AvisoAmbienteHomologacao lojaId={lojaAtual} />
 
-      {lojas.length > 1 && (
-        <div className="w-72">
-          <Label className="text-xs">Loja</Label>
-          <Select value={lojaAtual} onValueChange={setLojaId}>
-            <SelectTrigger><SelectValue placeholder="Selecione a loja" /></SelectTrigger>
-            <SelectContent>
-              {lojas.map((l: any) => (
-                <SelectItem key={l.id} value={l.id}>{l.nome} — {l.uf}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
 
       {/* Estado do canal. O NSU é a memória da varredura: sem ele, ou se
           reprocessa tudo ou se pula documento. */}

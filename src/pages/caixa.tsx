@@ -5,9 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
 import { DollarSign, Plus, Loader2, Lock, Unlock, RefreshCw, Calendar } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -63,10 +60,10 @@ export function CaixaPage() {
     }
   };
 
-  const [lojaFiltro, setLojaFiltro] = useState<string>("todas");
-
-  // Buscar caixas - se lojaFiltro="todas", não filtra
-  const lojaParaFiltro = lojaFiltro === "todas" ? undefined : lojaFiltro;
+  // A filial é a do seletor do topo, como em toda tela de movimento. A tela
+  // tinha um filtro de loja próprio que começava em "todas" — os turnos de
+  // Petrolina e Juazeiro apareciam misturados, e o do topo não mandava.
+  const lojaParaFiltro = lojaId ?? undefined;
   const { data: caixas = [], isLoading, isError: caixasError, refetch } = useCaixas(lojaParaFiltro);
 
   const { data: sangrias = [] } = useSangrias();
@@ -170,19 +167,6 @@ export function CaixaPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Filtro de Loja */}
-          <Select value={lojaFiltro} onValueChange={setLojaFiltro}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Filtrar por loja" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todas">Todas as lojas</SelectItem>
-              {lojas.map((l) => (
-                <SelectItem key={l.id} value={l.id}>{l.apelido || l.nome}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
           <Button variant="outline" size="sm" onClick={() => refetch()}>
             <RefreshCw className="h-4 w-4 mr-1" />
             Atualizar
@@ -395,9 +379,8 @@ export function CaixaPage() {
               <DollarSign className="h-12 w-12 mx-auto mb-3 text-muted-foreground/30" />
               <p className="text-muted-foreground font-medium">Nenhum caixa registrado</p>
               <p className="text-sm text-muted-foreground mt-1">
-                {lojaFiltro !== "todas"
-                  ? "Tente selecionar 'Todas as lojas' no filtro acima"
-                  : "Abra um caixa na página PDV para começar"}
+                Nenhum turno nesta filial. Troque a loja no topo para ver a outra,
+                ou abra um caixa no PDV.
               </p>
               <Button
                 variant="outline"

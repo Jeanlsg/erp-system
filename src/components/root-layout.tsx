@@ -33,23 +33,28 @@ import { useLojaAtualStore } from "@/lib/store/loja-atual";
 import { useLojas, isSupabaseConfigured } from "@/lib/supabase-queries";
 
 /**
- * Telas que escolhem a loja dentro delas mesmas.
+ * Telas de cadastro comum a todas as filiais.
  *
- * Nestas, o seletor do cabeçalho vira um segundo controle para a mesma
- * decisão — e pior, um que não manda: quem vale é o filtro da própria
- * tela. Some para não haver dois seletores discordando na mesma página.
+ * Cada filial tem os próprios dados — vendas, caixa, estoque, notas, contas —
+ * e todas essas telas seguem a loja escolhida aqui no topo. Não há mais tela
+ * com seletor de loja próprio: dois seletores na mesma página discordavam, e
+ * o do topo não mandava.
  *
- * As outras ~30 telas continuam usando a loja do cabeçalho; é ela que
- * useAutoSelectLoja lê. Quando uma delas ganhar filtro próprio, o caminho
- * é acrescentar a rota aqui.
+ * Estas rotas são a exceção de conteúdo, não de seletor: cliente, fornecedor
+ * e funcionário são da empresa, não da filial. O seletor continua visível
+ * (a escolha vale para a próxima tela), com um aviso para ninguém trocar de
+ * filial e estranhar que a lista não mudou.
  */
-export const ROTAS_COM_FILTRO_DE_LOJA = [
-  "/",                        // visão geral: escolhe várias lojas por caixa de seleção
-  "/relatorios",
-  "/caixa",
-  "/produtos-estoque-lotes",
-  "/produtos",                // mesma tela, outra rota
-  "/lotes",
+export const ROTAS_DA_EMPRESA = [
+  "/gestao/clientes",
+  "/gestao/fornecedores", "/fornecedores",
+  "/gestao/funcionarios", "/funcionarios",
+  "/gestao/servicos",
+  "/gestao/transportadoras",
+  "/gestao/usuarios", "/gestao/administrar-usuarios", "/gestao/usuario-permissoes",
+  "/kits",
+  "/lojas",
+  "/gestao/configuracoes-gerais", "/config/sistema", "/configuracoes",
 ];
 
 export function RootLayout() {
@@ -60,7 +65,7 @@ export function RootLayout() {
   const currentLojaId = useLojaAtualStore((s) => s.currentLojaId);
   const setCurrentLojaId = useLojaAtualStore((s) => s.setCurrentLojaId);
 
-  const temFiltroProprio = ROTAS_COM_FILTRO_DE_LOJA.includes(location.pathname);
+  const dadoDaEmpresa = ROTAS_DA_EMPRESA.includes(location.pathname);
 
   const [hydrated, setHydrated] = useState(false);
   // Modo demonstração: o "?" explica a página e, quando há tour, percorre
@@ -131,7 +136,7 @@ export function RootLayout() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-10 flex h-14 items-center justify-between gap-3 border-b bg-background/95 px-4 backdrop-blur">
           <div className="flex items-center gap-3">
-            {temFiltroProprio ? null : isSupabaseConfigured() && lojas.length > 0 ? (
+            {isSupabaseConfigured() && lojas.length > 0 ? (
               <Select value={currentLojaId ?? ""} onValueChange={setCurrentLojaId}>
                 <SelectTrigger className="w-48">
                   <Store className="mr-2 h-4 w-4" />
@@ -150,6 +155,12 @@ export function RootLayout() {
                 <Store className="h-4 w-4" />
                 {lojaAtual?.apelido ?? "Sistema"}
               </div>
+            )}
+            {dadoDaEmpresa && lojas.length > 1 && (
+              <span className="hidden text-xs text-muted-foreground sm:inline"
+                title="Este cadastro é da empresa, não da filial: é o mesmo nas duas lojas.">
+                cadastro comum às filiais
+              </span>
             )}
           </div>
 

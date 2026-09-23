@@ -1,24 +1,22 @@
 import { describe, it, expect } from "vitest";
-import { ROTAS_COM_FILTRO_DE_LOJA } from "./root-layout";
+import { ROTAS_DA_EMPRESA } from "./root-layout";
 
 describe("seletor de loja do cabeçalho", () => {
-  it("some nas telas que escolhem a loja por conta própria", () => {
-    for (const r of ["/", "/relatorios", "/caixa", "/produtos-estoque-lotes"]) {
-      expect(ROTAS_COM_FILTRO_DE_LOJA).toContain(r);
+  it("telas de movimento não são tratadas como cadastro da empresa", () => {
+    // estas têm dados próprios de cada filial e seguem a loja do topo
+    for (const r of ["/", "/relatorios", "/caixa", "/vendas", "/financeiro",
+                     "/produtos-estoque-lotes", "/notas-fiscais", "/compras"]) {
+      expect(ROTAS_DA_EMPRESA).not.toContain(r);
+    }
+  });
+
+  it("cadastros comuns ganham o aviso", () => {
+    for (const r of ["/gestao/clientes", "/gestao/fornecedores", "/gestao/funcionarios", "/lojas"]) {
+      expect(ROTAS_DA_EMPRESA).toContain(r);
     }
   });
 
   it("a frente de caixa não usa esta lista — tem casco próprio", () => {
-    // /pdv roda em PdvLayout, com seletor próprio: livre com o caixa fechado,
-    // travado na loja do caixa enquanto ele estiver aberto.
-    expect(ROTAS_COM_FILTRO_DE_LOJA).not.toContain("/pdv");
-  });
-
-  it("continua nas telas que dependem da loja do cabeçalho", () => {
-    // estas leem useAutoSelectLoja e não têm seletor próprio: sem o do topo,
-    // ficariam presas numa loja só
-    for (const r of ["/vendas", "/financeiro", "/compras", "/notas-fiscais", "/kits"]) {
-      expect(ROTAS_COM_FILTRO_DE_LOJA).not.toContain(r);
-    }
+    expect(ROTAS_DA_EMPRESA).not.toContain("/pdv");
   });
 });

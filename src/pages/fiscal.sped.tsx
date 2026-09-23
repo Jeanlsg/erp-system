@@ -9,6 +9,7 @@
 // ============================================================
 
 import { useState } from "react";
+import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { AlertTriangle, Download, FileText, Loader2, ShieldAlert } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,14 +45,16 @@ function tamanho(bytes: number) {
 
 export function FiscalSpedPage() {
   const { data: lojas = [] } = useLojas();
-  const [lojaId, setLojaId] = useState("");
   const [competencia, setCompetencia] = useState(competenciaAtual());
   const [tipo, setTipo] = useState<"efd" | "sintegra">("efd");
   const [finalidade, setFinalidade] = useState<"0" | "1">("0");
   const [ultimo, setUltimo] = useState<any>(null);
   const [baixando, setBaixando] = useState<string | null>(null);
 
-  const lojaAtual = lojaId || lojas[0]?.id || "";
+  // SPED é por CNPJ: um arquivo por filial. A filial é a do seletor do topo;
+  // a tela abria sempre na primeira loja da lista, com seletor próprio.
+  const { lojaId: lojaTopo } = useAutoSelectLoja();
+  const lojaAtual = lojaTopo ?? "";
   const { data: arquivos = [] } = useSpedArquivos(lojaAtual || undefined);
   const gerar = useGerarSped();
 
@@ -133,17 +136,6 @@ export function FiscalSpedPage() {
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap items-end gap-3">
-            <div className="w-64">
-              <Label className="text-xs">Loja</Label>
-              <Select value={lojaAtual} onValueChange={setLojaId}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>
-                  {lojas.map((l: any) => (
-                    <SelectItem key={l.id} value={l.id}>{l.nome} — {l.uf}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
             <div>
               <Label className="text-xs">Competência</Label>
               <Input type="month" value={competencia} onChange={(e) => setCompetencia(e.target.value)} />

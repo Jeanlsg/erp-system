@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { ArrowDownCircle, ArrowUpCircle, ClipboardCheck, Loader2, Settings2, PackageOpen } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { useEstoqueMovimentacoes, useLojas, useProdutos } from "@/lib/supabase-queries";
+import { useEstoqueMovimentacoes, useProdutos } from "@/lib/supabase-queries";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { isSupabaseConfigured } from "@/lib/supabase";
 
@@ -34,15 +35,16 @@ function moeda(v: number | null | undefined) {
 }
 
 export function EstoqueMovimentacoesPage() {
-  const [lojaId, setLojaId] = useState<string>("todas");
+  // Movimento de estoque é da filial do seletor do topo: somar as entradas e
+  // saídas das duas lojas numa lista só não bate com o saldo de nenhuma.
+  const { lojaId: lojaTopo } = useAutoSelectLoja();
   const [produtoId, setProdutoId] = useState<string>("todos");
   const [tipo, setTipo] = useState<string>("todos");
   const [busca, setBusca] = useState("");
 
-  const { data: lojas = [] } = useLojas();
   const { data: produtos = [] } = useProdutos();
   const { data: movimentos = [], isLoading, isError, error } = useEstoqueMovimentacoes({
-    lojaId: lojaId === "todas" ? undefined : lojaId,
+    lojaId: lojaTopo ?? undefined,
     produtoId: produtoId === "todos" ? undefined : produtoId,
     tipo: tipo === "todos" ? undefined : tipo,
   });
@@ -92,16 +94,6 @@ export function EstoqueMovimentacoesPage() {
           <div className="space-y-1">
             <Label>Buscar produto</Label>
             <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Nome, SKU ou observação" />
-          </div>
-          <div className="space-y-1">
-            <Label>Loja</Label>
-            <Select value={lojaId} onValueChange={setLojaId}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todas">Todas</SelectItem>
-                {lojas.map((l: any) => <SelectItem key={l.id} value={l.id}>{l.nome}</SelectItem>)}
-              </SelectContent>
-            </Select>
           </div>
           <div className="space-y-1">
             <Label>Produto</Label>

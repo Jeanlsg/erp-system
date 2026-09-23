@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Camera, ClipboardList, Loader2, Play, CheckCircle2, AlertTriangle } from "lucide-react";
 import { LeitorCodigoBarras } from "@/components/leitor-codigo-barras";
 import { useLeitorUsb } from "@/lib/use-leitor-usb";
@@ -14,15 +14,13 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
-import {
   useEstoqueNegativo,
   useInventarios, useInventarioItens, useAbrirInventario,
-  useSalvarContagem, useAplicarInventario, useLojas,
+  useSalvarContagem, useAplicarInventario,
 } from "@/lib/supabase-queries";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { isSupabaseConfigured } from "@/lib/supabase";
+import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 
 const STATUS: Record<string, { label: string; variant: "default" | "secondary" | "outline" | "destructive" }> = {
   aberto: { label: "Em contagem", variant: "default" },
@@ -31,21 +29,23 @@ const STATUS: Record<string, { label: string; variant: "default" | "secondary" |
 };
 
 export function InventarioPage() {
-  const [lojaFiltro, setLojaFiltro] = useState<string>("todas");
+  // A filial é a do seletor do topo. Inventário é contagem de UMA gaveta de
+  // estoque: misturar as duas lojas na lista era convite a contar a filial
+  // errada, e a tela tinha um filtro próprio que o topo não mandava.
+  const { lojaId, lojas: lojasTopo } = useAutoSelectLoja();
+  const nomeLoja = (lojasTopo as any[]).find((l) => l.id === lojaId)?.apelido ?? "filial";
   const [selecionado, setSelecionado] = useState<string | undefined>();
   const [modalAbrir, setModalAbrir] = useState(false);
-  const [novaLoja, setNovaLoja] = useState("");
   const [novaObs, setNovaObs] = useState("");
   const [confirmarAplicar, setConfirmarAplicar] = useState(false);
   const [leitorAberto, setLeitorAberto] = useState(false);
 
-  const { data: lojas = [] } = useLojas();
   const { data: inventarios = [], isLoading } = useInventarios(
-    lojaFiltro === "todas" ? undefined : lojaFiltro
+    lojaId ?? undefined
   );
   const { data: itens = [], isLoading: carregandoItens } = useInventarioItens(selecionado);
   const { data: negativos = [] } = useEstoqueNegativo(
-    lojaFiltro === "todas" ? undefined : lojaFiltro
+    lojaId ?? undefined
   );
 
   const abrir = useAbrirInventario();
@@ -66,13 +66,17 @@ export function InventarioPage() {
   );
   const naoContados = itens.filter((i: any) => i.quantidade_contada === null);
 
+  // Trocar de filial no topo não remonta a página: sem isto, a contagem
+  // aberta de Petrolina continuava na tela depois de mudar para Juazeiro.
+  useEffect(() => { setSelecionado(undefined); }, [lojaId]);
+
   const handleAbrir = async () => {
-    if (!novaLoja) {
-      toast.error("Selecione a loja do inventário");
+    if (!lojaId) {
+      toast.error("Escolha a filial no topo antes de abrir o inventário.");
       return;
     }
     try {
-      const id = await abrir.mutateAsync({ lojaId: novaLoja, observacoes: novaObs || undefined });
+      const id = await abrir.mutateAsync({ lojaId, observacoes: novaObs || undefined });
       toast.success("Inventário aberto com a fotografia do saldo atual.");
       setModalAbrir(false);
       setNovaObs("");
@@ -176,13 +180,7 @@ export function InventarioPage() {
         <CardHeader className="pb-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <CardTitle className="text-base">Inventários</CardTitle>
-            <Select value={lojaFiltro} onValueChange={setLojaFiltro}>
-              <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todas">Todas as lojas</SelectItem>
-                {lojas.map((l: any) => <SelectItem key={l.id} value={l.id}>{l.nome}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <span className="text-sm text-muted-foreground">{nomeLoja}</span>
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -343,12 +341,9 @@ export function InventarioPage() {
           <div className="space-y-4">
             <div className="space-y-1">
               <Label>Loja</Label>
-              <Select value={novaLoja} onValueChange={setNovaLoja}>
-                <SelectTrigger><SelectValue placeholder="Selecione a loja" /></SelectTrigger>
-                <SelectContent>
-                  {lojas.map((l: any) => <SelectItem key={l.id} value={l.id}>{l.nome}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+                {nomeLoja} <span className="text-muted-foreground">— a filial escolhida no topo</span>
+              </p>
             </div>
             <div className="space-y-1">
               <Label>Observações</Label>

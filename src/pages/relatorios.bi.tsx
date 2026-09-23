@@ -10,18 +10,18 @@
 // ============================================================
 
 import { useState } from "react";
+import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { AlertTriangle, PackageSearch, Loader2, TrendingUp, Wallet } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 import {
-  useLojas, useCurvaAbc, useSugestaoCompra, useEstoqueParado, useDreMensal,
+  useCurvaAbc, useSugestaoCompra, useEstoqueParado, useDreMensal,
 } from "@/lib/supabase-queries";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
@@ -34,13 +34,15 @@ const CLASSE_COR: Record<string, string> = {
 };
 
 export function RelatoriosBiPage({ embutido = false }: { embutido?: boolean } = {}) {
-  const { data: lojas = [] } = useLojas();
-  const [loja, setLoja] = useState("todas");
+  // Curva ABC, sugestão de compra, estoque parado e DRE são da filial do
+  // seletor do topo: a curva de uma loja não é a da outra, e sugerir compra
+  // sobre o estoque somado das duas mandava comprar o que sobra na vizinha.
+  const { lojaId: lojaTopo } = useAutoSelectLoja();
   const [desde, setDesde] = useState("");
   const [ate, setAte] = useState("");
   const [aba, setAba] = useState("abc");
 
-  const lojaId = loja === "todas" ? undefined : loja;
+  const lojaId = lojaTopo ?? undefined;
   const { data: abc = [], isLoading: carregandoAbc } = useCurvaAbc({ lojaId, desde: desde || undefined, ate: ate || undefined });
   const { data: sugestoes = [] } = useSugestaoCompra(lojaId);
   const { data: parados = [] } = useEstoqueParado(lojaId);
@@ -65,16 +67,6 @@ export function RelatoriosBiPage({ embutido = false }: { embutido?: boolean } = 
       )}
 
       <div className="flex flex-wrap items-end gap-3">
-        <div className="w-56">
-          <Label className="text-xs">Loja</Label>
-          <Select value={loja} onValueChange={setLoja}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todas">Todas as lojas</SelectItem>
-              {lojas.map((l: any) => <SelectItem key={l.id} value={l.id}>{l.nome}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
         <div>
           <Label className="text-xs">De</Label>
           <Input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} />

@@ -6,7 +6,7 @@
 // como paga — nada é digitado à mão, para o número bater com a venda.
 // ============================================================
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Banknote, CheckCircle2, Loader2, FileText, Target, Plus, Trash2 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -35,6 +35,10 @@ export function ComissoesPage() {
   const [funcionarioId, setFuncionarioId] = useState("");
   const [status, setStatus] = useState<Status>("todas");
   const [marcadas, setMarcadas] = useState<Set<string>>(new Set());
+  // Trocar de filial no topo não remonta a página. Sem limpar aqui, as
+  // comissões marcadas em Petrolina continuavam na seleção depois de mudar
+  // para Juazeiro, e "Pagar selecionadas" pagava o que nem estava na tela.
+  useEffect(() => { setMarcadas(new Set()); }, [lojaId]);
   const [pagando, setPagando] = useState(false);
   // Lançar comissão apurada em Contas a Pagar. Até agora o valor morria aqui
   // e alguém redigitava no financeiro — e redigitação é onde o número muda.

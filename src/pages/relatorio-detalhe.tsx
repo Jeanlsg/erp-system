@@ -26,7 +26,8 @@ import { FiltrosRelatorio, periodoPadrao, type Periodo } from "@/components/rela
 import { TabelaRelatorio } from "@/components/relatorio/tabela-relatorio";
 import { DetalhesCaixaDialog } from "@/components/detalhes-caixa";
 import { RELATORIOS } from "@/lib/relatorios/catalogo";
-import { useLojas, useVendedores, isSupabaseConfigured } from "@/lib/supabase-queries";
+import { useVendedores, isSupabaseConfigured } from "@/lib/supabase-queries";
+import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 
 const TODAS = "__todas__";
 
@@ -35,13 +36,13 @@ export function RelatorioDetalhePage() {
   const rel = RELATORIOS[tipo];
 
   const [periodo, setPeriodo] = useState<Periodo>(periodoPadrao(30));
-  const [loja, setLoja] = useState<string>(TODAS);
   const [caixaDetalhe, setCaixaDetalhe] = useState<string | null>(null);
   const [vendedor, setVendedor] = useState<string>(TODAS);
-  const { data: lojas = [] } = useLojas();
   const { data: vendedores = [] } = useVendedores();
 
-  const lojaId = loja === TODAS ? undefined : loja;
+  // A filial é a do seletor do topo, como em toda tela de movimento.
+  const { lojaId: lojaTopo } = useAutoSelectLoja();
+  const lojaId = lojaTopo ?? undefined;
   const vendedorId = vendedor === TODAS ? undefined : vendedor;
   const aceitaVendedor = rel?.filtros?.includes("vendedor") ?? false;
 
@@ -91,7 +92,7 @@ export function RelatorioDetalhePage() {
       <FiltrosRelatorio
         periodo={periodo}
         aoMudarPeriodo={setPeriodo}
-        aoLimpar={() => { setPeriodo(periodoPadrao(30)); setLoja(TODAS); setVendedor(TODAS); }}
+        aoLimpar={() => { setPeriodo(periodoPadrao(30)); setVendedor(TODAS); }}
       >
         {aceitaVendedor && (
           <div>
@@ -102,20 +103,6 @@ export function RelatorioDetalhePage() {
                 <SelectItem value={TODAS}>Todos</SelectItem>
                 {(vendedores as any[]).map((v) => (
                   <SelectItem key={v.id} value={v.id}>{v.nome ?? v.cargo}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-        {lojas.length > 1 && (
-          <div>
-            <Label className="text-xs">Loja</Label>
-            <Select value={loja} onValueChange={setLoja}>
-              <SelectTrigger className="mt-1 w-44"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={TODAS}>Todas as lojas</SelectItem>
-                {lojas.map((l: any) => (
-                  <SelectItem key={l.id} value={l.id}>{l.apelido || l.nome}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
