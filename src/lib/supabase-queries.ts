@@ -2790,7 +2790,7 @@ export function usePedidos(filters?: { lojaId?: string; status?: string }) {
       if (!isSupabaseConfigured()) return [];
       let query = supabase
         .from('erp_pedidos')
-        .select('*, cliente:erp_pessoas(nome_razao, telefone, celular), venda:erp_vendas(numero_pedido, total)')
+        .select('*, cliente:erp_pessoas(nome_razao, telefone, celular), venda:erp_vendas(numero_pedido, total), itens:erp_pedido_itens(id, nome, quantidade, preco_unitario, subtotal)')
         .order('created_at', { ascending: false })
         .limit(200);
       if (filters?.lojaId) query = query.eq('loja_id', filters.lojaId);
@@ -4290,6 +4290,65 @@ export function useUpdateCompraStatus() {
 // ========================================
 // PEDIDOS — criação
 // ========================================
+
+// ---- endereços salvos do cliente ----
+
+export function useEnderecosPessoa(pessoaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ["erp_pessoa_enderecos", pessoaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured() || !pessoaId) return [];
+      const { data, error } = await supabase
+        .from("erp_pessoa_enderecos").select("*").eq("pessoa_id", pessoaId)
+        .order("padrao", { ascending: false }).order("created_at");
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!pessoaId,
+  });
+}
+
+export function useSalvarEnderecoPessoa() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (e: any) => {
+      const { id, ...campos } = e;
+      const q = id
+        ? supabase.from("erp_pessoa_enderecos").update({ ...campos, updated_at: new Date().toISOString() }).eq("id", id)
+        : supabase.from("erp_pessoa_enderecos").insert(campos);
+      const { data, error } = await q.select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["erp_pessoa_enderecos"] }),
+  });
+}
+
+export function useExcluirEnderecoPessoa() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("erp_pessoa_enderecos").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["erp_pessoa_enderecos"] }),
+  });
+}
+
+/** Itens de um pedido — a lista de separação. */
+export function useItensPedido(pedidoId?: string) {
+  return useQuery<any[]>({
+    queryKey: ["erp_pedido_itens", pedidoId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured() || !pedidoId) return [];
+      const { data, error } = await supabase
+        .from("erp_pedido_itens").select("*").eq("pedido_id", pedidoId).order("created_at");
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!pedidoId,
+  });
+}
 
 export function useCreatePedido() {
   const qc = useQueryClient();

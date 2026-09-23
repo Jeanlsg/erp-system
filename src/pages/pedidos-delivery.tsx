@@ -211,9 +211,34 @@ export function PedidosDeliveryPage() {
                           </div>
 
                           <div className="flex items-center justify-between text-sm">
-                            <span className="font-semibold">{brl(Number(p.venda?.total ?? 0) + Number(p.taxa_entrega ?? 0))}</span>
+                            {/* O valor sai dos itens do pedido; a venda é a
+                                referência quando o pedido nasceu de uma venda */}
+                            <span className="font-semibold">
+                              {brl(
+                                ((p.itens ?? []).reduce((t: number, i: any) => t + Number(i.subtotal ?? 0), 0)
+                                  || Number(p.venda?.total ?? 0))
+                                + Number(p.taxa_entrega ?? 0),
+                              )}
+                            </span>
                             <span className="text-[11px] text-muted-foreground">{String(p.forma_pagamento ?? "")}</span>
                           </div>
+
+                          {/* Lista de separação: quem monta a sacola confere aqui */}
+                          {(p.itens ?? []).length > 0 && (
+                            <ul className="space-y-0.5 rounded-md bg-muted/50 px-2 py-1 text-[11px]">
+                              {(p.itens as any[]).slice(0, 4).map((i) => (
+                                <li key={i.id} className="flex justify-between gap-2">
+                                  <span className="truncate">{Number(i.quantidade)}× {i.nome}</span>
+                                  <span className="tabular-nums text-muted-foreground">{brl(Number(i.subtotal ?? 0))}</span>
+                                </li>
+                              ))}
+                              {(p.itens as any[]).length > 4 && (
+                                <li className="text-muted-foreground">
+                                  +{(p.itens as any[]).length - 4} outro(s) item(ns)
+                                </li>
+                              )}
+                            </ul>
+                          )}
 
                           {p.endereco_entrega?.bairro && (
                             <p className="truncate text-[11px] text-muted-foreground">
