@@ -17,7 +17,8 @@ import {
   Search, Keyboard,
   Bike,
 } from "lucide-react";
-import { useProdutos, useClientes, useCaixaAberto, useCreateCaixa, useFecharCaixa, useKits, useCaixas, useCreateSangria, useCreateEntradaExtra, useEmitirNFeVenda, isSupabaseConfigured, useVendedores, useEstoqueLoja, usePontosVenda, useCriarPontoVenda, useConfigsCaixa } from "@/lib/supabase-queries";
+import { useProdutos, useClientes, useCaixaAberto, useCreateCaixa, useFecharCaixa, useKits, useCaixas, useCreateSangria, useCreateEntradaExtra, useEmitirNFeVenda, isSupabaseConfigured, useVendedores, useEstoqueLoja, usePontosVenda, useCriarPontoVenda, useConfigsCaixa, useSaldosPedidos, useAplicarEntradaPedido } from "@/lib/supabase-queries";
+import { lojaEfetivaDoPdv } from "@/lib/loja-do-caixa";
 import { formasParaDeclarar as escolherFormas, faltaDeclarar as temFormaPendente, argumentosDeFechamento } from "@/lib/fechamento-por-forma";
 import { toast } from "sonner";
 import {
@@ -60,7 +61,16 @@ interface CartItem {
 export function PDVPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { lojaId } = useAutoSelectLoja();
+  // Quem manda na loja é o CAIXA ABERTO, não o seletor do topo.
+  //
+  // Com o caixa #1 aberto em Juazeiro, trocar a loja no cabeçalho fazia a
+  // venda ser gravada com loja_id de Petrolina amarrada ao caixa de Juazeiro:
+  // estoque baixado na loja errada e a venda fora do fechamento do caixa que
+  // a recebeu. O seletor do topo só vale enquanto não há caixa aberto — é
+  // assim que se escolhe ONDE abrir.
+  const { data: caixaAberto } = useCaixaAberto(user?.id);
+  const { lojaId: lojaDoCabecalho } = useAutoSelectLoja();
+  const lojaId = lojaEfetivaDoPdv(caixaAberto as any, lojaDoCabecalho);
   const emitirNFCe = useEmitirNFeVenda();
   const createCaixa = useCreateCaixa();
   const fecharCaixa = useFecharCaixa();
@@ -104,7 +114,6 @@ export function PDVPage() {
   const catalogo = useCatalogoOffline(lojaId, vendaveis, online);
   const produtos = catalogo.produtos;
   const { data: clientes = [] } = useClientes();
-  const { data: caixaAberto } = useCaixaAberto(user?.id);
   const { data: caixas = [] } = useCaixas(lojaId ?? undefined);
 
   const caixasAbertos = caixas.filter((c) => c.status === "aberto");
@@ -647,6 +656,54 @@ export function PDVPage() {
   const [entradaMotivo, setEntradaMotivo] = useState("");
   const [modalEntrada, setModalEntrada] = useState(false);
 
+  // ---------------------------------------------------------------
+  // Aplicar entrada / adiantamento (Ctrl+A)
+  //
+  // Sinal de pedido: o cliente paga parte agora e leva depois. O dinheiro
+  // entra na gaveta neste momento e o pedido passa a dever menos — as duas
+  // coisas numa RPC só, porque metade disso deixa o caixa sem fechar.
+  // ---------------------------------------------------------------
+  const [modalEntradaPedido, setModalEntradaPedido] = useState(false);
+  const [pedidoEntrada, setPedidoEntrada] = useState<string>("");
+  const [entradaPedidoValor, setEntradaPedidoValor] = useState("");
+  const [entradaPedidoForma, setEntradaPedidoForma] = useState("dinheiro");
+  const { data: saldosPedidos = [] } = useSaldosPedidos(lojaId ?? undefined);
+  // só entra na lista o pedido que ainda deve
+  const pedidosComSaldo = saldosPedidos.filter((p: any) => Number(p.saldo) > 0);
+  const aplicarEntrada = useAplicarEntradaPedido();
+  const pedidoSelecionado = pedidosComSaldo.find((p: any) => p.pedido_id === pedidoEntrada);
+
+  const handleEntradaPedido = async () => {
+    if (!caixaAberto || !pedidoSelecionado) return;
+    const valor = Number(String(entradaPedidoValor).replace(",", "."));
+    if (!isFinite(valor) || valor <= 0) {
+      toast.error("Informe o valor da entrada.");
+      return;
+    }
+    // O banco recusa de novo; aqui é só para o operador não digitar duas vezes.
+    if (valor > Number(pedidoSelecionado.saldo) + 0.005) {
+      toast.error(`A entrada não pode passar do saldo do pedido (${brl(Number(pedidoSelecionado.saldo))}).`);
+      return;
+    }
+    try {
+      const r = await aplicarEntrada.mutateAsync({
+        pedidoId: pedidoSelecionado.pedido_id,
+        caixaId: caixaAberto.id,
+        forma: entradaPedidoForma,
+        valor,
+      });
+      setModalEntradaPedido(false);
+      setEntradaPedidoValor("");
+      setPedidoEntrada("");
+      const saldo = Number(r?.saldo ?? 0);
+      toast.success(saldo > 0
+        ? `Entrada de ${brl(valor)} recebida. Falta ${brl(saldo)} neste pedido.`
+        : `Entrada de ${brl(valor)} recebida. Pedido quitado.`);
+    } catch (e: any) {
+      toast.error(`Não foi possível receber a entrada: ${e.message ?? e}`);
+    }
+  };
+
   const handleEntrada = async () => {
     if (!caixaAberto || !user || !entradaValor || !entradaMotivo) return;
     await createEntrada.mutateAsync({
@@ -692,6 +749,7 @@ export function PDVPage() {
     { tecla: "F11", rotulo: "Cancelar venda", acao: () => { if (cart.length && confirm("Cancelar a venda e limpar o cupom?")) limparCarrinho(); }, ativo: cart.length > 0 },
     { tecla: "Ctrl+S", rotulo: "Sangria", acao: () => setModalSangria(true), ativo: !!caixaAberto },
     { tecla: "Ctrl+E", rotulo: "Entrada de valores", acao: () => setModalEntrada(true), ativo: !!caixaAberto },
+    { tecla: "Ctrl+A", rotulo: "Aplicar entrada em pedido", acao: () => setModalEntradaPedido(true), ativo: !!caixaAberto },
     { tecla: "Ctrl+X", rotulo: "Fechar caixa", acao: () => setModalFechamento(true), ativo: !!caixaAberto },
     // F12 no sistema anterior sai da frente de caixa (leva para a seleção de
     // caixa, sem fechar o turno). O navegador reserva F12 para as ferramentas
@@ -1915,6 +1973,103 @@ export function PDVPage() {
             <Button variant="outline" onClick={() => setModalEntrada(false)}>Cancelar</Button>
             <Button onClick={handleEntrada} disabled={!entradaValor || !entradaMotivo || createEntrada.isPending}>
               {createEntrada.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Registrar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: Aplicar entrada / adiantamento em pedido (Ctrl+A) */}
+      <Dialog open={modalEntradaPedido} onOpenChange={setModalEntradaPedido}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Aplicar entrada em pedido</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            {pedidosComSaldo.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Nenhum pedido em aberto com saldo a receber nesta loja.
+              </p>
+            ) : (
+              <>
+                <div>
+                  <Label>Pedido</Label>
+                  <select
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                    value={pedidoEntrada}
+                    onChange={(e) => setPedidoEntrada(e.target.value)}
+                  >
+                    <option value="">Selecione o pedido...</option>
+                    {pedidosComSaldo.map((p: any) => (
+                      <option key={p.pedido_id} value={p.pedido_id}>
+                        #{String(p.pedido_id).replace(/-/g, "").slice(0, 8)} — saldo {brl(Number(p.saldo))}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {pedidoSelecionado && (
+                  <div className="rounded-md border p-2 text-sm space-y-1">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Total do pedido</span>
+                      <span className="tabular-nums">{brl(Number(pedidoSelecionado.total_pedido))}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Já recebido</span>
+                      <span className="tabular-nums">{brl(Number(pedidoSelecionado.total_pago))}</span>
+                    </div>
+                    <div className="flex justify-between font-semibold">
+                      <span>Saldo</span>
+                      <span className="tabular-nums">{brl(Number(pedidoSelecionado.saldo))}</span>
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <Label>Valor da entrada</Label>
+                  <InputMoeda
+                    value={entradaPedidoValor}
+                    onChange={(v) => setEntradaPedidoValor(String(v))}
+                  />
+                  {pedidoSelecionado && (
+                    <Button
+                      type="button"
+                      variant="link"
+                      className="h-auto p-0 text-xs"
+                      onClick={() => setEntradaPedidoValor(String(Number(pedidoSelecionado.saldo)))}
+                    >
+                      Receber o saldo todo ({brl(Number(pedidoSelecionado.saldo))})
+                    </Button>
+                  )}
+                </div>
+
+                <div>
+                  <Label>Como o cliente está pagando</Label>
+                  <select
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                    value={entradaPedidoForma}
+                    onChange={(e) => setEntradaPedidoForma(e.target.value)}
+                  >
+                    <option value="dinheiro">Dinheiro</option>
+                    <option value="pix">PIX</option>
+                    <option value="cartao_credito">Cartão Crédito</option>
+                    <option value="cartao_debito">Cartão Débito</option>
+                  </select>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Só o dinheiro entra na conta da gaveta. Na venda final, lance o que
+                    já foi pago como "Entrada/adiantamento já pago" para o faturamento
+                    sair pelo valor cheio.
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setModalEntradaPedido(false)}>Cancelar</Button>
+            <Button
+              onClick={handleEntradaPedido}
+              disabled={!pedidoSelecionado || !entradaPedidoValor || aplicarEntrada.isPending}
+            >
+              {aplicarEntrada.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Receber entrada"}
             </Button>
           </DialogFooter>
         </DialogContent>

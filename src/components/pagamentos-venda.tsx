@@ -26,7 +26,12 @@ import { brl } from "@/lib/format";
 
 export type FormaPagamento =
   | "dinheiro" | "pix" | "cartao_credito" | "cartao_debito"
-  | "crediario" | "boleto" | "promissoria" | "cheque" | "transferencia";
+  | "crediario" | "boleto" | "promissoria" | "cheque" | "transferencia"
+  // Sinal já recebido no pedido (Ctrl+A). A venda é registrada pelo valor
+  // cheio e o adiantamento entra como linha de pagamento, senão o
+  // faturamento sairia menor do que a mercadoria que saiu da loja. Não toca
+  // na gaveta: esse dinheiro entrou no dia em que o sinal foi pago.
+  | "adiantamento";
 
 export interface Pagamento {
   forma: FormaPagamento;
@@ -43,6 +48,7 @@ export const NOME_FORMA: Record<FormaPagamento, string> = {
   cartao_credito: "Cartão de crédito", cartao_debito: "Cartão de débito",
   crediario: "Crediário", boleto: "Boleto", promissoria: "Promissória",
   cheque: "Cheque", transferencia: "Transferência",
+  adiantamento: "Entrada/adiantamento já pago",
 };
 
 /** Quanto ainda falta cobrir. Negativo não existe: o excedente é troco. */

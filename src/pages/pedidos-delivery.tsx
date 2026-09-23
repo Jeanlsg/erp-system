@@ -20,7 +20,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { usePedidos, useUpdatePedidoStatus, isSupabaseConfigured } from "@/lib/supabase-queries";
+import { usePedidos, useUpdatePedidoStatus, useSaldosPedidos, isSupabaseConfigured } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { brl } from "@/lib/format";
@@ -66,6 +66,14 @@ function tempoCurto(min: number): string {
 export function PedidosDeliveryPage() {
   const { lojaId } = useAutoSelectLoja();
   const { data: pedidos = [], isLoading } = usePedidos({ lojaId: lojaId ?? undefined });
+  // Entrada/adiantamento já recebido (Ctrl+A no PDV). Sem isto, quem separa a
+  // sacola cobra o valor cheio de novo e o cliente paga duas vezes o sinal.
+  const { data: saldos = [] } = useSaldosPedidos(lojaId ?? undefined);
+  const saldoDe = useMemo(() => {
+    const m = new Map<string, any>();
+    for (const s of saldos) m.set(s.pedido_id, s);
+    return m;
+  }, [saldos]);
   const [modalNovo, setModalNovo] = useState(false);
   const update = useUpdatePedidoStatus();
   const [arrastando, setArrastando] = useState<string | null>(null);
@@ -178,6 +186,7 @@ export function PedidosDeliveryPage() {
                     const atrasado = col.alerta_min > 0 && min > col.alerta_min;
                     const prox = ORDEM[ORDEM.indexOf(col.id) + 1];
                     const tel = p.cliente?.celular ?? p.cliente?.telefone;
+                    const sld = saldoDe.get(p.id);
                     return (
                       <Card
                         key={p.id}
@@ -222,6 +231,22 @@ export function PedidosDeliveryPage() {
                             </span>
                             <span className="text-[11px] text-muted-foreground">{String(p.forma_pagamento ?? "")}</span>
                           </div>
+
+                          {/* Sinal recebido no PDV: o que ainda falta cobrar */}
+                          {sld && Number(sld.total_pago) > 0 && (
+                            <div className="rounded-md border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] dark:bg-emerald-950/20">
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Entrada recebida</span>
+                                <span className="tabular-nums font-medium">{brl(Number(sld.total_pago))}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">
+                                  {Number(sld.saldo) > 0 ? "Falta cobrar" : "Quitado"}
+                                </span>
+                                <span className="tabular-nums font-medium">{brl(Number(sld.saldo))}</span>
+                              </div>
+                            </div>
+                          )}
 
                           {/* Lista de separação: quem monta a sacola confere aqui */}
                           {(p.itens ?? []).length > 0 && (

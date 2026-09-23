@@ -2808,6 +2808,66 @@ export function usePedidos(filters?: { lojaId?: string; status?: string }) {
   });
 }
 
+/**
+ * Total, recebido e saldo de cada pedido (view vw_pedido_saldo).
+ *
+ * O saldo vem do banco, não de uma conta no front: o total é itens + taxa de
+ * entrega, e quem soma isso na tela erra quando o pedido é editado em outro
+ * terminal. Sem filtro de saldo porque o ciclo de pedidos também quer mostrar
+ * o pedido já quitado.
+ */
+export function useSaldosPedidos(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ["erp_pedidos_saldo", lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let q = supabase
+        .from("vw_pedido_saldo")
+        .select("*")
+        .neq("status", "cancelado")
+        .limit(300);
+      if (lojaId) q = q.eq("loja_id", lojaId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+/**
+ * Recebe a entrada/adiantamento de um pedido (Ctrl+A).
+ *
+ * Uma RPC só porque são duas gravações que não podem se separar: a entrada no
+ * caixa (o dinheiro está na gaveta agora) e o abatimento no pedido. O banco
+ * também recusa valor acima do saldo, caixa fechado e pedido cancelado.
+ */
+export function useAplicarEntradaPedido() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (p: {
+      pedidoId: string; caixaId: string;
+      forma: string; valor: number; observacoes?: string;
+    }) => {
+      const { data, error } = await supabase.schema("erp").rpc("aplicar_entrada_pedido", {
+        p_pedido_id: p.pedidoId,
+        p_caixa_id: p.caixaId,
+        p_forma: p.forma,
+        p_valor: p.valor,
+        p_observacoes: p.observacoes ?? null,
+      });
+      if (error) throw error;
+      return data as any;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["erp_pedidos_saldo"] });
+      qc.invalidateQueries({ queryKey: ["erp_pedidos"] });
+      // o dinheiro entrou na gaveta: o esperado do fechamento mudou
+      qc.invalidateQueries({ queryKey: ["erp_caixa"] });
+      qc.invalidateQueries({ queryKey: ["erp_caixa-aberto"] });
+    },
+  });
+}
+
 export function useUpdatePedidoStatus() {
   const qc = useQueryClient();
   return useMutation({
