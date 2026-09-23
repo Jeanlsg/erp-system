@@ -72,7 +72,9 @@ export async function montarDadosFechamento(
       .select("*, loja:erp_lojas(*), ponto:erp_pontos_venda(nome), usuario:erp_usuarios!erp_caixa_usuario_id_fkey(nome)")
       .eq("id", caixaId).single(),
     supabase.from("erp_vendas")
-      .select("total, desconto, taxa_entrega, forma_pagamento, status")
+      // os pagamentos vêm junto: a venda mista conta em cada forma pelo que
+      // foi pago nela, e não inteira na forma "principal"
+      .select("id, total, desconto, taxa_entrega, forma_pagamento, status, pagamentos:erp_venda_pagamentos(forma, valor)")
       .eq("caixa_id", caixaId),
     supabase.from("erp_sangrias").select("valor, forma_pagamento").eq("caixa_id", caixaId),
     supabase.from("erp_entradas_extras").select("valor, forma_pagamento").eq("caixa_id", caixaId),
@@ -96,9 +98,23 @@ export async function montarDadosFechamento(
     l.filter((x) => (x.forma_pagamento ?? "dinheiro") === "dinheiro")
       .reduce((t, x) => t + Number(x.valor ?? 0), 0);
 
-  const vendasDinheiro = finalizadas
-    .filter((v) => v.forma_pagamento === "dinheiro")
-    .reduce((t, v) => t + Number(v.total ?? 0), 0);
+  /** Quanto das vendas entrou em cada forma, respeitando a venda mista. */
+  const porForma = () => {
+    const m = new Map<string, number>();
+    for (const v of finalizadas) {
+      const detalhe = (v.pagamentos ?? []) as any[];
+      if (detalhe.length) {
+        for (const p of detalhe) m.set(p.forma, (m.get(p.forma) ?? 0) + Number(p.valor ?? 0));
+      } else {
+        // venda anterior à migration 085: forma única, como sempre foi
+        const f = v.forma_pagamento ?? "dinheiro";
+        m.set(f, (m.get(f) ?? 0) + Number(v.total ?? 0));
+      }
+    }
+    return m;
+  };
+  const formas = porForma();
+  const vendasDinheiro = formas.get("dinheiro") ?? 0;
 
   const sangriaDinheiro = emDinheiro(listaSangrias);
   const entradaDinheiro = emDinheiro(listaEntradas);
@@ -126,7 +142,10 @@ export async function montarDadosFechamento(
 
     valorInicial,
     entradasExtras: agrupar(listaEntradas),
-    vendasPorForma: agrupar(finalizadas.map((v) => ({ forma_pagamento: v.forma_pagamento, valor: v.total }))),
+    vendasPorForma: [...formas.entries()]
+      .map(([f, valor]) => ({ forma: nomeForma(f), valor }))
+      .filter((x) => x.valor !== 0)
+      .sort((a, b) => b.valor - a.valor),
 
     vendasCanceladas: { quantidade: canceladas.length, valor: soma(canceladas, "total") },
     devolucoes: { quantidade: listaDevolucoes.length, valor: soma(listaDevolucoes, "valor_devolvido") },

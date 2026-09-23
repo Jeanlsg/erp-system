@@ -39,6 +39,9 @@ import { useAtalhosPdv, type Atalho } from "@/lib/use-atalhos-pdv";
 import { documentoValido, mascaraDocumento } from "@/lib/documento";
 import { ComboboxBusca } from "@/components/ui/combobox-busca";
 import { ClienteRapidoPdvDialog } from "@/components/cliente-rapido-pdv";
+import {
+  PagamentosVenda, faltaPagar, trocoDe, type Pagamento,
+} from "@/components/pagamentos-venda";
 
 interface CartItem {
   produto_id: string;          // para kit: o id do kit (kit_id === produto_id)
@@ -197,6 +200,9 @@ export function PDVPage() {
   const [modalConfigCaixa, setModalConfigCaixa] = useState(false);
   const [modalCaixasAbertos, setModalCaixasAbertos] = useState(false);
   const [modalConfirmarVenda, setModalConfirmarVenda] = useState(false);
+  // Formas com que esta venda está sendo paga. Vazio = uma forma só, pelo
+  // seletor de sempre; com linhas, a venda é mista e vai detalhada ao banco.
+  const [pagamentos, setPagamentos] = useState<Pagamento[]>([]);
   const [emitirCupom, setEmitirCupom] = useState(false);
   // "É CPF na nota?" — consumidor identificado sem precisar de cadastro
   const [cpfNota, setCpfNota] = useState("");
@@ -210,7 +216,13 @@ export function PDVPage() {
   const total = Math.max(0, subtotal - totalDesconto + acresc);
   const valorRec = parseFloat(valorRecebido) || 0;
   // Troco só existe em pagamento em dinheiro
-  const troco = forma === "dinheiro" ? Math.max(0, valorRec - total) : 0;
+  const trocoSimples = forma === "dinheiro" ? Math.max(0, valorRec - total) : 0;
+  const temPagamentosDetalhados = pagamentos.length > 0;
+  const troco = temPagamentosDetalhados ? trocoDe(pagamentos) : trocoSimples;
+  // Venda mista não fecha enquanto a soma não cobre o total: dinheiro que
+  // falta aqui vira divergência de caixa no fim do dia, e aí ninguém lembra
+  // de qual venda foi.
+  const faltaReceber = temPagamentosDetalhados ? faltaPagar(total, pagamentos) : 0;
 
   // O que tem de estar na gaveta, calculado pelo banco (vw_caixa_resumo).
   //
@@ -330,6 +342,7 @@ export function PDVPage() {
     setAcrescimo("");
     setValorRecebido("");
     setForma("dinheiro");
+    setPagamentos([]);
   }, []);
 
   // Abrir caixa
@@ -455,7 +468,11 @@ export function PDVPage() {
         total,
         custo_total: custoTotal,
         lucro_total: total - custoTotal,
-        forma_pagamento: forma,
+        forma_pagamento: temPagamentosDetalhados
+          // a forma "principal" é a de maior valor; o banco reconfere
+          ? [...pagamentos].sort((x, y) => y.valor - x.valor)[0].forma
+          : forma,
+        ...(temPagamentosDetalhados ? { pagamentos } : {}),
         // sem cliente cadastrado, vale o CPF digitado no balcão
         ...(!clienteId && cpfNota.trim()
           ? { consumidor_cpf: cpfNota, consumidor_nome: nomeNota.trim() || undefined }
@@ -579,7 +596,16 @@ export function PDVPage() {
     { tecla: "F4", rotulo: "Código", acao: () => { campoCodigo.current?.focus(); campoCodigo.current?.select(); } },
     { tecla: "F5", rotulo: "Localizar", acao: () => setModalLocalizar(true) },
     { tecla: "F8", rotulo: "Cancelar item", acao: () => { if (itemSelecionado) { remover(itemSelecionado); setItemSelecionado(null); } else toast.info("Escolha o item no cupom antes."); }, ativo: cart.length > 0 },
-    { tecla: "F10", rotulo: "Add Pagamento", acao: () => { if (cart.length) setModalConfirmarVenda(true); }, ativo: cart.length > 0 },
+    { tecla: "F10", rotulo: "Add Pagamento", acao: () => {
+        if (!cart.length) return;
+        setModalConfirmarVenda(true);
+        // F10 é "adicionar pagamento": já abre o painel de formas
+        if (!pagamentos.length) {
+          setPagamentos([{ forma, valor: total,
+            ...(forma === "dinheiro" && valorRec > total
+                ? { valor_recebido: valorRec, troco: valorRec - total } : {}) }]);
+        }
+      }, ativo: cart.length > 0 },
     { tecla: "F11", rotulo: "Cancelar venda", acao: () => { if (cart.length && confirm("Cancelar a venda e limpar o cupom?")) limparCarrinho(); }, ativo: cart.length > 0 },
     { tecla: "Ctrl+S", rotulo: "Sangria", acao: () => setModalSangria(true), ativo: !!caixaAberto },
     { tecla: "Ctrl+E", rotulo: "Entrada de valores", acao: () => setModalEntrada(true), ativo: !!caixaAberto },
@@ -1386,18 +1412,46 @@ export function PDVPage() {
               <span>Total:</span>
               <span className="text-green-600">{brl(total)}</span>
             </div>
-            {forma === "dinheiro" && (
-              <>
-                <div className="flex justify-between">
-                  <span>Recebido:</span>
-                  <span>{brl(valorRec)}</span>
+            {/* Pagamentos (F10): uma ou várias formas. Enquanto não houver
+                linha lançada, vale o seletor simples da tela de venda. */}
+            <div className="mt-2 rounded-md border p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-sm font-medium">
+                  Pagamento <span className="font-normal text-muted-foreground">(F10)</span>
+                </p>
+                {!temPagamentosDetalhados && (
+                  <Button variant="outline" size="sm"
+                    onClick={() => setPagamentos([{ forma, valor: total,
+                      ...(forma === "dinheiro" && valorRec > total
+                          ? { valor_recebido: valorRec, troco: valorRec - total } : {}) }])}>
+                    Dividir em mais de uma forma
+                  </Button>
+                )}
+              </div>
+
+              {temPagamentosDetalhados ? (
+                <PagamentosVenda total={total} pagamentos={pagamentos} aoMudar={setPagamentos} />
+              ) : (
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span>Forma:</span>
+                    <span className="capitalize">{String(forma).replace("_", " ")}</span>
+                  </div>
+                  {forma === "dinheiro" && (
+                    <>
+                      <div className="flex justify-between">
+                        <span>Recebido:</span>
+                        <span>{brl(valorRec)}</span>
+                      </div>
+                      <div className="flex justify-between font-semibold text-orange-600">
+                        <span>Troco:</span>
+                        <span>{brl(troco)}</span>
+                      </div>
+                    </>
+                  )}
                 </div>
-                <div className="flex justify-between text-orange-600 font-semibold">
-                  <span>Troco:</span>
-                  <span>{brl(troco)}</span>
-                </div>
-              </>
-            )}
+              )}
+            </div>
             {!clienteId && (
               <div className="mt-2 space-y-2 rounded-md border p-3">
                 <p className="text-sm font-medium">CPF na nota? <span className="font-normal text-muted-foreground">(opcional)</span></p>
@@ -1448,9 +1502,12 @@ export function PDVPage() {
             <Button variant="outline" onClick={() => setModalConfirmarVenda(false)}>
               Voltar
             </Button>
-            <Button onClick={handleFinalizarVenda} disabled={finalizando} className="bg-green-600 hover:bg-green-700">
+            <Button onClick={handleFinalizarVenda}
+              disabled={finalizando || faltaReceber > 0}
+              title={faltaReceber > 0 ? `Ainda falta receber ${brl(faltaReceber)}` : undefined}
+              className="bg-green-600 hover:bg-green-700">
               {finalizando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4 mr-1" />}
-              Confirmar Venda
+              {faltaReceber > 0 ? `Falta ${brl(faltaReceber)}` : "Confirmar Venda"}
             </Button>
           </DialogFooter>
         </DialogContent>
