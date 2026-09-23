@@ -12,8 +12,9 @@ DF-e, importação de XML com auto-matching, e notificações.
 
 ## Estado em 23/09/2026
 
-Três das sete frentes fechadas. O grosso do trabalho, porém, veio de fora do
-plano: defeito encontrado em uso e pedido que surgiu no meio do caminho.
+Quatro das sete frentes fechadas, e tudo em produção desde 23/09. O grosso do
+trabalho, porém, veio de fora do plano: defeito encontrado em uso e pedido que
+surgiu no meio do caminho.
 
 ### Frentes do plano
 
@@ -23,7 +24,7 @@ plano: defeito encontrado em uso e pedido que surgiu no meio do caminho.
 | 2 | Devolução para fornecedor | **feita** |
 | 3 | NF avulsa (saída e entrada) | **parada** — depende do CSC de produção |
 | 4 | Ajustes finos do PDV | **feita** |
-| 5 | Funcionários e comissão | não começou |
+| 5 | Funcionários e comissão | **feita** |
 | 6 | Impostos na entrada por XML | não começou — depende do contador |
 | 7 | Miudezas | não começou |
 
@@ -39,6 +40,11 @@ SEFAZ de produção, porque o CSC não está cadastrado.
 aplicar entrada/adiantamento (Ctrl+A), fechamento indireto, e as duas
 configurações de fechamento: exigir valores por forma e ocultar valores exceto
 para o master.
+
+**Frente 5** — ficha de admissão (filiação, naturalidade, estado civil,
+instrução, filhos), dados bancários e comissão sobre serviço numa seção
+confidencial; metas por funcionário com acompanhamento na tela de Comissões; e
+comissão apurada virando conta a pagar, com trava contra lançar duas vezes.
 
 ### Entregue fora do plano
 
@@ -127,13 +133,21 @@ Em ordem de quem está esperando o quê.
 
 | falta | depende de |
 |---|---|
-| **Deploy** — mais de 50 commits em produção nenhuma | webhook bloqueado nesta sessão |
 | Decidir as 2 pendências acima que mexem em rotina | você |
 | CSC de produção cadastrado | você / contador |
 | Frente 3: NF avulsa de saída e de entrada | CSC |
-| Frente 5: funcionários, dados bancários, comissão, meta | nada |
 | Frente 6: impostos do XML no custo | contador |
 | Frente 7: duplicar venda, declaração MEI, prazo de notificação, mais de um código de barras por produto | nada |
+
+### Deploy
+
+Feito em 23/09, commit `f1bd405`, container `apps_erp.1.45mo7o0e16srebmo0doxeiiz6`
+saudável. Migrations 078 a 093 aplicadas.
+
+Um aviso para a próxima vez: disparar o webhook duas vezes seguidas **derruba o
+EasyPanel**. O segundo pedido aborta o build em andamento e o tratamento do
+aborto mata o processo (saída 1). Ele volta sozinho em poucos minutos, mas
+nenhum dos dois deploys acontece. Um disparo, depois espera.
 
 ---
 
@@ -246,6 +260,9 @@ Todos pequenos, todos no balcão todo dia:
 ---
 
 ## 5. Funcionários e comissão
+
+> **Feita.** Migrations 093. A meta e o lançamento em contas vivem na tela de
+> Comissões, que é onde o assunto já estava.
 
 **Hoje:** `erp_funcionarios` tem cargo, salário, CPF, RG, PIS, CTPS.
 
