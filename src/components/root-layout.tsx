@@ -32,6 +32,26 @@ import { ajudaDaRota } from "@/lib/ajuda-paginas";
 import { useLojaAtualStore } from "@/lib/store/loja-atual";
 import { useLojas, isSupabaseConfigured } from "@/lib/supabase-queries";
 
+/**
+ * Telas que escolhem a loja dentro delas mesmas.
+ *
+ * Nestas, o seletor do cabeçalho vira um segundo controle para a mesma
+ * decisão — e pior, um que não manda: quem vale é o filtro da própria
+ * tela. Some para não haver dois seletores discordando na mesma página.
+ *
+ * As outras ~30 telas continuam usando a loja do cabeçalho; é ela que
+ * useAutoSelectLoja lê. Quando uma delas ganhar filtro próprio, o caminho
+ * é acrescentar a rota aqui.
+ */
+export const ROTAS_COM_FILTRO_DE_LOJA = [
+  "/",                        // visão geral: escolhe várias lojas por caixa de seleção
+  "/relatorios",
+  "/caixa",
+  "/produtos-estoque-lotes",
+  "/produtos",                // mesma tela, outra rota
+  "/lotes",
+];
+
 export function RootLayout() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -39,6 +59,8 @@ export function RootLayout() {
   const { data: lojas = [], isSuccess: lojasCarregadas } = useLojas();
   const currentLojaId = useLojaAtualStore((s) => s.currentLojaId);
   const setCurrentLojaId = useLojaAtualStore((s) => s.setCurrentLojaId);
+
+  const temFiltroProprio = ROTAS_COM_FILTRO_DE_LOJA.includes(location.pathname);
 
   const [hydrated, setHydrated] = useState(false);
   // Modo demonstração: o "?" explica a página e, quando há tour, percorre
@@ -109,7 +131,7 @@ export function RootLayout() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-10 flex h-14 items-center justify-between gap-3 border-b bg-background/95 px-4 backdrop-blur">
           <div className="flex items-center gap-3">
-            {isSupabaseConfigured() && lojas.length > 0 ? (
+            {temFiltroProprio ? null : isSupabaseConfigured() && lojas.length > 0 ? (
               <Select value={currentLojaId ?? ""} onValueChange={setCurrentLojaId}>
                 <SelectTrigger className="w-48">
                   <Store className="mr-2 h-4 w-4" />
