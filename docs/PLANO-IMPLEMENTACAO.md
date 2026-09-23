@@ -10,6 +10,33 @@ DF-e, importação de XML com auto-matching, e notificações.
 
 ---
 
+## Estado em 23/09/2026
+
+**Nenhuma das sete frentes começou.** O que foi feito desde que este plano
+foi escrito veio de pedidos que surgiram no meio do caminho — quase tudo
+defeito encontrado em uso, não funcionalidade nova:
+
+| entregue | por quê |
+|---|---|
+| Comprovante térmico de fechamento, no formato do Excellent | pedido |
+| Detalhes do turno de caixa | não abriam de lugar nenhum |
+| Fechamento gravava "vendas R$ 0,00" e inventava diferença | defeito |
+| Sangria por forma; gaveta contava cartão como dinheiro | defeito grave |
+| Relatórios financeiros: 7 pop-ups viram telas com filtro | pedido |
+| Menu do financeiro: 4 itens viram 1 | pedido |
+| PDV em tela própria, teclado e atalhos | pedido |
+| Caixas como cadastro por loja, senha na abertura | pedido |
+| Ciclo de pedidos: criar pelo balcão, itens e endereços | pedido |
+| Dashboard e Visão Geral unificados | pedido |
+| **12 telas abriam por apelido de rota sem permissão** | segurança |
+| **Qualquer usuário podia se promover a admin** | segurança |
+| **CSC de produção vazaria no dia da virada** | segurança |
+
+As três últimas não estavam previstas aqui e eram mais urgentes que
+qualquer frente da lista.
+
+---
+
 ## Ordem recomendada
 
 A ordem abaixo segue **risco fiscal primeiro, atrito diário depois**. Cada
