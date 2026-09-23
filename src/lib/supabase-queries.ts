@@ -3939,6 +3939,99 @@ export function useUpsertConfiguracao() {
 }
 
 // ========================================
+// METAS E COMISSÕES (frente 5 do plano)
+// ========================================
+
+/**
+ * Metas do período, com o realizado já calculado pelo banco
+ * (vw_meta_funcionario). O realizado vem das vendas finalizadas com
+ * vendedor, não das comissões — comissão cancelada não desfaz a venda.
+ */
+export function useMetas(f: { lojaId?: string; de?: string; ate?: string }) {
+  return useQuery<any[]>({
+    queryKey: ["erp_metas", f],
+    queryFn: async () => {
+      if (!isSupabaseConfigured() || !f.lojaId) return [];
+      let q = supabase
+        .from("vw_meta_funcionario")
+        .select("*")
+        .eq("loja_id", f.lojaId)
+        .order("periodo_inicio", { ascending: false })
+        .limit(200);
+      // meta que cruza o período filtrado conta: campanha de quinzena não
+      // começa nem termina no dia em que alguém abre o relatório
+      if (f.ate) q = q.lte("periodo_inicio", f.ate);
+      if (f.de) q = q.gte("periodo_fim", f.de);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!f.lojaId,
+  });
+}
+
+export function useCriarMeta() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (m: {
+      lojaId: string; funcionarioId: string;
+      periodoInicio: string; periodoFim: string;
+      tipo: string; valor: number;
+    }) => {
+      const { data, error } = await supabase.from("erp_metas").insert({
+        loja_id: m.lojaId,
+        funcionario_id: m.funcionarioId,
+        periodo_inicio: m.periodoInicio,
+        periodo_fim: m.periodoFim,
+        tipo: m.tipo,
+        valor: m.valor,
+      }).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["erp_metas"] }),
+  });
+}
+
+export function useExcluirMeta() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("erp_metas").delete().eq("id", id);
+      if (error) throw error;
+      return id;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["erp_metas"] }),
+  });
+}
+
+/**
+ * Lança as comissões escolhidas em Contas a Pagar, uma conta por funcionário.
+ *
+ * RPC porque o controle que importa é do banco: comissão já ligada a uma
+ * conta é recusada. Sem isso, o clique repetido — ou duas pessoas conferindo
+ * o mesmo período — pagaria a comissão duas vezes.
+ */
+export function useLancarComissoesEmContas() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (p: { comissoes: string[]; vencimento: string; observacoes?: string }) => {
+      const { data, error } = await supabase.schema("erp").rpc("lancar_comissoes_em_contas", {
+        p_comissoes: p.comissoes,
+        p_vencimento: p.vencimento,
+        p_observacoes: p.observacoes ?? null,
+      });
+      if (error) throw error;
+      return data as any;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["erp_comissoes"] });
+      qc.invalidateQueries({ queryKey: ["erp_contas"] });
+    },
+  });
+}
+
+// ========================================
 // LGPD — solicitações de exclusão (Art. 18)
 // ========================================
 export function useSolicitacoesLgpd() {

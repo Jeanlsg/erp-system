@@ -52,13 +52,22 @@ export function FuncionariosPage() {
     email: "",
     telefone: "",
     comissao: "0", usuario_id: "",
+    nome_pai: "", nome_mae: "", naturalidade: "", nacionalidade: "Brasileira",
+    estado_civil: "", grau_instrucao: "", quantidade_filhos: "",
+    banco: "", agencia: "", conta: "", tipo_conta_bancaria: "", chave_pix: "",
+    comissao_servico: "",
     // acesso ao sistema: criado junto com o funcionário
     acesso: false, senha: "", papeis: ["caixa"] as Role[],
   });
   const FORM_VAZIO = {
     nome: "", cpf: "", cargo: "", departamento: "", salario: "",
     data_admissao: new Date().toISOString().slice(0, 10), email: "", telefone: "",
-    comissao: "0", usuario_id: "", acesso: false, senha: "", papeis: ["caixa"] as Role[],
+    comissao: "0", usuario_id: "",
+    nome_pai: "", nome_mae: "", naturalidade: "", nacionalidade: "Brasileira",
+    estado_civil: "", grau_instrucao: "", quantidade_filhos: "",
+    banco: "", agencia: "", conta: "", tipo_conta_bancaria: "", chave_pix: "",
+    comissao_servico: "",
+    acesso: false, senha: "", papeis: ["caixa"] as Role[],
   };
 
   if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="Funcionários" />;
@@ -73,6 +82,28 @@ export function FuncionariosPage() {
   const ativos = funcionarios.filter((f: any) => !f.data_demissao);
   const inativos = funcionarios.filter((f: any) => f.data_demissao);
 
+  /**
+   * Ficha e dados bancários.
+   *
+   * Campo vazio grava null, não string vazia: "" passaria por preenchido em
+   * qualquer relatório de admissão e em qualquer conferência de pagamento.
+   */
+  const camposDaFicha = () => ({
+    nome_pai: form.nome_pai || null,
+    nome_mae: form.nome_mae || null,
+    naturalidade: form.naturalidade || null,
+    nacionalidade: form.nacionalidade || null,
+    estado_civil: form.estado_civil || null,
+    grau_instrucao: form.grau_instrucao || null,
+    quantidade_filhos: form.quantidade_filhos === "" ? null : Number(form.quantidade_filhos),
+    banco: form.banco || null,
+    agencia: form.agencia || null,
+    conta: form.conta || null,
+    tipo_conta_bancaria: form.tipo_conta_bancaria || null,
+    chave_pix: form.chave_pix || null,
+    comissao_percentual_servico: form.comissao_servico === "" ? null : Number(form.comissao_servico),
+  });
+
   const abrirEdicao = (f: any) => {
     setEditando(f);
     setForm({
@@ -86,6 +117,19 @@ export function FuncionariosPage() {
       telefone: f.pessoa?.telefone ?? "",
       comissao: String(f.comissao_percentual ?? 0),
       usuario_id: f.usuario_id ?? "",
+      nome_pai: f.nome_pai ?? "",
+      nome_mae: f.nome_mae ?? "",
+      naturalidade: f.naturalidade ?? "",
+      nacionalidade: f.nacionalidade ?? "Brasileira",
+      estado_civil: f.estado_civil ?? "",
+      grau_instrucao: f.grau_instrucao ?? "",
+      quantidade_filhos: f.quantidade_filhos != null ? String(f.quantidade_filhos) : "",
+      banco: f.banco ?? "",
+      agencia: f.agencia ?? "",
+      conta: f.conta ?? "",
+      tipo_conta_bancaria: f.tipo_conta_bancaria ?? "",
+      chave_pix: f.chave_pix ?? "",
+      comissao_servico: f.comissao_percentual_servico != null ? String(f.comissao_percentual_servico) : "",
       acesso: !!f.usuario_id,
       senha: "",
       papeis: papeisDe(usuarios.find((u: any) => u.id === f.usuario_id)),
@@ -173,6 +217,7 @@ export function FuncionariosPage() {
         salario: form.salario ? Number(form.salario) : null,
         data_admissao: form.data_admissao || null,
         comissao_percentual: Number(form.comissao) || 0,
+        ...camposDaFicha(),
         usuario_id: usuarioId,
       });
       void qc.invalidateQueries({ queryKey: ["erp_usuarios_vinculo"] });
@@ -265,6 +310,7 @@ export function FuncionariosPage() {
       data_admissao: form.data_admissao || null,
       cpf: form.cpf || null,
       comissao_percentual: parseFloat(form.comissao) || 0,
+      ...camposDaFicha(),
       usuario_id: null,
       gerente: false,
     });
@@ -431,6 +477,98 @@ export function FuncionariosPage() {
               <div><Label>Comissão %</Label><Input type="number" step="0.01" value={form.comissao} onChange={(e) => setForm({ ...form, comissao: e.target.value })} /></div>
               <div><Label>Admissão</Label><Input type="date" value={form.data_admissao} onChange={(e) => setForm({ ...form, data_admissao: e.target.value })} /></div>
             </div>
+
+            {/* Ficha de admissão — o que a contabilidade pede e a tela não tinha */}
+            <details className="rounded-md border p-3">
+              <summary className="cursor-pointer text-sm font-medium">
+                Ficha de admissão
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  filiação, naturalidade, estado civil, instrução
+                </span>
+              </summary>
+              <div className="mt-3 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div><Label>Nome do pai</Label><Input value={form.nome_pai} onChange={(e) => setForm({ ...form, nome_pai: e.target.value })} /></div>
+                  <div><Label>Nome da mãe</Label><Input value={form.nome_mae} onChange={(e) => setForm({ ...form, nome_mae: e.target.value })} /></div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><Label>Naturalidade</Label><Input value={form.naturalidade} onChange={(e) => setForm({ ...form, naturalidade: e.target.value })} placeholder="Cidade / UF" /></div>
+                  <div><Label>Nacionalidade</Label><Input value={form.nacionalidade} onChange={(e) => setForm({ ...form, nacionalidade: e.target.value })} /></div>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <Label>Estado civil</Label>
+                    <select className="mt-1 flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                      value={form.estado_civil} onChange={(e) => setForm({ ...form, estado_civil: e.target.value })}>
+                      <option value="">—</option>
+                      <option value="solteiro">Solteiro(a)</option>
+                      <option value="casado">Casado(a)</option>
+                      <option value="divorciado">Divorciado(a)</option>
+                      <option value="viuvo">Viúvo(a)</option>
+                      <option value="uniao_estavel">União estável</option>
+                    </select>
+                  </div>
+                  <div>
+                    <Label>Grau de instrução</Label>
+                    <select className="mt-1 flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                      value={form.grau_instrucao} onChange={(e) => setForm({ ...form, grau_instrucao: e.target.value })}>
+                      <option value="">—</option>
+                      <option value="fundamental_incompleto">Fundamental incompleto</option>
+                      <option value="fundamental">Fundamental</option>
+                      <option value="medio_incompleto">Médio incompleto</option>
+                      <option value="medio">Médio</option>
+                      <option value="superior_incompleto">Superior incompleto</option>
+                      <option value="superior">Superior</option>
+                      <option value="pos">Pós-graduação</option>
+                    </select>
+                  </div>
+                  <div><Label>Filhos</Label><Input type="number" min="0" value={form.quantidade_filhos} onChange={(e) => setForm({ ...form, quantidade_filhos: e.target.value })} /></div>
+                </div>
+              </div>
+            </details>
+
+            {/* Confidencial: banco e comissão.
+
+                A tabela inteira já só é legível por admin e gerente desde a
+                078 — o aviso existe para quem está com a tela aberta no
+                balcão saber que ali tem dado de pagamento. */}
+            <details className="rounded-md border border-amber-300 bg-amber-50/50 p-3 dark:bg-amber-950/10">
+              <summary className="cursor-pointer text-sm font-medium">
+                Informações confidenciais
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  dados bancários e comissão — visível só a administrador e gerente
+                </span>
+              </summary>
+              <div className="mt-3 space-y-3">
+                <div className="grid grid-cols-3 gap-3">
+                  <div><Label>Banco</Label><Input value={form.banco} onChange={(e) => setForm({ ...form, banco: e.target.value })} placeholder="Nome ou número" /></div>
+                  <div><Label>Agência</Label><Input value={form.agencia} onChange={(e) => setForm({ ...form, agencia: e.target.value })} /></div>
+                  <div><Label>Conta</Label><Input value={form.conta} onChange={(e) => setForm({ ...form, conta: e.target.value })} /></div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Tipo de conta</Label>
+                    <select className="mt-1 flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                      value={form.tipo_conta_bancaria} onChange={(e) => setForm({ ...form, tipo_conta_bancaria: e.target.value })}>
+                      <option value="">—</option>
+                      <option value="corrente">Corrente</option>
+                      <option value="poupanca">Poupança</option>
+                      <option value="salario">Salário</option>
+                    </select>
+                  </div>
+                  <div><Label>Chave PIX</Label><Input value={form.chave_pix} onChange={(e) => setForm({ ...form, chave_pix: e.target.value })} /></div>
+                </div>
+                <div>
+                  <Label>Comissão sobre serviço %</Label>
+                  <Input type="number" step="0.01" min="0" value={form.comissao_servico}
+                    onChange={(e) => setForm({ ...form, comissao_servico: e.target.value })} />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Serviço comissiona diferente de produto: mão de obra não tem custo de
+                    mercadoria. Em branco, vale o percentual geral acima.
+                  </p>
+                </div>
+              </div>
+            </details>
 
             {/* Acesso ao sistema: nasce junto com o funcionário. Sem login ele
                 não vende no PDV e não gera comissão. */}
