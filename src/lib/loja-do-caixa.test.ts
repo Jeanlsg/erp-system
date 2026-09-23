@@ -24,10 +24,23 @@ describe("lojaEfetivaDoPdv", () => {
 });
 
 describe("podeTrocarDeLoja", () => {
-  it("trava com caixa aberto", () => {
+  it("trava com caixa aberto durante a venda", () => {
     expect(podeTrocarDeLoja({ loja_id: JUAZEIRO })).toBe(false);
   });
   it("libera sem caixa aberto", () => {
     expect(podeTrocarDeLoja(null)).toBe(true);
+  });
+  it("libera fora da frente de venda, mesmo com caixa aberto", () => {
+    // é de lá que o admin abre o segundo caixa, quase sempre na outra loja
+    expect(podeTrocarDeLoja({ loja_id: JUAZEIRO }, false)).toBe(true);
+  });
+});
+
+describe("lojaEfetivaDoPdv fora da frente de venda", () => {
+  it("volta a seguir o cabeçalho para permitir abrir caixa em outra loja", () => {
+    expect(lojaEfetivaDoPdv({ loja_id: JUAZEIRO }, PETROLINA, false)).toBe(PETROLINA);
+  });
+  it("na frente de venda continua no caixa", () => {
+    expect(lojaEfetivaDoPdv({ loja_id: JUAZEIRO }, PETROLINA, true)).toBe(JUAZEIRO);
   });
 });

@@ -12,13 +12,26 @@
 export function lojaEfetivaDoPdv(
   caixaAberto: { loja_id?: string | null } | null | undefined,
   lojaDoCabecalho: string | null | undefined,
+  /** a tela está NA frente de venda? false quando o operador saiu dela */
+  naFrente = true,
 ): string | null {
-  return caixaAberto?.loja_id ?? lojaDoCabecalho ?? null;
+  if (naFrente && caixaAberto?.loja_id) return caixaAberto.loja_id;
+  return lojaDoCabecalho ?? null;
 }
 
-/** O seletor de loja pode ser trocado? Não, enquanto houver caixa aberto. */
+/**
+ * O seletor de loja pode ser trocado?
+ *
+ * Não durante a venda: o cupom sairia numa loja com o caixa em outra. Mas sim
+ * quando o operador sai da frente de caixa — é de lá que o admin abre um
+ * segundo caixa, e um segundo caixa na mesma loja do primeiro raramente é o
+ * que se quer. Sem esta abertura, "abrir outro caixa" nunca alcançaria a
+ * outra loja.
+ */
 export function podeTrocarDeLoja(
   caixaAberto: { loja_id?: string | null } | null | undefined,
+  naFrente = true,
 ): boolean {
+  if (!naFrente) return true;
   return !caixaAberto?.loja_id;
 }

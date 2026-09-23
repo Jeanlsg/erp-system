@@ -16,9 +16,19 @@ import { create } from "zustand";
 interface PdvModo {
   vendendo: boolean;
   setVendendo: (v: boolean) => void;
+  /**
+   * Qual caixa aberto a tela está operando, quando há mais de um no mesmo
+   * nome (admin). Fica aqui pelo mesmo motivo do `vendendo`: o casco também
+   * precisa saber, para travar o cabeçalho na loja do caixa CERTO — e não na
+   * do caixa mais recente, que pode ser o outro.
+   */
+  caixaAtivoId: string | null;
+  setCaixaAtivoId: (id: string | null) => void;
 }
 
 export const usePdvModo = create<PdvModo>((set) => ({
   vendendo: false,
   setVendendo: (vendendo) => set({ vendendo }),
+  caixaAtivoId: null,
+  setCaixaAtivoId: (caixaAtivoId) => set({ caixaAtivoId }),
 }));

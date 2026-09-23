@@ -28,6 +28,7 @@ import {
   useUpdatePermissoesUsuario, useLojas,
   usePapelPermissoes, useSalvarPapelPermissoes,
   useFuncionarios, useCreateFuncionario, useUpdateFuncionario,
+  useCaixasPermitidos, useDefinirCaixasPermitidos, useTodosPontosVenda,
   isSupabaseConfigured,
 } from "@/lib/supabase-queries";
 import { supabase } from "@/lib/supabase";
@@ -341,6 +342,8 @@ export function UsuariosPage() {
   // Modais
   const [modalUsuario, setModalUsuario] = useState(false);
   const [modalPermissoes, setModalPermissoes] = useState(false);
+  // Caixas que a conta pode abrir (migration 092). Lista vazia = todos.
+  const [caixasDaConta, setCaixasDaConta] = useState<string[]>([]);
   const [editId, setEditId] = useState<string | null>(null);
   const [permissoesUsuarioId, setPermissoesUsuarioId] = useState<string | null>(null);
 
@@ -657,6 +660,12 @@ export function UsuariosPage() {
         id: permissoesUsuarioId,
         permissoes: payload,
       });
+      // Esta parte é trava de verdade: o gatilho de abertura no banco recusa
+      // caixa fora da lista, venha a chamada de onde vier.
+      await definirCaixas.mutateAsync({
+        usuarioId: permissoesUsuarioId,
+        pontos: caixasDaConta,
+      });
       toast.success(
         usarPermissoesCustom
           ? "Permissões customizadas salvas"
@@ -667,6 +676,15 @@ export function UsuariosPage() {
       toast.error(`Erro: ${err.message}`);
     }
   };
+
+  const { data: todosPontosVenda = [] } = useTodosPontosVenda();
+  const { data: caixasSalvos = [] } = useCaixasPermitidos(permissoesUsuarioId ?? undefined);
+  const definirCaixas = useDefinirCaixasPermitidos();
+
+  // Recarrega a lista sempre que o diálogo abre para outra conta.
+  useEffect(() => {
+    setCaixasDaConta(caixasSalvos);
+  }, [permissoesUsuarioId, caixasSalvos.join(",")]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const usuarioSelecionado = usuarios.find((u) => u.id === permissoesUsuarioId);
   const papeisSelecionados = papeisDe(usuarioSelecionado);
@@ -1196,6 +1214,55 @@ export function UsuariosPage() {
               daqui esconde o caminho, não vira uma trava de servidor. Para restringir de verdade
               o que alguém pode gravar, mude o cargo.
             </p>
+          </div>
+
+          {/* Caixas que a conta pode abrir.
+              Ao contrário do resto deste diálogo, esta parte é trava de
+              banco: o gatilho de abertura recusa caixa fora da lista, venha
+              a chamada da tela ou da API. */}
+          <div className="rounded-md border p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium">Caixas que esta conta pode abrir</p>
+                <p className="text-xs text-muted-foreground">
+                  {caixasDaConta.length === 0
+                    ? "Nenhum marcado: a conta pode abrir qualquer caixa."
+                    : `${caixasDaConta.length} caixa(s) liberado(s) — os demais são recusados pelo banco.`}
+                </p>
+              </div>
+              {caixasDaConta.length > 0 && (
+                <Button variant="outline" size="sm" onClick={() => setCaixasDaConta([])}>
+                  Liberar todos
+                </Button>
+              )}
+            </div>
+
+            {todosPontosVenda.length === 0 ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Nenhum caixa cadastrado ainda. Cadastre em PDV › Configurações.
+              </p>
+            ) : (
+              <div className="mt-2 grid gap-1 sm:grid-cols-2">
+                {todosPontosVenda.map((pv: any) => {
+                  const marcado = caixasDaConta.includes(pv.id);
+                  return (
+                    <label key={pv.id} className="flex items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-muted/50">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4"
+                        checked={marcado}
+                        onChange={(e) => setCaixasDaConta((prev) =>
+                          e.target.checked ? [...prev, pv.id] : prev.filter((id) => id !== pv.id))}
+                      />
+                      <span>{pv.nome}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {pv.loja?.apelido ?? pv.loja?.nome ?? ""}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Toggle: Padrão vs Custom */}

@@ -17,8 +17,9 @@ import {
   Search, Keyboard,
   Bike,
 } from "lucide-react";
-import { useProdutos, useClientes, useCaixaAberto, useCreateCaixa, useFecharCaixa, useKits, useCaixas, useCreateSangria, useCreateEntradaExtra, useEmitirNFeVenda, isSupabaseConfigured, useVendedores, useEstoqueLoja, usePontosVenda, useCriarPontoVenda, useConfigsCaixa, useSaldosPedidos, useAplicarEntradaPedido } from "@/lib/supabase-queries";
+import { useProdutos, useClientes, useCreateCaixa, useFecharCaixa, useKits, useCaixas, useCreateSangria, useCreateEntradaExtra, useEmitirNFeVenda, isSupabaseConfigured, useVendedores, useEstoqueLoja, usePontosVenda, useCriarPontoVenda, useConfigsCaixa, useSaldosPedidos, useAplicarEntradaPedido, useCaixasAbertosDoUsuario, useCaixasPermitidos } from "@/lib/supabase-queries";
 import { lojaEfetivaDoPdv } from "@/lib/loja-do-caixa";
+import { pontosQuePodeAbrir, caixaAtivo, podeVariosCaixas } from "@/lib/caixas-permitidos";
 import { formasParaDeclarar as escolherFormas, faltaDeclarar as temFormaPendente, argumentosDeFechamento } from "@/lib/fechamento-por-forma";
 import { toast } from "sonner";
 import {
@@ -68,9 +69,22 @@ export function PDVPage() {
   // estoque baixado na loja errada e a venda fora do fechamento do caixa que
   // a recebeu. O seletor do topo só vale enquanto não há caixa aberto — é
   // assim que se escolhe ONDE abrir.
-  const { data: caixaAberto } = useCaixaAberto(user?.id);
-  const { lojaId: lojaDoCabecalho } = useAutoSelectLoja();
-  const lojaId = lojaEfetivaDoPdv(caixaAberto as any, lojaDoCabecalho);
+  // O admin pode manter mais de um caixa aberto (migration 092) e alternar
+  // entre eles — caixa 1 de Petrolina e caixa 1 de Juazeiro ao mesmo tempo.
+  // Para as outras contas a lista tem no máximo um elemento, e nada muda.
+  // Sair da frente de caixa NÃO fecha o caixa: volta para a tela de seleção,
+  // com o turno em aberto, como no sistema anterior da loja (F12). Fica aqui
+  // em cima porque a loja da tela depende dele.
+  const [saiuDaFrente, setSaiuDaFrente] = useState(false);
+  const { data: caixasAbertosMeus = [] } = useCaixasAbertosDoUsuario(user?.id);
+  const caixaEscolhidoId = usePdvModo((st) => st.caixaAtivoId);
+  const setCaixaEscolhidoId = usePdvModo((st) => st.setCaixaAtivoId);
+  const caixaAberto = caixaAtivo(caixasAbertosMeus as any[], caixaEscolhidoId) as any;
+  const variosCaixas = podeVariosCaixas(user as any);
+  const { lojaId: lojaDoCabecalho, lojas } = useAutoSelectLoja();
+  // Fora da frente de venda a loja volta a seguir o cabeçalho: é de lá que o
+  // admin abre um segundo caixa, quase sempre na outra loja.
+  const lojaId = lojaEfetivaDoPdv(caixaAberto as any, lojaDoCabecalho, !saiuDaFrente);
   const emitirNFCe = useEmitirNFeVenda();
   const createCaixa = useCreateCaixa();
   const fecharCaixa = useFecharCaixa();
@@ -142,10 +156,6 @@ export function PDVPage() {
   const [modalPrecos, setModalPrecos] = useState(false);
   const [modalLocalizar, setModalLocalizar] = useState(false);
   const [modalAtalhos, setModalAtalhos] = useState(false);
-  // Sair da frente de caixa NÃO fecha o caixa: volta para a tela de seleção,
-  // com o turno em aberto, como no sistema anterior da loja (F12).
-  const [saiuDaFrente, setSaiuDaFrente] = useState(false);
-
   // avisa o casco: com a venda aberta, a tela é do balcão e o menu sai
   const setVendendo = usePdvModo((s) => s.setVendendo);
   useEffect(() => {
@@ -154,7 +164,19 @@ export function PDVPage() {
   }, [caixaAberto, saiuDaFrente, setVendendo]);
 
   // ---- caixas cadastrados desta loja ----
-  const { data: pontosVenda = [] } = usePontosVenda(lojaId ?? undefined);
+  const { data: pontosVendaDaLoja = [] } = usePontosVenda(lojaId ?? undefined);
+  // Caixas que ESTA conta pode abrir. O banco recusa de novo no gatilho de
+  // abertura; aqui é para não oferecer o que vai ser negado.
+  const { data: caixasPermitidos = [] } = useCaixasPermitidos(user?.id);
+  const pontosVenda = useMemo(
+    () => pontosQuePodeAbrir(pontosVendaDaLoja as any[], caixasPermitidos),
+    [pontosVendaDaLoja, caixasPermitidos]);
+  // Caixa já aberto não entra na lista de abertura: a gaveta é uma só.
+  const pontosLivres = useMemo(() => {
+    const ocupados = new Set(
+      (caixas as any[]).filter((c) => c.status === "aberto").map((c) => c.ponto_venda_id));
+    return pontosVenda.filter((pv: any) => !ocupados.has(pv.id));
+  }, [pontosVenda, caixas]);
   const criarPonto = useCriarPontoVenda();
   const [pontoSelecionado, setPontoSelecionado] = useState<string | null>(null);
   const [modalNovoPonto, setModalNovoPonto] = useState(false);
@@ -435,7 +457,8 @@ export function PDVPage() {
 
   const handleAbrirCaixa = async () => {
     if (!user || !lojaId || !caixaSelecionado) return;
-    await createCaixa.mutateAsync({
+    try {
+    const novo = await createCaixa.mutateAsync({
       loja_id: lojaId,
       usuario_id: user.id,
       numero_caixa: caixaSelecionado,
@@ -444,9 +467,18 @@ export function PDVPage() {
       data_abertura: new Date().toISOString(),
       status: "aberto",
     });
+    // Quem tem vários abertos já vinha com um escolhido: sem isto, abrir o
+    // segundo deixaria a tela no primeiro e a venda cairia no caixa errado.
+    if ((novo as any)?.id) setCaixaEscolhidoId((novo as any).id);
     setModalAbertura(false);
     setSaldoInicial("");
     setSaiuDaFrente(false);
+    } catch (e: any) {
+      // O gatilho do banco recusa caixa fora da lista da conta e caixa já
+      // aberto por outra pessoa. Sem isto a mensagem se perdia e o operador
+      // ficava clicando no botão sem resposta.
+      toast.error(`Não foi possível abrir o caixa: ${e?.message ?? e}`);
+    }
   };
 
   // Fechar caixa (valor final = valor contado em gaveta pelo operador)
@@ -782,7 +814,23 @@ export function PDVPage() {
       <div className="flex items-center justify-between px-6 py-3 border-b bg-background">
         <div className="flex items-center gap-3">
           <Calculator className="h-6 w-6" />
-          {caixaAberto ? (
+          {caixaAberto && caixasAbertosMeus.length > 1 ? (
+            /* Mais de um caixa aberto no mesmo nome: o crachá vira seletor.
+               Sem ele, o admin que abrisse o segundo caixa perderia o
+               primeiro de vista e venderia no caixa errado sem perceber. */
+            <select
+              className="h-8 rounded-md border border-green-600 bg-green-50 px-2 text-sm font-medium text-green-800 dark:bg-green-950/30 dark:text-green-200"
+              value={caixaAberto.id}
+              onChange={(e) => setCaixaEscolhidoId(e.target.value)}
+              title="Alternar entre os caixas que você tem abertos"
+            >
+              {(caixasAbertosMeus as any[]).map((c) => (
+                <option key={c.id} value={c.id}>
+                  Caixa #{c.numero_caixa} — {lojas.find((l: any) => l.id === c.loja_id)?.apelido ?? "loja"}
+                </option>
+              ))}
+            </select>
+          ) : caixaAberto ? (
             <Badge variant="default" className="bg-green-600">
               <Unlock className="h-3 w-3 mr-1" />
               Caixa #{caixaAberto.numero_caixa} Aberto
@@ -795,6 +843,14 @@ export function PDVPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          {caixaAberto && variosCaixas && !saiuDaFrente && (
+            /* Abrir um segundo caixa sem fechar o primeiro. Só para quem pode
+               manter vários; o banco recusa dos outros. */
+            <Button variant="outline" size="sm" onClick={() => setSaiuDaFrente(true)}
+              title="Abrir outro caixa sem fechar este">
+              <Plus className="mr-1 h-4 w-4" /> Abrir outro caixa
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={() => setModalCaixasAbertos(true)}>
             Caixas em Aberto
           </Button>
@@ -857,13 +913,17 @@ export function PDVPage() {
                 </Button>
               </CardHeader>
               <CardContent>
-                {pontosVenda.length === 0 ? (
+                {pontosLivres.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
-                    Esta loja ainda não tem caixa cadastrado. Use <b>Adicionar caixa</b>.
+                    {pontosVendaDaLoja.length === 0
+                      ? <>Esta loja ainda não tem caixa cadastrado. Use <b>Adicionar caixa</b>.</>
+                      : pontosVenda.length === 0
+                        ? "Esta conta não tem permissão para abrir nenhum caixa desta loja."
+                        : "Todos os caixas desta loja já estão abertos."}
                   </p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
-                    {pontosVenda.map((pv: any) => (
+                    {pontosLivres.map((pv: any) => (
                       <Button
                         key={pv.id}
                         variant={pontoSelecionado === pv.id ? "default" : "outline"}

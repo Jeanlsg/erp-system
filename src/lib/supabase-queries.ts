@@ -1213,23 +1213,95 @@ function comTotaisReais(c: any) {
   };
 }
 
-export function useCaixaAberto(usuarioId?: string) {
-  return useQuery<Caixa | null>({
+/**
+ * Todos os caixas abertos no nome do usuário, do mais recente para o mais
+ * antigo.
+ *
+ * Era um só, com `.maybeSingle()`. Desde que o admin pode manter mais de um
+ * caixa aberto (migration 092), `maybeSingle` daria erro ao encontrar dois —
+ * e a frente de caixa abriria em branco sem dizer por quê.
+ */
+export function useCaixasAbertosDoUsuario(usuarioId?: string) {
+  return useQuery<any[]>({
     queryKey: ['erp_caixa-aberto', usuarioId],
     queryFn: async () => {
-      if (!isSupabaseConfigured() || !usuarioId) return null;
+      if (!isSupabaseConfigured() || !usuarioId) return [];
       const { data, error } = await supabase
         .from('vw_caixa_resumo')
         .select('*')
         .eq('usuario_id', usuarioId)
         .eq('status', 'aberto')
         .is('data_fechamento', null)
-        .order('data_abertura', { ascending: false })
-        .maybeSingle();
+        .order('data_abertura', { ascending: false });
       if (error) throw error;
-      return comTotaisReais(data) as any;
+      return (data ?? []).map((c) => comTotaisReais(c)) as any[];
     },
     enabled: !!usuarioId,
+  });
+}
+
+/** O caixa aberto mais recente. Mesma queryKey: uma requisição só. */
+export function useCaixaAberto(usuarioId?: string) {
+  const q = useCaixasAbertosDoUsuario(usuarioId);
+  return { ...q, data: (q.data?.[0] ?? null) as Caixa | null };
+}
+
+/**
+ * Caixas que a conta pode abrir (migration 092).
+ * Lista vazia = sem restrição; é o que mantém as contas antigas funcionando.
+ */
+export function useCaixasPermitidos(usuarioId?: string) {
+  return useQuery<string[]>({
+    queryKey: ['erp_usuario_pontos_venda', usuarioId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured() || !usuarioId) return [];
+      const { data, error } = await supabase
+        .from('erp_usuario_pontos_venda')
+        .select('ponto_venda_id')
+        .eq('usuario_id', usuarioId);
+      if (error) throw error;
+      return (data ?? []).map((r: any) => r.ponto_venda_id);
+    },
+    enabled: !!usuarioId,
+  });
+}
+
+/** Grava a lista inteira de uma conta: apaga o que saiu, insere o que entrou. */
+export function useDefinirCaixasPermitidos() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ usuarioId, pontos }: { usuarioId: string; pontos: string[] }) => {
+      const { error: errDel } = await supabase
+        .from('erp_usuario_pontos_venda')
+        .delete()
+        .eq('usuario_id', usuarioId);
+      if (errDel) throw errDel;
+      if (pontos.length > 0) {
+        const { error } = await supabase
+          .from('erp_usuario_pontos_venda')
+          .insert(pontos.map((ponto_venda_id) => ({ usuario_id: usuarioId, ponto_venda_id })));
+        if (error) throw error;
+      }
+      return { usuarioId, pontos };
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_usuario_pontos_venda'] }),
+  });
+}
+
+/** Todos os caixas cadastrados, de todas as lojas — para a tela de usuários. */
+export function useTodosPontosVenda() {
+  return useQuery<any[]>({
+    queryKey: ['erp_pontos_venda_todos'],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      const { data, error } = await supabase
+        .from('erp_pontos_venda')
+        .select('*, loja:erp_lojas(apelido, nome)')
+        .eq('ativo', true)
+        .order('numero');
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 }
 

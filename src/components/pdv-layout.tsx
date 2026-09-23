@@ -22,9 +22,10 @@ import { useAuth, logout, roleLabels, ehOperadorDeBalcao, type Role } from "@/li
 import { usePdvModo } from "@/lib/store/pdv-modo";
 import { AppSidebar } from "@/components/app-sidebar";
 import { useLojaAtualStore } from "@/lib/store/loja-atual";
-import { useLojas, useCaixaAberto, isSupabaseConfigured } from "@/lib/supabase-queries";
+import { useLojas, useCaixasAbertosDoUsuario, isSupabaseConfigured } from "@/lib/supabase-queries";
 import { useConexao } from "@/lib/offline/conexao";
 import { podeTrocarDeLoja } from "@/lib/loja-do-caixa";
+import { caixaAtivo } from "@/lib/caixas-permitidos";
 
 export function PdvLayout() {
   const navigate = useNavigate();
@@ -39,9 +40,16 @@ export function PdvLayout() {
   // ar: trocar de loja com caixa aberto gravava a venda numa loja e o caixa
   // em outra. O seletor volta quando o caixa fecha — é aí que se escolhe
   // onde abrir o próximo.
-  const { data: caixaAberto } = useCaixaAberto(user?.id);
+  const { data: caixasAbertos = [] } = useCaixasAbertosDoUsuario(user?.id);
+  // O caixa que a PÁGINA está operando, não o mais recente: com dois caixas
+  // abertos em lojas diferentes, travar no mais recente poria o cabeçalho
+  // numa loja e a venda em outra.
+  const caixaAtivoId = usePdvModo((s) => s.caixaAtivoId);
+  const caixaAberto = caixaAtivo(caixasAbertos as any[], caixaAtivoId);
   const lojaDoCaixa = (caixaAberto as any)?.loja_id as string | undefined;
-  const lojaTravada = !podeTrocarDeLoja(caixaAberto as any);
+  // `vendendo` é falso quando o operador saiu da frente de caixa — e é de lá
+  // que ele abre outro caixa, então a loja volta a ser escolhível.
+  const lojaTravada = !podeTrocarDeLoja(caixaAberto as any, vendendo);
 
   // Fora da venda a tela é administrativa (escolher caixa, conferir
   // fechamento) e o menu ajuda. Com a venda aberta ele sai: o balcão quer a
@@ -66,8 +74,8 @@ export function PdvLayout() {
   // entre uma venda e outra (caixa, relatórios) precisam responder pela mesma
   // loja em que ele está vendendo.
   useEffect(() => {
-    if (lojaDoCaixa && lojaDoCaixa !== currentLojaId) setCurrentLojaId(lojaDoCaixa);
-  }, [lojaDoCaixa, currentLojaId, setCurrentLojaId]);
+    if (vendendo && lojaDoCaixa && lojaDoCaixa !== currentLojaId) setCurrentLojaId(lojaDoCaixa);
+  }, [vendendo, lojaDoCaixa, currentLojaId, setCurrentLojaId]);
 
   if (!hidratado || !isAuthenticated) return null;
 
