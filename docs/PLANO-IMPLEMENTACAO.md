@@ -12,62 +12,128 @@ DF-e, importação de XML com auto-matching, e notificações.
 
 ## Estado em 23/09/2026
 
-**Frentes 1, 2 e 4 concluídas.** O restante do que foi feito veio de pedidos
-que surgiram no meio do caminho — quase tudo defeito encontrado em uso, não
-funcionalidade nova:
+Três das sete frentes fechadas. O grosso do trabalho, porém, veio de fora do
+plano: defeito encontrado em uso e pedido que surgiu no meio do caminho.
 
-| frente | situação |
-|---|---|
-| 1. Pagamento múltiplo no PDV | **feita** — `erp_venda_pagamentos`, RPC recusa soma menor que o total |
-| 2. Devolução para fornecedor | **feita** — CFOP 5202/6202, impostos rateados da nota de entrada |
-| 3. NF avulsa | **parada** — depende do CSC de produção, que não está cadastrado |
-| 4. Ajustes finos do PDV | **feita** — ver abaixo |
-| 5. Funcionários e comissão | não começou |
-| 6. Impostos na entrada por XML | não começou — depende do contador |
-| 7. Miudezas | não começou |
+### Frentes do plano
 
-A frente 4 fechou com: desconto por item (F2), alterar item (F7), consultar
-preço (F9), aplicar entrada/adiantamento (Ctrl+A), fechamento indireto, e as
-duas configurações de fechamento (informar valores por forma; ocultar valores
-exceto master).
+| # | frente | situação |
+|---|---|---|
+| 1 | Pagamento múltiplo no PDV | **feita** |
+| 2 | Devolução para fornecedor | **feita** |
+| 3 | NF avulsa (saída e entrada) | **parada** — depende do CSC de produção |
+| 4 | Ajustes finos do PDV | **feita** |
+| 5 | Funcionários e comissão | não começou |
+| 6 | Impostos na entrada por XML | não começou — depende do contador |
+| 7 | Miudezas | não começou |
 
-O que foi entregue fora do plano:
+**Frente 1** — `erp_venda_pagamentos` guarda quantas formas a venda tiver, e a
+RPC recusa soma menor que o total. A conta da gaveta passou a separar por
+forma, então venda mista deixou de inventar dinheiro que não entrou.
 
-| entregue | por quê |
+**Frente 2** — devolução ao fornecedor com CFOP 5202 na mesma UF e 6202 fora,
+impostos rateados proporcionalmente da nota de entrada. Não testada contra a
+SEFAZ de produção, porque o CSC não está cadastrado.
+
+**Frente 4** — desconto por item (F2), alterar item (F7), consultar preço (F9),
+aplicar entrada/adiantamento (Ctrl+A), fechamento indireto, e as duas
+configurações de fechamento: exigir valores por forma e ocultar valores exceto
+para o master.
+
+### Entregue fora do plano
+
+| entregue | origem |
 |---|---|
 | Comprovante térmico de fechamento, no formato do Excellent | pedido |
 | Detalhes do turno de caixa | não abriam de lugar nenhum |
-| Fechamento gravava "vendas R$ 0,00" e inventava diferença | defeito |
-| Sangria por forma; gaveta contava cartão como dinheiro | defeito grave |
 | Relatórios financeiros: 7 pop-ups viram telas com filtro | pedido |
 | Menu do financeiro: 4 itens viram 1 | pedido |
 | PDV em tela própria, teclado e atalhos | pedido |
 | Caixas como cadastro por loja, senha na abertura | pedido |
 | Ciclo de pedidos: criar pelo balcão, itens e endereços | pedido |
 | Dashboard e Visão Geral unificados | pedido |
-| **12 telas abriam por apelido de rota sem permissão** | segurança |
-| **Qualquer usuário podia se promover a admin** | segurança |
-| **CSC de produção vazaria no dia da virada** | segurança |
+| Vários caixas abertos no admin, com alternância | pedido |
+| Lista de caixas que cada conta pode abrir | pedido |
+| 12 telas abriam por apelido de rota sem permissão | **segurança** |
+| Qualquer usuário podia se promover a admin | **segurança** |
+| CSC de produção vazaria no dia da virada | **segurança** |
+| Fechamento gravava "vendas R$ 0,00" e inventava diferença | **defeito grave** |
+| Sangria por forma; gaveta contava cartão como dinheiro | **defeito grave** |
+| PDV gravava venda na loja errada com caixa aberto em outra | **defeito grave** |
+| Cupom sumia sem aviso ao lançar produto | **defeito grave** |
 
-| **PDV gravava venda na loja errada com caixa aberto em outra** | defeito grave |
+Os sete últimos não estavam previstos aqui e eram mais urgentes que qualquer
+frente da lista.
 
-As quatro em negrito não estavam previstas aqui e eram mais urgentes que
-qualquer frente da lista.
+### Mudanças de comportamento
+
+O que passou a funcionar de outro jeito, para quem opera não ser pego de
+surpresa.
+
+| antes | agora |
+|---|---|
+| Seletor de loja no topo da frente de caixa, sempre ativo | Só com o caixa fechado. Aberto, a loja vem do caixa, com cadeado |
+| Um caixa aberto por usuário | Admin mantém vários e alterna pelo crachá verde |
+| Abrir caixa fechava o anterior em silêncio | Só para quem não pode ter vários. Ver pendência abaixo |
+| Qualquer conta abria qualquer caixa | Lista por conta em Usuários e Permissões; vazia = todos |
+| Dois operadores podiam abrir o mesmo caixa físico | Recusado pelo banco |
+| Botão Cancelar do cupom limpava direto | Pergunta, como o F11 já perguntava |
+| Quantidade sem limite, contada em unidades inteiras | Teto de 1000 por lançamento; fração preservada |
+| Fechamento mostrava o esperado a todos | Configurável: pode ocultar de quem não é master |
+| Fechamento pedia só o total da gaveta | Configurável: pode exigir valor por forma |
+
+### Migrations aplicadas em produção
+
+Da 078 à 092. Todas aditivas, nenhuma destrutiva. As que mudam regra de
+dinheiro foram verificadas em transação revertida, com dados fictícios:
+pagamento múltiplo (085, 086), devolução ao fornecedor (087), fechamento
+indireto (089), entrada de pedido (091) e caixas por usuário (092).
 
 ### Registrado, não corrigido
 
-**Operador de caixa não consegue usar o ciclo de pedidos.** As policies de
+**1. Operador de caixa não consegue usar o ciclo de pedidos.** As policies de
 `erp_pedidos` exigem `is_erp_admin()` (admin ou gerente) para INSERT e UPDATE.
 Verificado em produção com o usuário de papel `caixa`: o INSERT é recusado pelo
 RLS e o UPDATE alcança 0 linhas — arrastar um cartão no quadro falha em
 silêncio. Quem recebe o pedido no balcão é exatamente quem não pode criá-lo.
 
 A correção é uma policy nova para usuário do ERP na própria loja, no molde da
-que `erp_pedido_itens` já usa. Não foi aplicada porque muda quem pode escrever
-em pedido, e isso precisa de aprovação.
+que `erp_pedido_itens` já usa. Muda quem pode escrever em pedido, então espera
+aprovação.
 
 Receber a entrada do pedido (Ctrl+A) funciona para o caixa mesmo assim: passa
 por função `SECURITY DEFINER`, que valida quem pode dentro dela.
+
+**2. Fechamento automático mata o turno esquecido sem conferência.** Ao abrir
+um caixa, o gatilho fecha o anterior do mesmo usuário gravando "Fechado
+automaticamente ao abrir novo caixa" — sem ninguém contar a gaveta. O turno de
+ontem morre sem conferência e a diferença some.
+
+O certo é recusar a abertura e mandar fechar o anterior, que já existe desde o
+fechamento indireto (089). Muda a rotina da manhã do balcão, então espera
+aprovação.
+
+**3. O sinal do pedido não é abatido sozinho na venda final.** O operador
+precisa lançar a linha "Entrada/adiantamento já pago" no F10. O sistema não
+liga a venda ao pedido porque o carrinho do PDV ainda não tem esse vínculo.
+
+**4. O cupom não sobrevive a um recarregamento da aba.** O carrinho vive só na
+memória da tela. Guardá-lo no navegador é possível e pequeno, mas é decisão à
+parte.
+
+### O que falta para fechar os ajustes
+
+Em ordem de quem está esperando o quê.
+
+| falta | depende de |
+|---|---|
+| **Deploy** — mais de 50 commits em produção nenhuma | webhook bloqueado nesta sessão |
+| Decidir as 2 pendências acima que mexem em rotina | você |
+| CSC de produção cadastrado | você / contador |
+| Frente 3: NF avulsa de saída e de entrada | CSC |
+| Frente 5: funcionários, dados bancários, comissão, meta | nada |
+| Frente 6: impostos do XML no custo | contador |
+| Frente 7: duplicar venda, declaração MEI, prazo de notificação, mais de um código de barras por produto | nada |
 
 ---
 
@@ -91,6 +157,9 @@ sistema pela metade.
 
 ## 1. Pagamento múltiplo no PDV (F10)
 
+> **Feita.** `erp_venda_pagamentos` e RPC que recusa soma menor que o total.
+
+
 **Hoje:** a venda tem uma `forma_pagamento` só. Cliente que paga metade no
 cartão e metade em dinheiro é registrado como se fosse tudo de uma forma — e o
 fechamento de caixa herda esse erro.
@@ -111,6 +180,10 @@ a mentir (foi o defeito corrigido na migration 079).
 ---
 
 ## 2. Devolução para fornecedor
+
+> **Feita.** CFOP 5202/6202 e impostos rateados da nota de entrada. Não
+> testada contra a SEFAZ de produção: o CSC não está cadastrado.
+
 
 **Hoje:** `erp_devolucoes` é devolução **de cliente** (venda). Não existe
 devolução ao fornecedor, nem a nota que a acompanha.
@@ -133,6 +206,9 @@ configuração). Sem isso, a devolução interestadual sai com o imposto errado.
 
 ## 3. NF avulsa — saída e entrada
 
+> **Parada.** Depende do CSC de produção.
+
+
 **Hoje:** `useEmitirNFeVenda` exige `venda_id`. Só emite nota de venda que passou
 pelo PDV.
 
@@ -148,6 +224,11 @@ pelo PDV.
 ---
 
 ## 4. Ajustes finos do PDV
+
+> **Feita.** Todos os itens abaixo estão no ar. Ficaram de fora, registrados
+> no estado acima: o abatimento automático do sinal na venda final e as duas
+> pendências que mexem em rotina do balcão.
+
 
 Todos pequenos, todos no balcão todo dia:
 
