@@ -32,6 +32,47 @@ export type NavSection = {
 };
 
 /**
+ * Endereços que abrem a MESMA tela de outro endereço.
+ *
+ * O sistema tem apelidos de rota por compatibilidade com os endereços do
+ * Excellent, de onde a equipe veio. Só o endereço que está no menu tem
+ * permissão declarada, então o apelido abria a tela para qualquer usuário
+ * logado: /gestao/administrar-usuarios dava a gestão de usuários, e
+ * /funcionarios dava os salários. Aqui cada apelido aponta para o
+ * endereço que manda.
+ *
+ * O teste apelidos-rota.test.ts lê o App.tsx e falha quando um apelido
+ * novo fica de fora — é o que impede o furo de voltar.
+ */
+export const ROTAS_APELIDO: Record<string, string> = {
+  "/gestao/gerar-crediario-proprio": "/crediario-proprio",
+  "/gestao/gerar-promissoria": "/promissoria",
+  "/gestao/gerar-boleto": "/gerador-boletos",
+  "/gestao/relatorios-financeiros": "/financeiro",
+  "/financeiro/relatorios": "/financeiro",
+  "/fornecedores": "/gestao/fornecedores",
+  "/funcionarios": "/gestao/funcionarios",
+  "/gestao/pasta-principal": "/gestao/arquivos-pastas",
+  "/gestao/administrar-usuarios": "/gestao/usuarios",
+  "/gestao/usuario-permissoes": "/gestao/usuarios",
+  "/gestao/minhas-chaves": "/config/minhas-chaves",
+  "/config/downloads": "/gestao/downloads",
+  "/gestao/faturamento": "/faturamento",
+  "/pedidos": "/vendas",
+  "/lotes": "/produtos-estoque-lotes",
+  "/gestao/lotes": "/produtos-estoque-lotes",
+  "/produtos": "/produtos-estoque-lotes",
+  "/gestao/cadastro-produtos": "/produtos-estoque-lotes",
+  "/estoque": "/produtos-estoque-lotes",
+  "/gestao/estoque": "/produtos-estoque-lotes",
+  "/gestao/compras/importar-nfe": "/compras/importar-nfe",
+  "/gestao/remessas": "/remessas",
+  "/gestao/transferencia-estoque": "/remessas",
+  "/estoque.transferencia": "/remessas",
+  "/relatorios/financeiro": "/financeiro/relatorio",
+};
+
+/**
  * Permissão exigida por uma rota, lida da MESMA estrutura que monta o menu.
  *
  * O guard de rota (root-layout) consulta isto. Manter um segundo mapa
@@ -41,6 +82,12 @@ export type NavSection = {
  * propósito.
  */
 export function permissaoDaRota(pathname: string): Permission | null {
+  // apelido primeiro: /funcionarios responde pela permissão de
+  // /gestao/funcionarios, que é quem está no menu
+  const canonica = ROTAS_APELIDO[pathname]
+    ?? Object.entries(ROTAS_APELIDO).find(([a]) => pathname.startsWith(a + "/"))?.[1];
+  if (canonica) pathname = canonica;
+
   const folhas: NavItem[] = [];
   const varre = (itens: NavItem[]) => {
     for (const i of itens) {
@@ -130,8 +177,9 @@ export const sections: NavSection[] = [
         children: [
           { title: "E-mail Marketing", url: "/email-marketing", icon: Mail, perm: "cliente.ver" },
           { title: "Cartão Fidelidade", url: "/cartao-fidelidade", icon: CreditCard, perm: "cliente.ver" },
-          { title: "Crediário Próprio", url: "/crediario-proprio", icon: CreditCard, perm: "financeiro.ver" },
-          { title: "Promissórias", url: "/promissoria", icon: ScrollText, perm: "financeiro.ver" },
+          // Crediário e Promissórias saíram daqui: apareciam TAMBÉM em Gestão ›
+          // Gestão Recebimentos, e é lá que pertencem — as telas tratam limite
+          // de crédito, parcela e baixa, que é recebimento, não venda.
         ],
       },
       {
