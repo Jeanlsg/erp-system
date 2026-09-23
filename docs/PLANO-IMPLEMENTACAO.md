@@ -12,9 +12,26 @@ DF-e, importação de XML com auto-matching, e notificações.
 
 ## Estado em 23/09/2026
 
-**Nenhuma das sete frentes começou.** O que foi feito desde que este plano
-foi escrito veio de pedidos que surgiram no meio do caminho — quase tudo
-defeito encontrado em uso, não funcionalidade nova:
+**Frentes 1, 2 e 4 concluídas.** O restante do que foi feito veio de pedidos
+que surgiram no meio do caminho — quase tudo defeito encontrado em uso, não
+funcionalidade nova:
+
+| frente | situação |
+|---|---|
+| 1. Pagamento múltiplo no PDV | **feita** — `erp_venda_pagamentos`, RPC recusa soma menor que o total |
+| 2. Devolução para fornecedor | **feita** — CFOP 5202/6202, impostos rateados da nota de entrada |
+| 3. NF avulsa | **parada** — depende do CSC de produção, que não está cadastrado |
+| 4. Ajustes finos do PDV | **feita** — ver abaixo |
+| 5. Funcionários e comissão | não começou |
+| 6. Impostos na entrada por XML | não começou — depende do contador |
+| 7. Miudezas | não começou |
+
+A frente 4 fechou com: desconto por item (F2), alterar item (F7), consultar
+preço (F9), aplicar entrada/adiantamento (Ctrl+A), fechamento indireto, e as
+duas configurações de fechamento (informar valores por forma; ocultar valores
+exceto master).
+
+O que foi entregue fora do plano:
 
 | entregue | por quê |
 |---|---|
@@ -32,8 +49,25 @@ defeito encontrado em uso, não funcionalidade nova:
 | **Qualquer usuário podia se promover a admin** | segurança |
 | **CSC de produção vazaria no dia da virada** | segurança |
 
-As três últimas não estavam previstas aqui e eram mais urgentes que
+| **PDV gravava venda na loja errada com caixa aberto em outra** | defeito grave |
+
+As quatro em negrito não estavam previstas aqui e eram mais urgentes que
 qualquer frente da lista.
+
+### Registrado, não corrigido
+
+**Operador de caixa não consegue usar o ciclo de pedidos.** As policies de
+`erp_pedidos` exigem `is_erp_admin()` (admin ou gerente) para INSERT e UPDATE.
+Verificado em produção com o usuário de papel `caixa`: o INSERT é recusado pelo
+RLS e o UPDATE alcança 0 linhas — arrastar um cartão no quadro falha em
+silêncio. Quem recebe o pedido no balcão é exatamente quem não pode criá-lo.
+
+A correção é uma policy nova para usuário do ERP na própria loja, no molde da
+que `erp_pedido_itens` já usa. Não foi aplicada porque muda quem pode escrever
+em pedido, e isso precisa de aprovação.
+
+Receber a entrada do pedido (Ctrl+A) funciona para o caixa mesmo assim: passa
+por função `SECURITY DEFINER`, que valida quem pode dentro dela.
 
 ---
 
