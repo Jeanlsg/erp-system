@@ -7,7 +7,7 @@ import { InputMoeda } from "@/components/ui/input-moeda";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose,
 } from "@/components/ui/dialog";
 import {
   Calculator, Plus, Trash2, Loader2, ShoppingCart,
@@ -52,6 +52,8 @@ interface CartItem {
   preco_custo: number;
   quantidade: number;
   imagem_url?: string | null;
+  /** desconto NESTA linha, em reais. O desconto geral continua à parte. */
+  desconto?: number;
 }
 
 export function PDVPage() {
@@ -117,6 +119,15 @@ export function PDVPage() {
   const [qtdLinha, setQtdLinha] = useState("1");
   const [produtoNaLinha, setProdutoNaLinha] = useState<any | null>(null);
   const [itemSelecionado, setItemSelecionado] = useState<string | null>(null);
+  // Alterar item (F7): quantidade, preço e desconto da LINHA. Antes só dava
+  // para somar de um em um pelos botões, e corrigir preço não dava de jeito
+  // nenhum — o operador cancelava o item e lançava de novo.
+  const [itemEditando, setItemEditando] = useState<CartItem | null>(null);
+  const [edQtd, setEdQtd] = useState("");
+  const [edPreco, setEdPreco] = useState("");
+  const [edDesconto, setEdDesconto] = useState("");
+  const [edDescontoPct, setEdDescontoPct] = useState(false);
+  const [modalPrecos, setModalPrecos] = useState(false);
   const [modalLocalizar, setModalLocalizar] = useState(false);
   const [modalAtalhos, setModalAtalhos] = useState(false);
   // Sair da frente de caixa NÃO fecha o caixa: volta para a tela de seleção,
@@ -210,9 +221,12 @@ export function PDVPage() {
 
   // Calculados
   const subtotal = cart.reduce((s, i) => s + i.preco_unitario * i.quantidade, 0);
+  // O desconto por item sai do subtotal antes do desconto geral: são duas
+  // coisas diferentes e o operador precisa ver as duas no cupom.
+  const descontoItens = cart.reduce((s2, i) => s2 + (Number(i.desconto) || 0), 0);
   const desc = parseFloat(desconto) || 0;
   const acresc = parseFloat(acrescimo) || 0;
-  const totalDesconto = descontoPercentual ? subtotal * (desc / 100) : desc;
+  const totalDesconto = (descontoPercentual ? subtotal * (desc / 100) : desc) + descontoItens;
   const total = Math.max(0, subtotal - totalDesconto + acresc);
   const valorRec = parseFloat(valorRecebido) || 0;
   // Troco só existe em pagamento em dinheiro
@@ -270,6 +284,31 @@ export function PDVPage() {
       }];
     });
   }, []);
+
+  const abrirEdicaoItem = (item: CartItem) => {
+    setItemEditando(item);
+    setEdQtd(String(item.quantidade));
+    setEdPreco(String(item.preco_unitario));
+    setEdDesconto(String(item.desconto ?? 0));
+    setEdDescontoPct(false);
+  };
+
+  const aplicarEdicaoItem = () => {
+    if (!itemEditando) return;
+    const qtd = Math.max(1, parseFloat(edQtd) || 1);
+    const preco = Math.max(0, parseFloat(edPreco) || 0);
+    const bruto = qtd * preco;
+    const informado = Math.max(0, parseFloat(edDesconto) || 0);
+    const descontoReais = edDescontoPct ? (bruto * informado) / 100 : informado;
+    if (descontoReais > bruto) {
+      toast.error("O desconto não pode passar do valor do item.");
+      return;
+    }
+    setCart((cur) => cur.map((i) => i.produto_id === itemEditando.produto_id
+      ? { ...i, quantidade: qtd, preco_unitario: preco, desconto: Math.round(descontoReais * 100) / 100 }
+      : i));
+    setItemEditando(null);
+  };
 
   /** Acha o produto por código de barras ou SKU, sem diferenciar maiúscula. */
   const acharPorCodigo = useCallback((c: string) => {
@@ -486,7 +525,8 @@ export function PDVPage() {
           preco_unitario: i.preco_unitario,
           preco_custo: i.preco_custo,
           quantidade: i.quantidade,
-          subtotal: i.preco_unitario * i.quantidade,
+          desconto: Number(i.desconto) || 0,
+          subtotal: i.preco_unitario * i.quantidade - (Number(i.desconto) || 0),
         })),
         caixa_id: caixaAberto?.id,
       });
@@ -595,6 +635,17 @@ export function PDVPage() {
     { tecla: "F2", rotulo: "Cliente", acao: () => setModalCliente(true) },
     { tecla: "F4", rotulo: "Código", acao: () => { campoCodigo.current?.focus(); campoCodigo.current?.select(); } },
     { tecla: "F5", rotulo: "Localizar", acao: () => setModalLocalizar(true) },
+    { tecla: "F6", rotulo: "Desconto no item", acao: () => {
+        const item = cart.find((i) => i.produto_id === itemSelecionado);
+        if (item) abrirEdicaoItem(item);
+        else toast.info("Escolha o item no cupom antes.");
+      }, ativo: cart.length > 0 },
+    { tecla: "F7", rotulo: "Alterar item", acao: () => {
+        const item = cart.find((i) => i.produto_id === itemSelecionado);
+        if (item) abrirEdicaoItem(item);
+        else toast.info("Escolha o item no cupom antes.");
+      }, ativo: cart.length > 0 },
+    { tecla: "F9", rotulo: "Consultar preço", acao: () => setModalPrecos(true) },
     { tecla: "F8", rotulo: "Cancelar item", acao: () => { if (itemSelecionado) { remover(itemSelecionado); setItemSelecionado(null); } else toast.info("Escolha o item no cupom antes."); }, ativo: cart.length > 0 },
     { tecla: "F10", rotulo: "Add Pagamento", acao: () => {
         if (!cart.length) return;
@@ -620,7 +671,7 @@ export function PDVPage() {
   useAtalhosPdv(ATALHOS);
   // a barra de baixo mostra só o que o operador usa a todo momento
   const ATALHOS_VISIVEIS = ATALHOS.filter((a) =>
-    ["F4", "F5", "F8", "F10", "F11", "Ctrl+S", "Ctrl+X", "F12", "Ctrl+H"].includes(a.tecla));
+    ["F4", "F5", "F7", "F8", "F9", "F10", "F11", "Ctrl+S", "Ctrl+X", "F12", "Ctrl+H"].includes(a.tecla));
 
   if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="PDV / Frente de Caixa" />;
 
@@ -968,6 +1019,7 @@ export function PDVPage() {
                     <th className="p-2 text-center">Un</th>
                     <th className="p-2 text-right">Qtde</th>
                     <th className="p-2 text-right">Vlr. unit.</th>
+                    <th className="p-2 text-right">Desc.</th>
                     <th className="p-2 text-right">Total</th>
                     <th className="p-2"></th>
                   </tr>
@@ -980,6 +1032,8 @@ export function PDVPage() {
                   ) : cart.map((item, i) => (
                     <tr key={item.produto_id}
                       onClick={() => setItemSelecionado(item.produto_id)}
+                      onDoubleClick={() => abrirEdicaoItem(item)}
+                      title="Clique para selecionar · duplo clique para alterar (F7)"
                       className={`cursor-pointer border-b last:border-0 ${
                         itemSelecionado === item.produto_id ? "bg-primary/10" : "hover:bg-accent"}`}>
                       <td className="p-2 tabular-nums text-muted-foreground">{i + 1}</td>
@@ -1000,7 +1054,12 @@ export function PDVPage() {
                         </div>
                       </td>
                       <td className="p-2 text-right tabular-nums">{brl(item.preco_unitario)}</td>
-                      <td className="p-2 text-right font-semibold tabular-nums">{brl(item.preco_unitario * item.quantidade)}</td>
+                      <td className="p-2 text-right tabular-nums text-muted-foreground">
+                        {item.desconto ? "-" + brl(item.desconto) : "—"}
+                      </td>
+                      <td className="p-2 text-right font-semibold tabular-nums">
+                        {brl(item.preco_unitario * item.quantidade - (Number(item.desconto) || 0))}
+                      </td>
                       <td className="p-2 text-right">
                         <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive"
                           onClick={(e) => { e.stopPropagation(); remover(item.produto_id); }} title="Cancelar item (F8)">
@@ -1249,6 +1308,102 @@ export function PDVPage() {
           </div>
         </div>
       )}
+
+      {/* Alterar item (F7) — quantidade, preço e desconto da linha */}
+      <Dialog open={!!itemEditando} onOpenChange={(o) => !o && setItemEditando(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Alterar item</DialogTitle>
+            <DialogClose />
+          </DialogHeader>
+          {itemEditando && (
+            <div className="space-y-3">
+              <div className="rounded-md bg-muted/40 p-2 text-sm">
+                <p className="font-medium">{itemEditando.nome}</p>
+                <p className="text-xs text-muted-foreground">{itemEditando.sku}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Quantidade</Label>
+                  <Input type="number" min="1" step="any" autoFocus className="mt-1"
+                    value={edQtd} onChange={(e) => setEdQtd(e.target.value)} />
+                </div>
+                <div>
+                  <Label>Valor unitário</Label>
+                  <InputMoeda value={edPreco} onChange={(v) => setEdPreco(String(v))} />
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center justify-between">
+                  <Label>Desconto no item <span className="text-muted-foreground">(F6)</span></Label>
+                  <div className="flex gap-1">
+                    <Button size="sm" variant={!edDescontoPct ? "default" : "outline"}
+                      className="h-6 px-2 text-xs" onClick={() => setEdDescontoPct(false)}>R$</Button>
+                    <Button size="sm" variant={edDescontoPct ? "default" : "outline"}
+                      className="h-6 px-2 text-xs" onClick={() => setEdDescontoPct(true)}>%</Button>
+                  </div>
+                </div>
+                <Input type="number" min="0" step="any" className="mt-1"
+                  value={edDesconto} onChange={(e) => setEdDesconto(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") aplicarEdicaoItem(); }} />
+              </div>
+              <div className="flex justify-between border-t pt-2 text-sm">
+                <span className="text-muted-foreground">Total da linha</span>
+                <span className="font-semibold tabular-nums">
+                  {brl(Math.max(0,
+                    (parseFloat(edQtd) || 0) * (parseFloat(edPreco) || 0)
+                    - (edDescontoPct
+                        ? ((parseFloat(edQtd) || 0) * (parseFloat(edPreco) || 0) * (parseFloat(edDesconto) || 0)) / 100
+                        : (parseFloat(edDesconto) || 0))))}
+                </span>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setItemEditando(null)}>Cancelar</Button>
+            <Button onClick={aplicarEdicaoItem}>Aplicar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Consultar preço (F9) — sem sair da venda, sem lançar nada */}
+      <Dialog open={modalPrecos} onOpenChange={setModalPrecos}>
+        <DialogContent className="max-w-2xl max-h-[85vh] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>Consultar preço</DialogTitle>
+            <DialogClose />
+          </DialogHeader>
+          <div className="min-h-0 min-w-0 space-y-2 overflow-y-auto">
+            <Input autoFocus placeholder="Nome, SKU ou código de barras…"
+              value={search} onChange={(e) => setSearch(e.target.value)} />
+            <table className="w-full text-sm">
+              <thead className="border-b text-xs uppercase text-muted-foreground">
+                <tr>
+                  <th className="p-2 text-left">Código</th>
+                  <th className="p-2 text-left">Descrição</th>
+                  <th className="p-2 text-right">Estoque</th>
+                  <th className="p-2 text-right">Preço</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtrados.slice(0, 80).map((prod: any) => (
+                  <tr key={prod.id} className="border-b last:border-0">
+                    <td className="p-2 font-mono text-xs">{prod.sku}</td>
+                    <td className="p-2">{prod.nome}</td>
+                    <td className={`p-2 text-right tabular-nums ${(saldoDe(prod) ?? 1) <= 0 ? "text-red-600" : ""}`}>
+                      {saldoDe(prod) ?? "—"}
+                    </td>
+                    <td className="p-2 text-right font-semibold tabular-nums">{brl(prod.preco_venda)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setModalPrecos(false)}>Fechar (ESC)</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Localizar produto (F5) — o catálogo continua aqui, para quando o
           código de barras não se lê ou o operador não sabe o código */}
