@@ -44,6 +44,7 @@ import { KitsPage } from "@/pages/kits";
 import { ComprasPage } from "@/pages/compras";
 import { RelatorioDetalhePage } from "@/pages/relatorio-detalhe";
 import { DevolucoesPage } from "@/pages/devolucoes";
+import { DevolucaoFornecedorPage } from "@/pages/devolucao-fornecedor";
 import { FiscalPage } from "@/pages/fiscal";
 import { FiscalDfePage } from "@/pages/fiscal.dfe";
 import { FiscalSpedPage } from "@/pages/fiscal.sped";
@@ -226,6 +227,8 @@ export default function App() {
         <Route path="pedidos" element={<VendasPage />} />
         <Route path="vendas" element={<VendasPage />} />
         <Route path="devolucoes" element={<DevolucoesPage />} />
+        {/* devolução DE CLIENTE é a de cima; esta é a que volta ao fornecedor */}
+        <Route path="devolucao-fornecedor" element={<DevolucaoFornecedorPage />} />
         <Route path="kits" element={<KitsPage />} />
         <Route path="lotes" element={<ProdutosEstoqueLotesPage />} />
         <Route path="gestao/lotes" element={<ProdutosEstoqueLotesPage />} />

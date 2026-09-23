@@ -4397,6 +4397,85 @@ export function useCreatePedido() {
 }
 
 // ========================================
+// DEVOLUÇÃO PARA FORNECEDOR
+// ========================================
+
+export function useDevolucoesFornecedor(lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ["erp_devolucoes_fornecedor", lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      let q = supabase.from("erp_devolucoes_fornecedor")
+        .select("*, fornecedor:erp_pessoas!erp_devolucoes_fornecedor_fornecedor_id_fkey(nome_razao, cpf_cnpj, uf), itens:erp_devolucao_fornecedor_itens(*)")
+        .order("created_at", { ascending: false })
+        .limit(200);
+      if (lojaId) q = q.eq("loja_id", lojaId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+/** Notas de entrada de um fornecedor — a origem da devolução. */
+export function useNotasEntradaFornecedor(fornecedorId?: string, lojaId?: string) {
+  return useQuery<any[]>({
+    queryKey: ["erp_nfe_entrada_fornecedor", fornecedorId, lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured() || !fornecedorId) return [];
+      let q = supabase.from("erp_nfe_entrada")
+        .select("*, itens:erp_nfe_entrada_itens(*)")
+        .eq("fornecedor_id", fornecedorId)
+        .neq("status", "cancelada")
+        .order("data_emissao", { ascending: false })
+        .limit(50);
+      if (lojaId) q = q.eq("loja_id", lojaId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!fornecedorId,
+  });
+}
+
+export function useCriarDevolucaoFornecedor() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ devolucao, itens }: { devolucao: any; itens: any[] }) => {
+      const { data: d, error } = await supabase
+        .from("erp_devolucoes_fornecedor").insert(devolucao).select().single();
+      if (error) throw error;
+      if (itens.length) {
+        const { error: e2 } = await supabase.from("erp_devolucao_fornecedor_itens")
+          .insert(itens.map((i) => ({ ...i, devolucao_id: d.id })));
+        // sem itens a devolução não serve para nada; desfaz para não deixar
+        // rascunho órfão na lista
+        if (e2) { await supabase.from("erp_devolucoes_fornecedor").delete().eq("id", d.id); throw e2; }
+      }
+      return d;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["erp_devolucoes_fornecedor"] }),
+  });
+}
+
+export function useConfirmarDevolucaoFornecedor() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase.schema("erp")
+        .rpc("confirmar_devolucao_fornecedor", { p_devolucao_id: id });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["erp_devolucoes_fornecedor"] });
+      qc.invalidateQueries({ queryKey: ["erp_estoque"] });
+      invalidarProdutos(qc);
+    },
+  });
+}
+
+// ========================================
 // SERVIÇOS — CRUD
 // ========================================
 

@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   Home, Calculator, Wallet, Receipt, Truck, Bike, MessageSquare, ShoppingCart, Barcode, CreditCard, Wrench, FileText, Users, Building2, Package, Calendar, LineChart, Briefcase, Mail, Settings, Cog, Store, Key, HelpCircle, PanelLeftClose, PanelLeftOpen, LayoutDashboard, RotateCcw, PackagePlus, ShoppingBag, ArrowLeftRight, ScrollText, Banknote, AlertTriangle, Shield, Search, Smartphone, Star, Lock, Network, Send, FolderTree, ScanBarcode, ChevronRight, Minus, Flag, Upload, ChevronDown, ExternalLink, BookOpen,
+  Undo2,
 } from "lucide-react";
 
 import { useAuth, type Permission } from "@/lib/store/auth-store";
@@ -217,6 +218,7 @@ export const sections: NavSection[] = [
           { title: "Transferências", url: "/estoque.transferencia", icon: ArrowLeftRight, perm: "estoque.transferir" },
           { title: "Compras", url: "/compras", icon: ShoppingBag, perm: "compra.criar" },
           { title: "Importar NFe", url: "/compras/importar-nfe", icon: Upload, perm: "compra.criar" },
+          { title: "Devolução a Fornecedor", url: "/devolucao-fornecedor", icon: Undo2, perm: "compra.criar" },
           { title: "Kits & Combos", url: "/kits", icon: PackagePlus, perm: "produto.ver" },
           { title: "Serviços", url: "/gestao/servicos", icon: Wrench, perm: "produto.ver" },
           { title: "Agenda Telefônica", url: "/gestao/agenda-telefonica", icon: Smartphone, perm: "cliente.ver" },
