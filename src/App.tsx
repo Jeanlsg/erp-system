@@ -1,4 +1,4 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 
 import { RootLayout } from "@/components/root-layout";
 import { PdvLayout } from "@/components/pdv-layout";
@@ -11,7 +11,7 @@ import { EquipamentosPage } from "@/pages/equipamentos";
 import { TutoriaisPage } from "@/pages/tutoriais";
 import { ComissoesPage } from "@/pages/comissoes";
 import { CustomersPage } from "@/pages/customers";
-import { VisaoGeralPage } from "@/pages/visao-geral";
+// import { VisaoGeralPage } from "@/pages/visao-geral"; // unificada no Dashboard
 import { FinanceiroPage } from "@/pages/financeiro";
 import { FornecedoresPage } from "@/pages/fornecedores";
 import { AgendaPage } from "@/pages/agenda";
@@ -220,7 +220,9 @@ export default function App() {
         <Route path="tutoriais" element={<TutoriaisPage />} />
 
         {/* ===== ROTAS LEGADO (compatibilidade) ===== */}
-        <Route path="visao-geral" element={<VisaoGeralPage />} />
+        {/* Visão Geral e Dashboard viraram uma tela só; o link antigo
+            continua funcionando para quem o tiver salvo */}
+        <Route path="visao-geral" element={<Navigate to="/" replace />} />
         <Route path="caixa" element={<CaixaPage />} />
         <Route path="pedidos" element={<VendasPage />} />
         <Route path="vendas" element={<VendasPage />} />

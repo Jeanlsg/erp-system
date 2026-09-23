@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
-  Home, Calculator, Wallet, Receipt, Truck, Bike, MessageSquare, ShoppingCart, Barcode, CreditCard, Wrench, FileText, Users, Building2, Package, Calendar, LineChart, Briefcase, Mail, Settings, Cog, Store, Key, HelpCircle, PanelLeftClose, PanelLeftOpen, LayoutDashboard, Globe, RotateCcw, PackagePlus, ShoppingBag, ArrowLeftRight, ScrollText, Banknote, AlertTriangle, Shield, Search, Smartphone, Star, Lock, Network, Send, FolderTree, ScanBarcode, ChevronRight, Minus, Flag, Upload, ChevronDown, ExternalLink, BookOpen,
+  Home, Calculator, Wallet, Receipt, Truck, Bike, MessageSquare, ShoppingCart, Barcode, CreditCard, Wrench, FileText, Users, Building2, Package, Calendar, LineChart, Briefcase, Mail, Settings, Cog, Store, Key, HelpCircle, PanelLeftClose, PanelLeftOpen, LayoutDashboard, RotateCcw, PackagePlus, ShoppingBag, ArrowLeftRight, ScrollText, Banknote, AlertTriangle, Shield, Search, Smartphone, Star, Lock, Network, Send, FolderTree, ScanBarcode, ChevronRight, Minus, Flag, Upload, ChevronDown, ExternalLink, BookOpen,
 } from "lucide-react";
 
 import { useAuth, type Permission } from "@/lib/store/auth-store";
@@ -111,7 +111,7 @@ export const sections: NavSection[] = [
     label: "",
     items: [
       { title: "Dashboard", url: "/", icon: LayoutDashboard, exact: true },
-      { title: "Visão Geral", url: "/visao-geral", icon: Globe, perm: "relatorio.ver" },
+      // Visão Geral foi unificada no Dashboard — mesma pergunta, duas telas
     ],
   },
   {

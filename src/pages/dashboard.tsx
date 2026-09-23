@@ -1,271 +1,353 @@
-import { useMemo, useEffect } from "react";
+// ============================================================
+// Página: Visão geral — a tela única de acompanhamento.
+//
+// Existiam duas telas que respondiam quase a mesma pergunta: o Dashboard
+// ("hoje, nesta loja") e a Visão Geral ("no período, comparando lojas").
+// Quem queria saber como a loja ia precisava olhar as duas e conciliar de
+// cabeça — e "Estoque baixo" aparecia nas duas, com contas diferentes.
+//
+// Aqui é uma tela só, com período e lojas escolhidos no topo: o mesmo
+// filtro vale para tudo que está abaixo, dos KPIs ao comparativo.
+//
+// As vendas vêm de useRelatorioVendas, não de useVendas: aquele para em
+// 200 linhas e a Visão Geral avisava, em letra miúda, que o faturamento
+// podia estar truncado. Número de faturamento com asterisco não serve.
+// ============================================================
+
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { TrendingUp, Receipt, AlertTriangle, PackageX, ScanBarcode, Package, ArrowUpRight, Calendar, Loader2 } from "lucide-react";
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart,
+  ResponsiveContainer, Tooltip, XAxis, YAxis,
+} from "recharts";
+import {
+  AlertTriangle, ArrowUpRight, PackageX, Receipt, Store, TrendingUp, Wallet,
+} from "lucide-react";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { brl, num } from "@/lib/format";
-import { useLojaAtualStore } from "@/lib/store/loja-atual";
-import { useLojas, useDashboardStats, useVendasPorDia, useTopProdutos, isSupabaseConfigured } from "@/lib/supabase-queries";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
+import { FiltrosRelatorio, periodoPadrao, type Periodo } from "@/components/relatorio/filtros-relatorio";
+import {
+  useLojas, useProdutosComEstoque, useRelatorioVendas, useContasVencidas,
+  isSupabaseConfigured,
+} from "@/lib/supabase-queries";
+import { brl, num, pct } from "@/lib/format";
 
-const DIA_LABEL: Record<number, string> = { 0: "Dom", 1: "Seg", 2: "Ter", 3: "Qua", 4: "Qui", 5: "Sex", 6: "Sáb" };
+const CORES = [
+  "hsl(var(--primary))", "hsl(var(--chart-2))", "hsl(var(--chart-3))",
+  "hsl(var(--chart-4))", "hsl(var(--chart-5))", "hsl(var(--muted-foreground))",
+];
 
-function KpiCard({ label, value, delta, icon: Icon, tone = "default" }: any) {
-  const toneClass = tone === "destructive" ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary";
-  return (
-    <Card>
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-            <p className="mt-2 text-2xl font-semibold tabular-nums">{value}</p>
-            {delta && <p className="mt-1 text-xs text-muted-foreground">{delta}</p>}
-          </div>
-          <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${toneClass}`}>
-            <Icon className="h-5 w-5" />
-          </div>
+const NOME_FORMA: Record<string, string> = {
+  dinheiro: "Dinheiro", pix: "PIX", cartao_credito: "Cartão crédito",
+  cartao_debito: "Cartão débito", crediario: "Crediário", boleto: "Boleto",
+};
+
+function Kpi({ label, value, hint, icon: Icon, tone = "default", para }: any) {
+  const cor = tone === "destructive" ? "bg-destructive/10 text-destructive"
+    : tone === "warning" ? "bg-amber-500/15 text-amber-700 dark:text-amber-400"
+    : "bg-primary/10 text-primary";
+  const corpo = (
+    <CardContent className="p-4">
+      <div className="flex items-start justify-between">
+        <div className="min-w-0">
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
+          {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
         </div>
-      </CardContent>
-    </Card>
+        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${cor}`}>
+          <Icon className="h-5 w-5" />
+        </div>
+      </div>
+    </CardContent>
   );
+  // KPI que aponta para uma tela vira atalho: o número sozinho não resolve
+  return para
+    ? <Card className="transition hover:border-primary"><Link to={para}>{corpo}</Link></Card>
+    : <Card>{corpo}</Card>;
 }
 
 export function DashboardPage() {
-  const { data: lojas = [], isLoading: lojasLoading } = useLojas();
-  const currentLojaId = useLojaAtualStore((s) => s.currentLojaId);
-  const setCurrentLojaId = useLojaAtualStore((s) => s.setCurrentLojaId);
+  const [periodo, setPeriodo] = useState<Periodo>(periodoPadrao(30));
+  const [selecionadas, setSelecionadas] = useState<string[]>([]);
 
-  // Auto-selecionar a primeira loja matriz automaticamente
-  useEffect(() => {
-    if (lojas.length > 0 && !currentLojaId) {
-      const matriz = lojas.find((l) => l.matriz) ?? lojas[0];
-      setCurrentLojaId(matriz.id);
+  const { data: lojas = [] } = useLojas();
+  const { data: produtos = [] } = useProdutosComEstoque();
+  const { data: contasVencidas = [] } = useContasVencidas();
+  const { data: vendas = [], isLoading } = useRelatorioVendas({ de: periodo.de, ate: periodo.ate });
+
+  // nenhuma marcada = todas: abrir a tela já mostrando a rede inteira
+  const lojasAtivas = selecionadas.length === 0 ? lojas.map((l: any) => l.id) : selecionadas;
+
+  const vendasFiltradas = useMemo(
+    () => (vendas as any[]).filter((v) => lojasAtivas.includes(v.loja_id) && v.status === "finalizada"),
+    [vendas, lojasAtivas],
+  );
+
+  const kpis = useMemo(() => {
+    const total = vendasFiltradas.reduce((s, v) => s + Number(v.total || 0), 0);
+    const custo = vendasFiltradas.reduce((s, v) => s + Number(v.custo_total || 0), 0);
+    const lucro = total - custo;
+    return {
+      total, lucro,
+      margem: total > 0 ? lucro / total : 0,
+      ticket: vendasFiltradas.length ? total / vendasFiltradas.length : 0,
+      qtd: vendasFiltradas.length,
+    };
+  }, [vendasFiltradas]);
+
+  const estoquePorLoja = useMemo(() => {
+    return lojasAtivas.map((lojaId: string) => {
+      const loja = lojas.find((l: any) => l.id === lojaId);
+      let unidades = 0, baixo = 0, esgotado = 0, valor = 0;
+      for (const p of produtos as any[]) {
+        const q = p.estoque_por_loja?.[lojaId] ?? 0;
+        unidades += q;
+        valor += q * Number(p.preco_custo || 0);
+        if (q === 0) esgotado++;
+        else if (q <= p.estoque_minimo) baixo++;
+      }
+      return { id: lojaId, nome: loja?.apelido ?? lojaId, unidades, baixo, esgotado, valor };
+    });
+  }, [produtos, lojasAtivas, lojas]);
+
+  const valorEstoque = estoquePorLoja.reduce((s, e) => s + e.valor, 0);
+  const totalBaixo = estoquePorLoja.reduce((s, e) => s + e.baixo, 0);
+  const totalEsgotado = estoquePorLoja.reduce((s, e) => s + e.esgotado, 0);
+
+  const vencidasDasLojas = useMemo(
+    () => (contasVencidas as any[]).filter((c) => !c.loja_id || lojasAtivas.includes(c.loja_id)),
+    [contasVencidas, lojasAtivas],
+  );
+  const valorVencido = vencidasDasLojas.reduce((s, c) => s + Number(c.valor || 0), 0);
+
+  const porDia = useMemo(() => {
+    const m = new Map<string, Record<string, number>>();
+    for (const v of vendasFiltradas) {
+      const dia = String(v.data_venda).slice(0, 10);
+      const linha = m.get(dia) ?? {};
+      linha[v.loja_id] = (linha[v.loja_id] ?? 0) + Number(v.total || 0);
+      m.set(dia, linha);
     }
-  }, [lojas, currentLojaId, setCurrentLojaId]);
+    return [...m.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([dia, valores]) => ({
+        dia: dia.slice(8, 10) + "/" + dia.slice(5, 7),
+        ...valores,
+      }))
+      .slice(-60);
+  }, [vendasFiltradas]);
 
-  const lojaId = currentLojaId;
-  const { data: stats, isLoading: statsLoading } = useDashboardStats(lojaId ?? undefined);
-  const { data: vendasPorDia = [] } = useVendasPorDia(lojaId ?? "", 7);
-  const { data: topProdutos = [] } = useTopProdutos(lojaId ?? "", 5, 7);
-
-  const grafico7d = useMemo(() => {
-    const arr: { day: string; total: number }[] = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-      const total = vendasPorDia.find((v) => v.dia === key)?.total ?? 0;
-      arr.push({ day: DIA_LABEL[d.getDay()] ?? "?", total });
+  const porPagamento = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const v of vendasFiltradas) {
+      const f = v.forma_pagamento ?? "outros";
+      m.set(f, (m.get(f) ?? 0) + Number(v.total || 0));
     }
-    return arr;
-  }, [vendasPorDia]);
+    return [...m.entries()].map(([f, total]) => ({ nome: NOME_FORMA[f] ?? f, total }));
+  }, [vendasFiltradas]);
 
-  // Se Supabase não está configurado
-  if (!isSupabaseConfigured()) {
-    return (
-      <div className="space-y-6">
-        <header>
-          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">
-            Visão geral da operação
-          </p>
-        </header>
-        <Card>
-          <CardContent className="p-12 text-center">
-            <p className="text-muted-foreground">
-              Configure as variáveis do Supabase no arquivo <code className="text-xs">.env</code>
-            </p>
-            <code className="mt-2 inline-block text-xs">VITE_SUPABASE_URL</code> e <code className="text-xs">VITE_SUPABASE_ANON_KEY</code>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  const topProdutos = useMemo(() => {
+    const m = new Map<string, { nome: string; quantidade: number; total: number }>();
+    for (const v of vendasFiltradas) {
+      for (const i of (v.itens ?? []) as any[]) {
+        const chave = i.produto_id ?? i.nome;
+        const a = m.get(chave) ?? { nome: i.nome, quantidade: 0, total: 0 };
+        a.quantidade += Number(i.quantidade || 0);
+        a.total += Number(i.subtotal || 0);
+        m.set(chave, a);
+      }
+    }
+    return [...m.values()].sort((a, b) => b.total - a.total).slice(0, 8);
+  }, [vendasFiltradas]);
 
-  // Carregando lojas
-  if (lojasLoading) {
-    return (
-      <div className="flex min-h-[400px] items-center justify-center">
-        <div className="flex flex-col items-center gap-3 text-muted-foreground">
-          <Loader2 className="h-8 w-8 animate-spin" />
-          <p className="text-sm">Carregando lojas...</p>
-        </div>
-      </div>
-    );
-  }
+  const porLoja = useMemo(() => {
+    return lojasAtivas.map((lojaId: string) => {
+      const loja = lojas.find((l: any) => l.id === lojaId);
+      const vs = vendasFiltradas.filter((v) => v.loja_id === lojaId);
+      const receita = vs.reduce((s, v) => s + Number(v.total || 0), 0);
+      const custo = vs.reduce((s, v) => s + Number(v.custo_total || 0), 0);
+      const lucro = receita - custo;
+      return {
+        id: lojaId, nome: loja?.apelido ?? lojaId, vendas: vs.length, receita, lucro,
+        margem: receita > 0 ? lucro / receita : 0,
+        ticket: vs.length ? receita / vs.length : 0,
+      };
+    }).sort((a, b) => b.receita - a.receita);
+  }, [vendasFiltradas, lojasAtivas, lojas]);
 
-  // Sem lojas cadastradas
-  if (lojas.length === 0) {
-    return (
-      <div className="space-y-6">
-        <header>
-          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">
-            Visão geral da operação · hoje, {new Date().toLocaleDateString("pt-BR")}
-          </p>
-        </header>
-        <Card>
-          <CardContent className="p-12 text-center">
-            <p className="text-muted-foreground mb-2">
-              Nenhuma loja cadastrada no Supabase.
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Cadastre pelo menos uma loja na tabela <code>lojas</code> para começar.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  const alternarLoja = (id: string) =>
+    setSelecionadas((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
 
-  // Aguardando loja ser selecionada (será automático)
-  if (!lojaId) {
-    return (
-      <div className="flex min-h-[400px] items-center justify-center">
-        <div className="flex flex-col items-center gap-3 text-muted-foreground">
-          <Loader2 className="h-8 w-8 animate-spin" />
-          <p className="text-sm">Selecionando loja...</p>
-        </div>
-      </div>
-    );
-  }
+  if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="Visão geral" />;
 
-  // Dashboard normal
+  const semVenda = !isLoading && vendasFiltradas.length === 0;
+
   return (
-    <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">
-            Visão geral da operação · hoje, {new Date().toLocaleDateString("pt-BR")}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button asChild variant="outline">
-            <Link to="/produtos"><Package className="mr-2 h-4 w-4" /> Produtos</Link>
-          </Button>
-          <Button asChild>
-            <Link to="/pdv"><ScanBarcode className="mr-2 h-4 w-4" /> Abrir PDV</Link>
-          </Button>
-        </div>
-      </header>
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Visão geral</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          O período e as lojas escolhidos aqui valem para tudo nesta tela.
+        </p>
+      </div>
 
-      {statsLoading ? (
-        <div className="flex h-32 items-center justify-center text-muted-foreground">
-          <Loader2 className="h-6 w-6 animate-spin mr-2" /> Carregando indicadores...
-        </div>
+      <FiltrosRelatorio
+        periodo={periodo}
+        aoMudarPeriodo={setPeriodo}
+        aoLimpar={() => { setPeriodo(periodoPadrao(30)); setSelecionadas([]); }}
+      >
+        {lojas.length > 1 && (
+          <div>
+            <p className="mb-1 flex items-center gap-1 text-xs text-muted-foreground">
+              <Store className="h-3.5 w-3.5" /> Lojas
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {lojas.map((l: any) => {
+                const on = lojasAtivas.includes(l.id);
+                return (
+                  <label key={l.id}
+                    className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition ${
+                      on ? "border-primary bg-primary/10" : "border-border bg-card text-muted-foreground"}`}>
+                    <Checkbox checked={on} onCheckedChange={() => alternarLoja(l.id)} />
+                    <span>{l.apelido ?? l.nome}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </FiltrosRelatorio>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Kpi label="Faturamento" icon={TrendingUp}
+          value={isLoading ? "…" : brl(kpis.total)}
+          hint={`${num(kpis.qtd)} venda(s) · ticket ${brl(kpis.ticket)}`} />
+        <Kpi label="Lucro bruto" icon={Receipt}
+          value={isLoading ? "…" : brl(kpis.lucro)}
+          hint={`Margem ${pct(kpis.margem)}`}
+          tone={kpis.lucro < 0 ? "destructive" : "default"} />
+        <Kpi label="Estoque baixo" icon={PackageX} para="/produtos-estoque-lotes"
+          value={num(totalBaixo)} hint={`${num(totalEsgotado)} esgotado(s)`}
+          tone={totalBaixo > 0 ? "destructive" : "default"} />
+        <Kpi label="Contas vencidas" icon={AlertTriangle} para="/financeiro"
+          value={num(vencidasDasLojas.length)} hint={brl(valorVencido)}
+          tone={vencidasDasLojas.length > 0 ? "destructive" : "default"} />
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Kpi label="Valor em estoque" icon={Wallet} value={brl(valorEstoque)} hint="a preço de custo" tone="warning" />
+      </div>
+
+      {semVenda ? (
+        <Card>
+          <CardContent className="p-12 text-center text-sm text-muted-foreground">
+            Nenhuma venda no período e nas lojas escolhidas.
+          </CardContent>
+        </Card>
       ) : (
         <>
-          <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <KpiCard label="Vendas hoje" value={brl(stats?.vendasHoje ?? 0)} delta={`${num(stats?.ticketsHoje ?? 0)} tickets`} icon={TrendingUp} />
-            <KpiCard label="Ticket médio" value={brl(stats?.ticketMedio ?? 0)} delta={`${num(stats?.ticketsHoje ?? 0)} vendas hoje`} icon={Receipt} />
-            <KpiCard label="Estoque baixo" value={num(stats?.produtosEstoqueBaixo ?? 0)} delta="produtos abaixo do mínimo" icon={PackageX} tone={(stats?.produtosEstoqueBaixo ?? 0) > 0 ? "destructive" : "default"} />
-            <KpiCard label="Contas vencidas" value={num(stats?.contasVencidas ?? 0)} delta={brl(stats?.valorContasVencidas ?? 0)} icon={AlertTriangle} tone={(stats?.contasVencidas ?? 0) > 0 ? "destructive" : "default"} />
-          </section>
-
-          <section className="grid gap-4 lg:grid-cols-3">
+          <div className="grid gap-4 lg:grid-cols-3">
             <Card className="lg:col-span-2">
-              <CardHeader>
-                <CardTitle className="text-base">Vendas nos últimos 7 dias</CardTitle>
-              </CardHeader>
-              <CardContent className="h-72">
-                {grafico7d.every((d) => d.total === 0) ? (
-                  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                    <Calendar className="mr-2 h-4 w-4" />
-                    Sem vendas registradas nos últimos 7 dias.
-                  </div>
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={grafico7d} margin={{ left: 0, right: 8, top: 8, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.35} />
-                          <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis dataKey="day" stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                      <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickFormatter={(v) => `R$ ${v}`} />
-                      <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} formatter={(v: number) => brl(v)} />
-                      <Area type="monotone" dataKey="total" stroke="hsl(var(--primary))" strokeWidth={2} fill="url(#g1)" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                )}
+              <CardHeader className="pb-2"><CardTitle className="text-base">Vendas por dia</CardTitle></CardHeader>
+              <CardContent className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={porDia} margin={{ left: 0, right: 8, top: 8, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="dia" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                    <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickFormatter={(v) => `R$ ${v}`} />
+                    <Tooltip formatter={(v: number) => brl(v)}
+                      contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
+                    {lojasAtivas.length > 1 && <Legend wrapperStyle={{ fontSize: 12 }} />}
+                    {lojasAtivas.map((id: string, i: number) => (
+                      <Bar key={id} dataKey={id} stackId="a" fill={CORES[i % CORES.length]}
+                        name={(lojas.find((l: any) => l.id === id) as any)?.apelido ?? id} />
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
               </CardContent>
             </Card>
 
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-base">Alertas</CardTitle>
-                <Badge variant="outline" className="font-normal">
-                  {(stats?.produtosEstoqueBaixo ?? 0) + (stats?.contasVencidas ?? 0)}
-                </Badge>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {(stats?.produtosEstoqueBaixo ?? 0) === 0 && (stats?.contasVencidas ?? 0) === 0 ? (
-                  <div className="rounded-md border bg-card p-4 text-sm text-muted-foreground">
-                    Tudo certo por aqui · nenhum alerta no momento.
-                  </div>
-                ) : (
-                  <>
-                    {(stats?.produtosEstoqueBaixo ?? 0) > 0 && (
-                      <Link to="/produtos" className="flex items-start gap-3 rounded-md border bg-card p-3 hover:bg-accent">
-                        <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-md bg-destructive/10 text-destructive">
-                          <PackageX className="h-4 w-4" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium">{stats?.produtosEstoqueBaixo} produtos</p>
-                          <p className="text-xs text-muted-foreground">Abaixo do estoque mínimo</p>
-                        </div>
-                      </Link>
-                    )}
-                    {(stats?.contasVencidas ?? 0) > 0 && (
-                      <Link to="/financeiro" className="flex items-start gap-3 rounded-md border bg-card p-3 hover:bg-accent">
-                        <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-md bg-destructive/10 text-destructive">
-                          <AlertTriangle className="h-4 w-4" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium">{stats?.contasVencidas} contas vencidas</p>
-                          <p className="text-xs text-muted-foreground">{brl(stats?.valorContasVencidas ?? 0)}</p>
-                        </div>
-                      </Link>
-                    )}
-                  </>
-                )}
+              <CardHeader className="pb-2"><CardTitle className="text-base">Formas de pagamento</CardTitle></CardHeader>
+              <CardContent className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={porPagamento} dataKey="total" nameKey="nome" innerRadius={55} outerRadius={90} paddingAngle={2}>
+                      {porPagamento.map((_, i) => <Cell key={i} fill={CORES[i % CORES.length]} />)}
+                    </Pie>
+                    <Tooltip formatter={(v: number) => brl(v)}
+                      contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                  </PieChart>
+                </ResponsiveContainer>
               </CardContent>
             </Card>
-          </section>
+          </div>
 
-          <section>
+          <div className="grid gap-4 lg:grid-cols-2">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-base">Top produtos</CardTitle>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-base">Produtos mais vendidos</CardTitle>
                 <Button asChild variant="ghost" size="sm">
-                  <Link to="/relatorios">Ver relatórios <ArrowUpRight className="ml-1 h-3.5 w-3.5" /></Link>
+                  <Link to="/relatorios">Relatórios <ArrowUpRight className="ml-1 h-3.5 w-3.5" /></Link>
                 </Button>
               </CardHeader>
               <CardContent className="p-0">
-                {topProdutos.length === 0 ? (
-                  <div className="px-6 py-8 text-center text-sm text-muted-foreground">
-                    Sem vendas registradas para gerar ranking.
-                  </div>
-                ) : (
-                  <div className="divide-y">
-                    {topProdutos.map((p, i) => (
-                      <div key={p.nome} className="flex items-center gap-4 px-6 py-3 text-sm">
-                        <div className="flex h-7 w-7 items-center justify-center rounded-md bg-muted text-xs font-medium tabular-nums">{i + 1}</div>
-                        <div className="flex-1 truncate font-medium">{p.nome}</div>
-                        <div className="w-24 text-right tabular-nums text-muted-foreground">{num(p.quantidade)} un.</div>
-                        <div className="w-28 text-right tabular-nums font-medium">{brl(p.total)}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <div className="divide-y">
+                  {topProdutos.map((p, i) => (
+                    <div key={p.nome} className="flex items-center gap-4 px-4 py-2.5 text-sm">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-md bg-muted text-xs font-medium tabular-nums">{i + 1}</div>
+                      <div className="min-w-0 flex-1 truncate font-medium">{p.nome}</div>
+                      <div className="w-20 text-right tabular-nums text-muted-foreground">{num(p.quantidade)} un.</div>
+                      <div className="w-24 text-right font-medium tabular-nums">{brl(p.total)}</div>
+                    </div>
+                  ))}
+                </div>
               </CardContent>
             </Card>
-          </section>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-base">Comparativo por loja</CardTitle>
+                <Badge variant="outline">{porLoja.length} unidade(s)</Badge>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Loja</TableHead>
+                      <TableHead className="text-right">Vendas</TableHead>
+                      <TableHead className="text-right">Faturamento</TableHead>
+                      <TableHead className="text-right">Ticket</TableHead>
+                      <TableHead className="text-right">Margem</TableHead>
+                      <TableHead className="text-right">Parte</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {porLoja.map((l) => (
+                      <TableRow key={l.id}>
+                        <TableCell className="font-medium">{l.nome}</TableCell>
+                        <TableCell className="text-right tabular-nums">{num(l.vendas)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{brl(l.receita)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{brl(l.ticket)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{pct(l.margem)}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {pct(kpis.total > 0 ? l.receita / kpis.total : 0)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </div>
         </>
       )}
     </div>
