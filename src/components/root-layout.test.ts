@@ -9,8 +9,8 @@ describe("seletor de loja do cabeçalho", () => {
   });
 
   it("a frente de caixa não usa esta lista — tem casco próprio", () => {
-    // /pdv roda em PdvLayout, que nunca mostra seletor: a loja se troca fora
-    // da frente de caixa, e com caixa aberto quem manda é o caixa.
+    // /pdv roda em PdvLayout, com seletor próprio: livre com o caixa fechado,
+    // travado na loja do caixa enquanto ele estiver aberto.
     expect(ROTAS_COM_FILTRO_DE_LOJA).not.toContain("/pdv");
   });
 

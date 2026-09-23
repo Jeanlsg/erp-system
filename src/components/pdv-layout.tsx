@@ -15,11 +15,14 @@ import { useEffect, useState } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import { Lock, LogOut, Store, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { useAuth, logout, roleLabels, ehOperadorDeBalcao, type Role } from "@/lib/store/auth-store";
 import { usePdvModo } from "@/lib/store/pdv-modo";
 import { AppSidebar } from "@/components/app-sidebar";
 import { useLojaAtualStore } from "@/lib/store/loja-atual";
-import { useLojas, useCaixaAberto } from "@/lib/supabase-queries";
+import { useLojas, useCaixaAberto, isSupabaseConfigured } from "@/lib/supabase-queries";
 import { useConexao } from "@/lib/offline/conexao";
 import { podeTrocarDeLoja } from "@/lib/loja-do-caixa";
 
@@ -78,23 +81,41 @@ export function PdvLayout() {
       <header className="flex shrink-0 items-center justify-between gap-3 border-b bg-card px-4 py-2">
         <div className="flex items-center gap-3 min-w-0">
           <span className="font-semibold tracking-tight">Frente de caixa</span>
-          {/* Sem seletor aqui.
-              A loja se troca FORA da frente de caixa — no cabeçalho das telas
-              de gestão. Dentro do PDV ela é só informação: com caixa aberto
-              quem manda é o caixa, e trocar de loja no meio da venda gravava o
-              cupom numa loja com o caixa em outra. */}
-          <span
-            className="flex items-center gap-1 rounded-md border bg-muted/50 px-2 py-1 text-sm"
-            title={lojaTravada
-              ? "A loja vem do caixa aberto. Para operar em outra loja, feche o caixa."
-              : "Para trocar de loja, saia da frente de caixa e use o seletor do cabeçalho."}
-          >
-            <Store className="h-3.5 w-3.5" />
-            {(lojas.find((l: any) => l.id === (lojaDoCaixa ?? currentLojaId)) as any)?.apelido
-              ?? (lojas.find((l: any) => l.id === (lojaDoCaixa ?? currentLojaId)) as any)?.nome
-              ?? "—"}
-            {lojaTravada && <Lock className="h-3 w-3 text-muted-foreground" />}
-          </span>
+          {/* O caixa ABERTO trava a loja; o caixa fechado, não.
+              Com caixa aberto, trocar de loja gravava o cupom numa loja com o
+              caixa em outra — some o seletor e fica o nome com cadeado. Com o
+              caixa fechado esta tela é a de abertura: escolher a loja aqui é
+              justamente como se decide onde abrir, e é o único caminho de quem
+              só opera o balcão, que não tem menu lateral. */}
+          {lojaTravada ? (
+            <span
+              className="flex items-center gap-1 rounded-md border bg-muted/50 px-2 py-1 text-sm"
+              title="A loja vem do caixa aberto. Para operar em outra loja, feche o caixa."
+            >
+              <Store className="h-3.5 w-3.5" />
+              {(lojas.find((l: any) => l.id === lojaDoCaixa) as any)?.apelido
+                ?? (lojas.find((l: any) => l.id === lojaDoCaixa) as any)?.nome
+                ?? "—"}
+              <Lock className="h-3 w-3 text-muted-foreground" />
+            </span>
+          ) : isSupabaseConfigured() && lojas.length > 1 ? (
+            <Select value={currentLojaId ?? ""} onValueChange={setCurrentLojaId}>
+              <SelectTrigger className="h-8 w-56">
+                <Store className="mr-2 h-3.5 w-3.5" />
+                <SelectValue placeholder="Escolha a loja" />
+              </SelectTrigger>
+              <SelectContent>
+                {lojas.map((l: any) => (
+                  <SelectItem key={l.id} value={l.id}>{l.apelido || l.nome}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <span className="flex items-center gap-1 text-sm text-muted-foreground">
+              <Store className="h-3.5 w-3.5" />
+              {(lojas.find((l: any) => l.id === currentLojaId) as any)?.apelido ?? "—"}
+            </span>
+          )}
           {!online && (
             <span className="flex items-center gap-1 rounded-md bg-amber-100 px-2 py-0.5 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
               <WifiOff className="h-3 w-3" /> sem internet — as vendas ficam na fila

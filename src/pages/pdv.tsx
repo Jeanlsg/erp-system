@@ -160,6 +160,16 @@ export function PDVPage() {
   const [modalNovoPonto, setModalNovoPonto] = useState(false);
   const [nomeNovoPonto, setNomeNovoPonto] = useState("");
 
+  // Trocar de loja com o caixa fechado tem de limpar a escolha do caixa:
+  // "Caixa 1 — Juazeiro" continuava marcado depois de mudar para Petrolina, e
+  // o botão de abrir abria o caixa da loja que não estava mais na tela.
+  useEffect(() => {
+    if (pontoSelecionado && !pontosVenda.some((pv: any) => pv.id === pontoSelecionado)) {
+      setPontoSelecionado(null);
+      setCaixaSelecionado(null);
+    }
+  }, [pontosVenda, pontoSelecionado]);
+
   // Com um caixa só na loja, escolher é burocracia: já vem marcado.
   useEffect(() => {
     if (!pontoSelecionado && pontosVenda.length === 1) {
