@@ -565,14 +565,24 @@ export interface ClienteCompras extends Pessoa {
   ultima_compra: string | null;
 }
 
-export function useClientesCompras() {
+/**
+ * Clientes DESTA filial, com as compras feitas nela (migration 096).
+ *
+ * O cadastro de pessoa é um só na empresa — o CPF é único —, e a filial vem
+ * do vínculo erp_pessoa_lojas: nasce no cadastro e em cada venda, pedido ou
+ * conta. lojaId null = filial ainda carregando: a consulta espera, em vez de
+ * mostrar a empresa inteira por um instante.
+ */
+export function useClientesCompras(lojaId: string | null) {
   return useQuery<ClienteCompras[]>({
-    queryKey: ["erp_clientes_compras"],
+    queryKey: ["erp_clientes_compras", lojaId],
+    enabled: !!lojaId,
     queryFn: async () => {
-      if (!isSupabaseConfigured()) return [];
+      if (!isSupabaseConfigured() || !lojaId) return [];
       const { data, error } = await supabase
-        .from("vw_clientes_compras")
+        .from("vw_clientes_compras_loja")
         .select("*")
+        .eq("loja_id", lojaId)
         .eq("ativo", true)
         .eq("eh_cliente", true)
         .order("nome_razao");
@@ -589,19 +599,82 @@ export function chaveTelefone(v: string | null | undefined): string | null {
   return d.replace(/^55/, "").slice(0, 2) + d.slice(-8);
 }
 
-export function useClientes() {
+/**
+ * Clientes ativos. Sem argumento, os da empresa inteira — é o que a LGPD e a
+ * importação de nota precisam. Com { lojaId }, só os ligados àquela filial;
+ * lojaId null faz a consulta esperar a filial carregar. Telas de filial usam
+ * useClientesDaFilial, que já passa a filial do topo.
+ */
+export function useClientes(escopo?: { lojaId: string | null }) {
+  const lojaId = escopo?.lojaId ?? null;
   return useQuery<Pessoa[]>({
-    queryKey: ["erp_clientes"],
+    queryKey: ["erp_clientes", escopo ? lojaId : "empresa"],
+    enabled: !escopo || !!lojaId,
     queryFn: async () => {
       if (!isSupabaseConfigured()) return [];
-      const { data, error } = await supabase
+      let q = supabase
         .from("erp_pessoas")
-        .select("*")
+        .select(escopo ? "*, filiais:erp_pessoa_lojas!inner(loja_id)" : "*")
         .eq("ativo", true)
         .eq("eh_cliente", true)
         .order("nome_razao");
+      if (escopo && lojaId) q = q.eq("filiais.loja_id", lojaId);
+      const { data, error } = await q;
       if (error) throw error;
-      return data ?? [];
+      // o select dinâmico confunde o tipo gerado; o formato é o de erp_pessoas
+      return (data ?? []) as unknown as Pessoa[];
+    },
+  });
+}
+
+/** Em quais filiais a pessoa está (erp_pessoa_lojas). */
+export function usePessoaLojas(pessoaId?: string | null) {
+  return useQuery<string[]>({
+    queryKey: ["erp_pessoa_lojas", pessoaId],
+    enabled: !!pessoaId,
+    queryFn: async () => {
+      if (!isSupabaseConfigured() || !pessoaId) return [];
+      const { data, error } = await supabase.from("erp_pessoa_lojas")
+        .select("loja_id").eq("pessoa_id", pessoaId);
+      if (error) throw error;
+      return (data ?? []).map((r: any) => r.loja_id);
+    },
+  });
+}
+
+/**
+ * Acerta as filiais de um cliente: liga as marcadas, desliga as desmarcadas.
+ * O banco só deixa mexer nas filiais em que o usuário trabalha; as outras
+ * ficam como estão.
+ */
+export function useDefinirLojasDaPessoa() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ pessoaId, marcadas, podeMexer }: {
+      pessoaId: string; marcadas: string[]; podeMexer: string[];
+    }) => {
+      const { data: atuais, error: e0 } = await supabase.from("erp_pessoa_lojas")
+        .select("loja_id").eq("pessoa_id", pessoaId);
+      if (e0) throw e0;
+      const tem = new Set((atuais ?? []).map((r: any) => r.loja_id));
+      const ligar = marcadas.filter((l) => !tem.has(l) && podeMexer.includes(l));
+      const desligar = [...tem].filter((l) => !marcadas.includes(l) && podeMexer.includes(l));
+      if (ligar.length) {
+        const { error } = await supabase.from("erp_pessoa_lojas")
+          .insert(ligar.map((loja_id) => ({ pessoa_id: pessoaId, loja_id })));
+        if (error) throw error;
+      }
+      if (desligar.length) {
+        const { error } = await supabase.from("erp_pessoa_lojas")
+          .delete().eq("pessoa_id", pessoaId).in("loja_id", desligar);
+        if (error) throw error;
+      }
+      return { ligar, desligar };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["erp_pessoa_lojas"] });
+      qc.invalidateQueries({ queryKey: ["erp_clientes"] });
+      qc.invalidateQueries({ queryKey: ["erp_clientes_compras"] });
     },
   });
 }

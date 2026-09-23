@@ -11,9 +11,13 @@ describe("seletor de loja do cabeçalho", () => {
   });
 
   it("cadastros comuns ganham o aviso", () => {
-    for (const r of ["/gestao/clientes", "/gestao/fornecedores", "/gestao/funcionarios", "/lojas"]) {
+    for (const r of ["/gestao/fornecedores", "/gestao/funcionarios", "/lojas"]) {
       expect(ROTAS_DA_EMPRESA).toContain(r);
     }
+  });
+
+  it("clientes são da filial, não da empresa (migration 096)", () => {
+    expect(ROTAS_DA_EMPRESA).not.toContain("/gestao/clientes");
   });
 
   it("a frente de caixa não usa esta lista — tem casco próprio", () => {

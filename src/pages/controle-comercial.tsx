@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useClientesDaFilial } from "@/lib/hooks/use-clientes-da-filial";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { ShoppingCart, FileText, Wrench, Truck, Store, Plus, Loader2, X, Check, Ban } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import {
-  useClientes, useProdutos, usePedidos, useCreatePedido, useUpdatePedidoStatus,
+  useProdutos, usePedidos, useCreatePedido, useUpdatePedidoStatus,
   useOrcamentos, useCreateOrcamento, useUpdateOrcamentoStatus,
   useOrdensServico, useCreateOrdemServico, useUpdateOrdemServico,
   useConsignacoes, useCreateConsignacao, useUpdateConsignacaoStatus,
@@ -104,7 +105,7 @@ function EditorItensLivres({ itens, setItens }: { itens: ItemLivre[]; setItens: 
 export function PedidoPage() {
   const { lojaId } = useAutoSelectLoja();
   const { data: pedidos = [], isLoading } = usePedidos({ lojaId: lojaId ?? undefined });
-  const { data: clientes = [] } = useClientes();
+  const { data: clientes = [] } = useClientesDaFilial();
   const createPedido = useCreatePedido();
   const updateStatus = useUpdatePedidoStatus();
 
@@ -191,7 +192,7 @@ export function PedidoPage() {
 export function OrcamentoPage() {
   const { lojaId } = useAutoSelectLoja();
   const { data: orcamentos = [], isLoading } = useOrcamentos(lojaId ?? undefined);
-  const { data: clientes = [] } = useClientes();
+  const { data: clientes = [] } = useClientesDaFilial();
   const create = useCreateOrcamento();
   const updateStatus = useUpdateOrcamentoStatus();
 
@@ -291,7 +292,7 @@ const OS_STATUS_FLUXO: Record<string, string[]> = {
 export function OrdemServicoPage() {
   const { lojaId } = useAutoSelectLoja();
   const { data: ordens = [], isLoading } = useOrdensServico(lojaId ?? undefined);
-  const { data: clientes = [] } = useClientes();
+  const { data: clientes = [] } = useClientesDaFilial();
   const create = useCreateOrdemServico();
   const update = useUpdateOrdemServico();
 
@@ -393,7 +394,7 @@ export function OrdemServicoPage() {
 export function ConsignacaoPage() {
   const { lojaId } = useAutoSelectLoja();
   const { data: consignacoes = [], isLoading } = useConsignacoes(lojaId ?? undefined);
-  const { data: clientes = [] } = useClientes();
+  const { data: clientes = [] } = useClientesDaFilial();
   const { data: produtos = [] } = useProdutos({ lojaId: lojaId ?? undefined });
   const create = useCreateConsignacao();
   const updateStatus = useUpdateConsignacaoStatus();
@@ -515,7 +516,7 @@ export function ConsignacaoPage() {
 export function LocacaoPage() {
   const { lojaId } = useAutoSelectLoja();
   const { data: locacoes = [], isLoading } = useLocacoes(lojaId ?? undefined);
-  const { data: clientes = [] } = useClientes();
+  const { data: clientes = [] } = useClientesDaFilial();
   const create = useCreateLocacao();
   const updateStatus = useUpdateLocacaoStatus();
 

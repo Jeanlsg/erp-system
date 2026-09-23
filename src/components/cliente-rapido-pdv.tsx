@@ -7,6 +7,7 @@
 // ============================================================
 
 import { useEffect, useState } from "react";
+import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { Loader2, Search, UserPlus, MessageSquare, Check } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -39,6 +40,8 @@ interface Props {
 }
 
 export function ClienteRapidoPdvDialog({ open, onOpenChange, onCliente, online }: Props) {
+  // cliente cadastrado no balcão é da filial do balcão (migration 096)
+  const { lojaId } = useAutoSelectLoja();
   const qc = useQueryClient();
   const [celular, setCelular] = useState("");
   const [buscando, setBuscando] = useState(false);
@@ -95,6 +98,7 @@ export function ClienteRapidoPdvDialog({ open, onOpenChange, onCliente, online }
         email: form.email.trim() || null,
         cpf_cnpj: soDigitos(form.cpf) || null,
         ativo: true, eh_cliente: true, eh_fornecedor: false,
+        loja_cadastro_id: lojaId ?? null,
       }).select("id, nome_razao").single();
       if (error) {
         if (/duplicate|unique/i.test(error.message)) throw new Error("Já existe um cadastro com este CPF — procure pelo nome no campo Cliente.");

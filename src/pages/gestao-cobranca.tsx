@@ -4,6 +4,7 @@
 // ============================================================
 
 import { useState } from "react";
+import { useClientesDaFilial } from "@/lib/hooks/use-clientes-da-filial";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,7 +22,7 @@ import {
   useNegativacoesFull, useCreateNegativacao, useDeleteNegativacao, useDesnegativar,
   useParcelamentosFull, useCreateParcelamento,
   useProtestosFull, useCreateProtesto, useDeleteProtesto,
-  useClientes, useContasVencidas,
+  useContasVencidas,
   isSupabaseConfigured,
 } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
@@ -202,7 +203,7 @@ export function NegativarDevedoresPage() {
   const [modal, setModal] = useState(false);
   const [desnegModal, setDesnegModal] = useState<{ id: string } | null>(null);
   const [motivo, setMotivo] = useState("");
-  const { data: pessoas = [] } = useClientes();
+  const { data: pessoas = [] } = useClientesDaFilial();
   const { data: contasVencidas = [] } = useContasVencidas(lojaId ?? undefined);
   const [form, setForm] = useState({
     pessoa_id: "",
@@ -360,7 +361,7 @@ export function ParcelarDebitosPage() {
   const { lojaId } = useAutoSelectLoja();
   const { data: parcelamentos = [], isLoading } = useParcelamentosFull(lojaId ?? undefined);
   const create = useCreateParcelamento();
-  const { data: pessoas = [] } = useClientes();
+  const { data: pessoas = [] } = useClientesDaFilial();
 
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState({
@@ -493,7 +494,7 @@ export function EncaminharProtestoPage() {
   const { data: protestos = [], isLoading } = useProtestosFull(lojaId ?? undefined);
   const create = useCreateProtesto();
   const del = useDeleteProtesto();
-  const { data: pessoas = [] } = useClientes();
+  const { data: pessoas = [] } = useClientesDaFilial();
 
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState({

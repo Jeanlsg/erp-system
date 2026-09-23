@@ -4,6 +4,7 @@
 
 import { Link } from "react-router-dom";
 import { useState } from "react";
+import { useClientesDaFilial } from "@/lib/hooks/use-clientes-da-filial";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -40,7 +41,9 @@ import { toast } from "sonner";
 // CONSULTA PESSOA FÍSICA
 // ====================================================================
 export function ConsultaPessoaFisicaPage() {
-  const { data: pessoas = [], isLoading } = useClientes();
+  // cadastro feito aqui é da filial do topo (migration 096)
+  const { lojaId: lojaCadastro } = useAutoSelectLoja();
+  const { data: pessoas = [], isLoading } = useClientesDaFilial();
   const create = useCreatePessoa();
   const update = useUpdatePessoa();
   const del = useInativarPessoa();
@@ -85,7 +88,7 @@ export function ConsultaPessoaFisicaPage() {
       limite_credito: parseFloat(form.limite_credito) || 0,
     };
     if (editId) await update.mutateAsync({ id: editId, ...payload });
-    else await create.mutateAsync(payload);
+    else await create.mutateAsync({ ...payload, loja_cadastro_id: lojaCadastro } as any);
     setModal(false);
     setEditId(null);
     setForm({ nome_razao: "", cpf_cnpj: "", email: "", telefone: "", celular: "", data_nascimento: "", estado_civil: "", sexo: "", profissao: "", limite_credito: "0" });
@@ -200,7 +203,9 @@ export function ConsultaPessoaFisicaPage() {
 // CONSULTA PESSOA JURÍDICA
 // ====================================================================
 export function ConsultaPessoaJuridicaPage() {
-  const { data: pessoas = [], isLoading } = useClientes();
+  // cadastro feito aqui é da filial do topo (migration 096)
+  const { lojaId: lojaCadastro } = useAutoSelectLoja();
+  const { data: pessoas = [], isLoading } = useClientesDaFilial();
   const create = useCreatePessoa();
   const update = useUpdatePessoa();
   const del = useInativarPessoa();
@@ -241,7 +246,7 @@ export function ConsultaPessoaJuridicaPage() {
       limite_credito: parseFloat(form.limite_credito) || 0,
     };
     if (editId) await update.mutateAsync({ id: editId, ...payload });
-    else await create.mutateAsync(payload);
+    else await create.mutateAsync({ ...payload, loja_cadastro_id: lojaCadastro } as any);
     setModal(false);
     setEditId(null);
   };

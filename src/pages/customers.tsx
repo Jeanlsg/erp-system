@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Users, Plus, Search, Loader2, Pencil, Trash2, FileSpreadsheet } from "lucide-react";
@@ -7,7 +7,10 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
-import { useClientesCompras, useCreatePessoa, useUpdatePessoa, useInativarPessoa, chaveTelefone, isSupabaseConfigured } from "@/lib/supabase-queries";
+import { useClientesCompras, useCreatePessoa, useUpdatePessoa, useInativarPessoa, chaveTelefone, isSupabaseConfigured, usePessoaLojas, useDefinirLojasDaPessoa } from "@/lib/supabase-queries";
+import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
+import { supabase } from "@/lib/supabase";
+import { useQueryClient } from "@tanstack/react-query";
 import { brl, date } from "@/lib/format";
 import { toast } from "sonner";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
@@ -23,15 +26,24 @@ const FORM_VAZIO = {
 };
 
 export function CustomersPage() {
-  const { data: clientes = [], isLoading } = useClientesCompras();
+  // Clientes da filial do topo (migration 096). O cadastro é um só na
+  // empresa; a filial vem do vínculo, que nasce no cadastro e em cada venda.
+  const { lojaId, lojas } = useAutoSelectLoja();
+  const { data: clientes = [], isLoading } = useClientesCompras(lojaId ?? null);
   const create = useCreatePessoa();
   const update = useUpdatePessoa();
   const inativar = useInativarPessoa();
+  const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [modalAberto, setModalAberto] = useState(false);
   const [editando, setEditando] = useState<Pessoa | null>(null);
   const [form, setForm] = useState(FORM_VAZIO);
   const [importando, setImportando] = useState(false);
+  // filiais do cliente em edição — só para quem trabalha em mais de uma
+  const { data: filiaisSalvas = [] } = usePessoaLojas(editando?.id ?? null);
+  const definirFiliais = useDefinirLojasDaPessoa();
+  const [filiaisMarcadas, setFiliaisMarcadas] = useState<string[]>([]);
+  useEffect(() => { setFiliaisMarcadas(filiaisSalvas); }, [editando?.id, filiaisSalvas.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!isSupabaseConfigured()) {
     return <SupabaseNotConfigured title="Clientes" />;
@@ -76,6 +88,34 @@ export function CustomersPage() {
     // compras e duplica o lead no CRM (lá o telefone É a identidade).
     // Avisa antes de criar mais um, mostrando quem já usa o número.
     const chave = chaveTelefone(form.celular || form.telefone);
+    // Na outra filial: a lista desta tela não enxerga, então procura na
+    // empresa inteira. Achou lá? Traz o cadastro existente para esta filial
+    // em vez de criar um segundo para a mesma pessoa.
+    if (chave && !editando && lojaId) {
+      const tel = form.celular || form.telefone;
+      const { data: achados } = await supabase.schema("erp")
+        .rpc("buscar_cliente_por_telefone", { p_telefone: tel });
+      const deOutraFilial = ((achados ?? []) as any[]).find((a) => !clientes.some((c) => c.id === a.id));
+      if (deOutraFilial) {
+        const trazer = confirm(
+          `Este telefone já é de "${deOutraFilial.nome_razao}", cadastrado em outra filial.` +
+          "\n\nOK: trazer esse cadastro para esta filial (recomendado)." +
+          "\nCancelar: criar um cadastro novo mesmo assim.");
+        if (trazer) {
+          const { error } = await supabase.from("erp_pessoa_lojas")
+            .insert({ pessoa_id: deOutraFilial.id, loja_id: lojaId });
+          if (error && !/duplicate/i.test(error.message)) {
+            toast.error(`Não foi possível trazer: ${error.message}`);
+            return;
+          }
+          void qc.invalidateQueries({ queryKey: ["erp_clientes_compras"] });
+          void qc.invalidateQueries({ queryKey: ["erp_clientes"] });
+          toast.success(`${deOutraFilial.nome_razao} agora também é cliente desta filial.`);
+          setModalAberto(false);
+          return;
+        }
+      }
+    }
     if (chave) {
       const jaExiste = clientes.find(
         (c) => c.chave_telefone === chave && c.id !== editando?.id,
@@ -104,11 +144,18 @@ export function CustomersPage() {
     try {
       if (editando) {
         await update.mutateAsync({ id: editando.id, ...payload } as any);
+        if (lojas.length > 1) {
+          await definirFiliais.mutateAsync({
+            pessoaId: editando.id, marcadas: filiaisMarcadas,
+            podeMexer: (lojas as any[]).map((l) => l.id),
+          });
+        }
         toast.success("Cliente atualizado.");
       } else {
         // cadastrado nesta tela é cliente; o papel de fornecedor se ganha na
         // tela de Fornecedores, e uma pessoa pode ser os dois
-        await create.mutateAsync({ ...payload, ativo: true, eh_cliente: true } as any);
+        // a filial do cadastro liga o cliente a ela (migration 096)
+        await create.mutateAsync({ ...payload, ativo: true, eh_cliente: true, loja_cadastro_id: lojaId } as any);
         toast.success("Cliente cadastrado.");
       }
       setModalAberto(false);
@@ -266,6 +313,26 @@ export function CustomersPage() {
                 Opcional. Preenchida, o cliente entra na régua de aniversário do CRM.
               </p>
             </div>
+            {editando && lojas.length > 1 && (
+              <div>
+                <Label>Filiais deste cliente</Label>
+                <div className="mt-1 flex flex-wrap gap-3">
+                  {(lojas as any[]).map((l) => (
+                    <label key={l.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                      <input type="checkbox" className="h-4 w-4"
+                        checked={filiaisMarcadas.includes(l.id)}
+                        onChange={(e) => setFiliaisMarcadas((f) =>
+                          e.target.checked ? [...f, l.id] : f.filter((x) => x !== l.id))} />
+                      {l.apelido || l.nome}
+                    </label>
+                  ))}
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  O cliente aparece na lista das filiais marcadas. Uma venda numa filial
+                  desmarcada liga ele a ela de novo.
+                </p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setModalAberto(false)}>Cancelar</Button>

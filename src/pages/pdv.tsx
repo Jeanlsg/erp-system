@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { useClientesDaFilial } from "@/lib/hooks/use-clientes-da-filial";
 import { FecharCaixaIndiretoDialog } from "@/components/fechar-caixa-indireto";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -18,7 +19,7 @@ import {
   Search, Keyboard,
   Bike,
 } from "lucide-react";
-import { useProdutos, useClientes, useCreateCaixa, useFecharCaixa, useKits, useCaixas, useCreateSangria, useCreateEntradaExtra, useEmitirNFeVenda, isSupabaseConfigured, useVendedores, useEstoqueLoja, usePontosVenda, useCriarPontosVenda, useRenomearPontoVenda, useRemoverPontoVenda, useConfigsCaixa, useSaldosPedidos, useAplicarEntradaPedido, useCaixasAbertosDoUsuario, useCaixasPermitidos } from "@/lib/supabase-queries";
+import { useProdutos, useCreateCaixa, useFecharCaixa, useKits, useCaixas, useCreateSangria, useCreateEntradaExtra, useEmitirNFeVenda, isSupabaseConfigured, useVendedores, useEstoqueLoja, usePontosVenda, useCriarPontosVenda, useRenomearPontoVenda, useRemoverPontoVenda, useConfigsCaixa, useSaldosPedidos, useAplicarEntradaPedido, useCaixasAbertosDoUsuario, useCaixasPermitidos } from "@/lib/supabase-queries";
 import { caixaAtivoNaLoja, caixasEmOutrasLojas, podeAbrirOutroCaixa } from "@/lib/loja-do-caixa";
 import { useLojaAtualStore } from "@/lib/store/loja-atual";
 import { quantidadeParaLancar, QTD_MAXIMA_POR_LANCAMENTO } from "@/lib/quantidade-lancamento";
@@ -136,7 +137,7 @@ export function PDVPage() {
   // Offline, a lista vem do espelho local salvo enquanto havia rede.
   const catalogo = useCatalogoOffline(lojaId, vendaveis, online);
   const produtos = catalogo.produtos;
-  const { data: clientes = [] } = useClientes();
+  const { data: clientes = [] } = useClientesDaFilial();
   const { data: caixas = [] } = useCaixas(lojaId ?? undefined);
 
   const caixasAbertos = caixas.filter((c) => c.status === "aberto");

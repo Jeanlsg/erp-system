@@ -7,6 +7,7 @@
 // ============================================================
 
 import { useMemo, useState } from "react";
+import { useClientesDaFilial } from "@/lib/hooks/use-clientes-da-filial";
 import { Mail, Loader2, Plus, Send } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -20,8 +21,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  useEmailMarketing, useCreateEmailMarketing, useClientes,
-  isSupabaseConfigured, supabase,
+  useEmailMarketing, useCreateEmailMarketing, isSupabaseConfigured, supabase,
 } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
@@ -33,7 +33,7 @@ export function EmailMarketingPage() {
   const { lojaId } = useAutoSelectLoja();
   const qc = useQueryClient();
   const { data: campanhas = [], isLoading } = useEmailMarketing(lojaId ?? undefined);
-  const { data: clientes = [] } = useClientes();
+  const { data: clientes = [] } = useClientesDaFilial();
   const criar = useCreateEmailMarketing();
 
   const [aberto, setAberto] = useState(false);

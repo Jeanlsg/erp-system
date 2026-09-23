@@ -14,6 +14,7 @@
 // ============================================================
 
 import { useMemo, useRef, useState } from "react";
+import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { Download, FileSpreadsheet, Loader2, Upload } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -87,6 +88,8 @@ interface Props {
 
 export function ImportarPessoasDialog({ open, onOpenChange, papel }: Props) {
   const qc = useQueryClient();
+  // clientes importados entram na filial do topo (migration 096)
+  const { lojaId } = useAutoSelectLoja();
   const inputRef = useRef<HTMLInputElement>(null);
   const [nomeArquivo, setNomeArquivo] = useState("");
   const [itens, setItens] = useState<LinhaImportacao[]>([]);
@@ -197,6 +200,7 @@ export function ImportarPessoasDialog({ open, onOpenChange, papel }: Props) {
           ativo: true,
           eh_cliente: ehCliente,
           eh_fornecedor: !ehCliente,
+          ...(ehCliente && lojaId ? { loja_cadastro_id: lojaId } : {}),
         });
       });
 
@@ -208,6 +212,13 @@ export function ImportarPessoasDialog({ open, onOpenChange, papel }: Props) {
           .update(ehCliente ? { eh_cliente: true } : { eh_fornecedor: true })
           .in("id", lote);
         if (error) throw new Error(`atualização de papel: ${error.message}`);
+        // quem já existia e passou a ser cliente também entra nesta filial
+        if (ehCliente && lojaId) {
+          const { error: e2 } = await supabase.from("erp_pessoa_lojas")
+            .upsert(lote.map((pessoa_id) => ({ pessoa_id, loja_id: lojaId })),
+              { onConflict: "pessoa_id,loja_id", ignoreDuplicates: true });
+          if (e2) throw new Error(`vínculo com a filial: ${e2.message}`);
+        }
         atualizados += lote.length;
       }
 

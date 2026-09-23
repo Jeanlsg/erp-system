@@ -8,6 +8,7 @@
 // ============================================================
 
 import { useMemo, useState } from "react";
+import { useClientesDaFilial } from "@/lib/hooks/use-clientes-da-filial";
 import { FileText, Loader2, Plus, Printer, CheckCircle2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -21,7 +22,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  usePromissorias, useClientes, useLojas, isSupabaseConfigured, supabase,
+  usePromissorias, useLojas, isSupabaseConfigured, supabase,
 } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
@@ -71,7 +72,7 @@ export function PromissoriaPage() {
   const { lojaId } = useAutoSelectLoja();
   const qc = useQueryClient();
   const { data: promissorias = [], isLoading } = usePromissorias({ lojaId: lojaId ?? undefined });
-  const { data: clientes = [] } = useClientes();
+  const { data: clientes = [] } = useClientesDaFilial();
   const { data: lojas = [] } = useLojas();
   const loja = lojas.find((l: any) => l.id === lojaId);
 

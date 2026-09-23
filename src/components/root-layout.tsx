@@ -42,13 +42,13 @@ import { alternaFiliais } from "@/lib/lojas-permitidas";
  * com seletor de loja próprio: dois seletores na mesma página discordavam, e
  * o do topo não mandava.
  *
- * Estas rotas são a exceção de conteúdo, não de seletor: cliente, fornecedor
- * e funcionário são da empresa, não da filial. O seletor continua visível
+ * Estas rotas são a exceção de conteúdo, não de seletor: fornecedor e
+ * funcionário são da empresa, não da filial. Cliente deixou de ser (096):
+ * cada filial vê os seus. O seletor continua visível
  * (a escolha vale para a próxima tela), com um aviso para ninguém trocar de
  * filial e estranhar que a lista não mudou.
  */
 export const ROTAS_DA_EMPRESA = [
-  "/gestao/clientes",
   "/gestao/fornecedores", "/fornecedores",
   "/gestao/funcionarios", "/funcionarios",
   "/gestao/servicos",

@@ -11,6 +11,7 @@
 // ============================================================
 
 import { useEffect, useMemo, useState } from "react";
+import { useClientesDaFilial } from "@/lib/hooks/use-clientes-da-filial";
 import { Bike, Loader2, Plus, MapPin, Trash2, Check } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  useClientes, useCreatePedido, useRegioesEntrega, useProdutos,
+  useCreatePedido, useRegioesEntrega, useProdutos,
   useEnderecosPessoa, useSalvarEnderecoPessoa,
 } from "@/lib/supabase-queries";
 import { supabase } from "@/lib/supabase";
@@ -42,7 +43,7 @@ type ItemPedido = { produto_id: string | null; nome: string; quantidade: number;
 export function NovoPedidoBalcaoDialog({
   open, onOpenChange, lojaId,
 }: { open: boolean; onOpenChange: (v: boolean) => void; lojaId?: string | null }) {
-  const { data: clientes = [] } = useClientes();
+  const { data: clientes = [] } = useClientesDaFilial();
   const { data: regioes = [] } = useRegioesEntrega();
   const { data: produtos = [] } = useProdutos({ lojaId: lojaId ?? undefined });
   const criar = useCreatePedido();

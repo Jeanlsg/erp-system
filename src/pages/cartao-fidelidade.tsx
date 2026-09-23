@@ -10,6 +10,7 @@
 // ============================================================
 
 import { useState } from "react";
+import { useClientesDaFilial } from "@/lib/hooks/use-clientes-da-filial";
 import { Award, Gift, Loader2, Sparkles, Star } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,7 +25,7 @@ import {
 
 import {
   useCartoesFidelidade, useEmitirCartaoFidelidade, useResgatarPontos,
-  useMovimentacoesFidelidade, useClientes, useConfiguracoesGerais,
+  useMovimentacoesFidelidade, useConfiguracoesGerais,
 } from "@/lib/supabase-queries";
 import { ComboboxBusca } from "@/components/ui/combobox-busca";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
@@ -42,7 +43,7 @@ const NIVEL: Record<string, { rotulo: string; classe: string; Icone: typeof Star
 export function CartaoFidelidadePage() {
   const { lojaId } = useAutoSelectLoja();
   const { data: cartoes = [], isLoading } = useCartoesFidelidade(lojaId ?? undefined);
-  const { data: clientes = [] } = useClientes();
+  const { data: clientes = [] } = useClientesDaFilial();
   const { data: config = [] } = useConfiguracoesGerais();
 
   const emitir = useEmitirCartaoFidelidade();
