@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { FecharCaixaIndiretoDialog } from "@/components/fechar-caixa-indireto";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -24,41 +24,12 @@ export function CaixaPage() {
   const [caixaDetalhe, setCaixaDetalhe] = useState<string | null>(null);
   const { user, can } = useAuth();
   const { lojaId, lojas } = useAutoSelectLoja();
-  const queryClient = useQueryClient();
 
   // Fechamento indireto: fechar o caixa de outro é ato de supervisão, e o
   // banco recusa quem não for admin/gerente — aqui é só para não oferecer
   // um botão que vai falhar.
   const podeFecharDeOutro = can("caixa.fechar") && can("financeiro.ver");
   const [caixaIndireto, setCaixaIndireto] = useState<any | null>(null);
-  const [valorIndireto, setValorIndireto] = useState("");
-  const [motivoIndireto, setMotivoIndireto] = useState("");
-  const [fechandoIndireto, setFechandoIndireto] = useState(false);
-
-  const fecharIndireto = async () => {
-    if (!caixaIndireto) return;
-    const contado = parseFloat(valorIndireto);
-    if (isNaN(contado) || contado < 0) { toast.error("Informe o valor contado na gaveta."); return; }
-    if (!motivoIndireto.trim()) { toast.error("Informe o motivo — ele fica no relatório."); return; }
-    setFechandoIndireto(true);
-    try {
-      const { data, error } = await supabase.schema("erp").rpc("fechar_caixa_indireto", {
-        p_caixa_id: caixaIndireto.id, p_valor_contado: contado, p_motivo: motivoIndireto.trim(),
-      });
-      if (error) throw error;
-      const r = data as any;
-      toast.success(
-        Math.abs(Number(r?.diferenca ?? 0)) < 0.01
-          ? "Caixa fechado. A gaveta conferia."
-          : `Caixa fechado com diferença de ${brl(Number(r?.diferenca ?? 0))}.`);
-      setCaixaIndireto(null);
-      void queryClient.invalidateQueries({ queryKey: ["erp_caixa"] });
-    } catch (e: any) {
-      toast.error(`Não foi possível fechar: ${e.message ?? e}`);
-    } finally {
-      setFechandoIndireto(false);
-    }
-  };
 
   // A filial é a do seletor do topo, como em toda tela de movimento. A tela
   // tinha um filtro de loja próprio que começava em "todas" — os turnos de
@@ -223,7 +194,7 @@ export function CaixaPage() {
                     <span className="text-xs text-muted-foreground">feche pelo PDV</span>
                   ) : podeFecharDeOutro ? (
                     <Button size="sm" variant="outline"
-                      onClick={() => { setCaixaIndireto(c); setValorIndireto(""); setMotivoIndireto(""); }}>
+                      onClick={() => setCaixaIndireto(c)}>
                       Fechar por fora
                     </Button>
                   ) : (
@@ -548,51 +519,7 @@ export function CaixaPage() {
           ficou aberto. O motivo é obrigatório e vai para o relatório — um
           caixa fechado por terceiro não tem o mesmo peso de um conferido
           pelo próprio operador, e esconder isso seria pior que não ter. */}
-      <Dialog open={!!caixaIndireto} onOpenChange={(o) => !o && setCaixaIndireto(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Fechar caixa por fora</DialogTitle>
-          </DialogHeader>
-          {caixaIndireto && (
-            <div className="space-y-3">
-              <div className="rounded-md bg-muted/40 p-3 text-sm">
-                <p className="font-medium">
-                  {caixaIndireto.ponto?.nome ?? `Caixa ${caixaIndireto.numero_caixa}`}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {caixaIndireto.usuario?.nome ?? "—"} · aberto em{" "}
-                  {new Date(caixaIndireto.data_abertura).toLocaleString("pt-BR")}
-                </p>
-                <p className="mt-1 text-xs">
-                  Esperado na gaveta:{" "}
-                  <b>{brl(Number(caixaIndireto.valor_esperado_gaveta ?? caixaIndireto.valor_inicial ?? 0))}</b>
-                </p>
-              </div>
-              <div>
-                <Label>Valor contado na gaveta *</Label>
-                <Input type="number" step="0.01" min="0" autoFocus className="mt-1"
-                  value={valorIndireto} onChange={(e) => setValorIndireto(e.target.value)} />
-              </div>
-              <div>
-                <Label>Motivo *</Label>
-                <Input className="mt-1" value={motivoIndireto}
-                  onChange={(e) => setMotivoIndireto(e.target.value)}
-                  placeholder="Ex.: operador saiu de férias e esqueceu o caixa aberto" />
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  Fica registrado no relatório, junto com o seu nome.
-                </p>
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCaixaIndireto(null)}>Cancelar</Button>
-            <Button onClick={() => void fecharIndireto()} disabled={fechandoIndireto}>
-              {fechandoIndireto ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Fechar caixa
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <FecharCaixaIndiretoDialog caixa={caixaIndireto} aoFechar={() => setCaixaIndireto(null)} />
 
       <DetalhesCaixaDialog caixaId={caixaDetalhe} onOpenChange={(v) => !v && setCaixaDetalhe(null)} />
     </div>

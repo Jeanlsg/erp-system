@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { FecharCaixaIndiretoDialog } from "@/components/fechar-caixa-indireto";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -62,7 +63,7 @@ interface CartItem {
 }
 
 export function PDVPage() {
-  const { user } = useAuth();
+  const { user, can } = useAuth();
   const navigate = useNavigate();
   // A filial é a do seletor do topo, como em toda tela; o PDV opera o caixa
   // aberto do usuário NAQUELA filial (regras em lib/loja-do-caixa). Antes o
@@ -196,6 +197,20 @@ export function PDVPage() {
       (caixas as any[]).filter((c) => c.status === "aberto").map((c) => c.ponto_venda_id));
     return pontosVenda.filter((pv: any) => !ocupados.has(pv.id));
   }, [pontosVenda, caixas]);
+  // Caixas desta filial abertos por OUTRA pessoa. A tela dizia só "todos os
+  // caixas desta loja já estão abertos", sem dizer de quem nem desde quando —
+  // e o caixa de Juazeiro estava aberto desde a véspera por outro operador.
+  const ocupadosPorOutros = useMemo(() =>
+    (caixas as any[])
+      .filter((c) => c.status === "aberto" && !c.data_fechamento && c.usuario_id !== user?.id)
+      .map((c) => ({ ...c, ponto: (pontosVendaDaLoja as any[]).find((pv) => pv.id === c.ponto_venda_id) })),
+  [caixas, user?.id, pontosVendaDaLoja]);
+  // Fechar o turno de outra pessoa é supervisão; o banco recusa os demais.
+  const podeFecharDeOutro = can("caixa.fechar") && can("financeiro.ver");
+  const [caixaParaFecharPorFora, setCaixaParaFecharPorFora] = useState<any | null>(null);
+  const abertoHaMaisDeUmDia = (iso: string) =>
+    new Date(iso).toDateString() !== new Date().toDateString();
+
   const criarPonto = useCriarPontoVenda();
   const [pontoSelecionado, setPontoSelecionado] = useState<string | null>(null);
   const [modalNovoPonto, setModalNovoPonto] = useState(false);
@@ -1035,13 +1050,43 @@ export function PDVPage() {
                 </Button>
               </CardHeader>
               <CardContent>
+                {ocupadosPorOutros.length > 0 && (
+                  <div className="mb-3 space-y-2">
+                    {ocupadosPorOutros.map((c: any) => (
+                      <div key={c.id}
+                        className={`flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm ${
+                          abertoHaMaisDeUmDia(c.data_abertura) ? "border-amber-400 bg-amber-50 dark:bg-amber-950/20" : ""}`}>
+                        <span>
+                          <b>{c.ponto?.nome ?? `Caixa ${c.numero_caixa}`}</b> está aberto por{" "}
+                          <b>{c.usuario?.nome ?? "outro operador"}</b> desde{" "}
+                          {new Date(c.data_abertura).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+                          {abertoHaMaisDeUmDia(c.data_abertura) && (
+                            <span className="ml-1 text-amber-700 dark:text-amber-400">— ficou aberto de outro dia</span>
+                          )}
+                        </span>
+                        {podeFecharDeOutro ? (
+                          <Button size="sm" variant="outline" onClick={() => setCaixaParaFecharPorFora(c)}
+                            title="Fecha o turno dessa pessoa com o valor contado e um motivo, que vão para o relatório">
+                            Fechar por fora
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            Peça a quem abriu, ou a um gerente, para fechar.
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {pontosLivres.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
                     {pontosVendaDaLoja.length === 0
                       ? <>Esta loja ainda não tem caixa cadastrado. Use <b>Adicionar caixa</b>.</>
                       : pontosVenda.length === 0
                         ? "Esta conta não tem permissão para abrir nenhum caixa desta loja."
-                        : "Todos os caixas desta loja já estão abertos."}
+                        : ocupadosPorOutros.length > 0
+                          ? "Nenhum caixa livre. Feche o turno acima para abrir o seu."
+                          : "Todos os caixas desta loja já estão abertos."}
                   </p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
@@ -2256,6 +2301,11 @@ export function PDVPage() {
         </DialogContent>
       </Dialog>
 
+      <FecharCaixaIndiretoDialog
+        caixa={caixaParaFecharPorFora}
+        aoFechar={() => setCaixaParaFecharPorFora(null)}
+      />
+
       {/* Modal: Caixas em Aberto */}
       <Dialog open={modalCaixasAbertos} onOpenChange={setModalCaixasAbertos}>
         <DialogContent className="max-w-2xl">
@@ -2276,6 +2326,7 @@ export function PDVPage() {
                     <th className="text-left p-2">Abertura</th>
                     <th className="text-left p-2">Saldo Inicial</th>
                     <th className="text-left p-2">Vendas</th>
+                    <th className="p-2"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2288,6 +2339,25 @@ export function PDVPage() {
                       </td>
                       <td className="p-2">{brl(c.valor_inicial || 0)}</td>
                       <td className="p-2 text-green-600">{brl(c.total_vendas || 0)}</td>
+                      <td className="p-2 text-right">
+                        {(c as any).usuario_id === user?.id ? (
+                          <Button size="sm" variant="outline"
+                            onClick={() => { irParaCaixa(c); setModalCaixasAbertos(false); }}>
+                            Operar
+                          </Button>
+                        ) : podeFecharDeOutro ? (
+                          <Button size="sm" variant="outline"
+                            onClick={() => {
+                              setCaixaParaFecharPorFora({
+                                ...c,
+                                ponto: (pontosVendaDaLoja as any[]).find((pv) => pv.id === (c as any).ponto_venda_id),
+                              });
+                              setModalCaixasAbertos(false);
+                            }}>
+                            Fechar por fora
+                          </Button>
+                        ) : null}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
