@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useProdutos, useClientes, useCreateCaixa, useFecharCaixa, useKits, useCaixas, useCreateSangria, useCreateEntradaExtra, useEmitirNFeVenda, isSupabaseConfigured, useVendedores, useEstoqueLoja, usePontosVenda, useCriarPontoVenda, useConfigsCaixa, useSaldosPedidos, useAplicarEntradaPedido, useCaixasAbertosDoUsuario, useCaixasPermitidos } from "@/lib/supabase-queries";
 import { lojaEfetivaDoPdv } from "@/lib/loja-do-caixa";
+import { quantidadeParaLancar, QTD_MAXIMA_POR_LANCAMENTO } from "@/lib/quantidade-lancamento";
 import { pontosQuePodeAbrir, caixaAtivo, podeVariosCaixas } from "@/lib/caixas-permitidos";
 import { formasParaDeclarar as escolherFormas, faltaDeclarar as temFormaPendente, argumentosDeFechamento } from "@/lib/fechamento-por-forma";
 import { toast } from "sonner";
@@ -308,12 +309,22 @@ export function PDVPage() {
   }, [produtos, search]);
 
   // Adicionar produto ao carrinho
-  const adicionar = useCallback((p: any) => {
+  /**
+   * Lança o produto no cupom.
+   *
+   * A quantidade é um parâmetro, não um laço de repetição. Chamar isto uma
+   * vez por unidade — como era antes — transformava um código de barras
+   * digitado no campo de quantidade em trilhões de atualizações de estado, e
+   * a aba morria levando o cupom junto.
+   */
+  const adicionar = useCallback((p: any, qtd = 1) => {
     setCart((prev) => {
       const existe = prev.find((i) => i.produto_id === p.id);
       if (existe) {
         return prev.map((i) =>
-          i.produto_id === p.id ? { ...i, quantidade: i.quantidade + 1 } : i
+          i.produto_id === p.id
+            ? { ...i, quantidade: Math.round((i.quantidade + qtd) * 1000) / 1000 }
+            : i
         );
       }
       return [...prev, {
@@ -323,7 +334,7 @@ export function PDVPage() {
         sku: p.sku,
         preco_unitario: Number(p.preco_venda),
         preco_custo: Number(p.preco_custo),
-        quantidade: 1,
+        quantidade: qtd,
         imagem_url: p.imagem_url,
       }];
     });
@@ -370,10 +381,15 @@ export function PDVPage() {
       campoCodigo.current?.select();
       return;
     }
-    const qtd = Math.max(1, parseFloat(qtdLinha) || 1);
-    // uma chamada por unidade mantém a soma correta quando o item já está
-    // no cupom (adicionar() incrementa de um em um)
-    for (let i = 0; i < qtd; i++) adicionar(p);
+    const q = quantidadeParaLancar(qtdLinha);
+    if (!q.ok) {
+      // Recusar com aviso: o erro mais comum aqui é o bipe do próximo produto
+      // caindo no campo de quantidade, porque o TAB deixa o foco nele.
+      toast.error(q.erro);
+      campoQtd.current?.select();
+      return;
+    }
+    adicionar(p, q.qtd);
     setCodigo(""); setQtdLinha("1"); setProdutoNaLinha(null);
     campoCodigo.current?.focus();
   }, [produtoNaLinha, codigo, qtdLinha, acharPorCodigo, adicionar]);
@@ -1122,7 +1138,7 @@ export function PDVPage() {
                   <Label className="text-xs">Quantidade</Label>
                   <Input
                     ref={campoQtd}
-                    type="number" min="0" step="any"
+                    type="number" min="0" step="any" max={QTD_MAXIMA_POR_LANCAMENTO}
                     className="mt-1 text-lg"
                     value={qtdLinha}
                     onChange={(e) => setQtdLinha(e.target.value)}
@@ -1451,7 +1467,15 @@ export function PDVPage() {
 
               {/* Botões de Ação */}
               <div className="flex gap-2 pt-2">
-                <Button variant="outline" className="flex-1" onClick={limparCarrinho}>
+                <Button variant="outline" className="flex-1"
+                  onClick={() => {
+                    // O F11 já perguntava; o botão limpava direto. Mesmo ato,
+                    // mesma pergunta — perder o cupom por um clique errado é
+                    // refazer a venda com o cliente esperando.
+                    if (cart.length === 0 || confirm("Cancelar a venda e limpar o cupom?")) {
+                      limparCarrinho();
+                    }
+                  }}>
                   <X className="h-4 w-4 mr-1" />
                   Cancelar
                 </Button>
