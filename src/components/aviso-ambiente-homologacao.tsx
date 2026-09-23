@@ -15,7 +15,7 @@
 
 import { FlaskConical } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { useConfiguracoesSefaz } from "@/lib/supabase-queries";
+import { useAmbienteSefaz } from "@/lib/supabase-queries";
 
 interface Props {
   lojaId?: string | null;
@@ -24,7 +24,8 @@ interface Props {
 }
 
 export function AvisoAmbienteHomologacao({ lojaId, oQueNaoFunciona }: Props) {
-  const { data: cfg, isSuccess } = useConfiguracoesSefaz(lojaId ?? undefined);
+  // da view, não da tabela: esta tela roda no PDV, e a tabela tem o CSC
+  const { data: cfg, isSuccess } = useAmbienteSefaz(lojaId ?? undefined);
 
   // enquanto carrega, não afirma nada
   if (!isSuccess) return null;

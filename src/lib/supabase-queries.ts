@@ -3019,6 +3019,28 @@ export function useCertificados(lojaId?: string) {
   });
 }
 
+/**
+ * Ambiente fiscal da loja para quem NÃO é gestão.
+ *
+ * erp_configuracoes_sefaz guarda o csc_token — a credencial que assina o
+ * QR Code da NFC-e — e o hook de gestão faz `select *`. O balcão precisa
+ * saber só se está em homologação; lê daqui, sem a credencial ir parar no
+ * navegador de quem opera o caixa.
+ */
+export function useAmbienteSefaz(lojaId?: string) {
+  return useQuery<any | null>({
+    queryKey: ['erp_sefaz_ambiente', lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured() || !lojaId) return null;
+      const { data, error } = await supabase
+        .from('v_erp_sefaz_ambiente').select('*').eq('loja_id', lojaId).maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!lojaId,
+  });
+}
+
 export function useConfiguracoesSefaz(lojaId?: string) {
   return useQuery<any | null>({
     queryKey: ['erp_configuracoes_sefaz', lojaId],
