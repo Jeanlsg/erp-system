@@ -62,7 +62,9 @@ export const RELATORIOS: Record<string, Relatorio> = {
           .reduce((t, k) => t + Number(f[k] ?? 0), 0) },
       { chave: "valor_final", titulo: "Informado no fechamento", tipo: "dinheiro", total: true },
       { chave: "diferenca", titulo: "Saldo (diferença)", tipo: "dinheiro", total: true },
-      { chave: "tipo_fechamento", titulo: "Tipo fechamento", valor: () => "Normal" },
+      { chave: "tipo_fechamento", titulo: "Tipo fechamento",
+        valor: (f) => f.tipo_fechamento === "indireto"
+          ? `Indireto${f.motivo_indireto ? ` — ${f.motivo_indireto}` : ""}` : "Normal" },
       { chave: "origem", titulo: "Origem", valor: (f) => f.origem ?? "PDV" },
       { chave: "abertura", titulo: "Abertura caixa", tipo: "data", valor: (f) => f.caixa?.data_abertura },
       { chave: "recibo", titulo: "Cód. recibo", valor: (f) => String(f.id ?? "").slice(0, 8) },

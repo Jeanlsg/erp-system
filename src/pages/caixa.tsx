@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -24,8 +25,44 @@ import { toast } from "sonner";
 
 export function CaixaPage() {
   const [caixaDetalhe, setCaixaDetalhe] = useState<string | null>(null);
-  const { user } = useAuth();
+  const { user, can } = useAuth();
   const { lojaId, lojas } = useAutoSelectLoja();
+  const queryClient = useQueryClient();
+
+  // Fechamento indireto: fechar o caixa de outro é ato de supervisão, e o
+  // banco recusa quem não for admin/gerente — aqui é só para não oferecer
+  // um botão que vai falhar.
+  const podeFecharDeOutro = can("caixa.fechar") && can("financeiro.ver");
+  const [caixaIndireto, setCaixaIndireto] = useState<any | null>(null);
+  const [valorIndireto, setValorIndireto] = useState("");
+  const [motivoIndireto, setMotivoIndireto] = useState("");
+  const [fechandoIndireto, setFechandoIndireto] = useState(false);
+
+  const fecharIndireto = async () => {
+    if (!caixaIndireto) return;
+    const contado = parseFloat(valorIndireto);
+    if (isNaN(contado) || contado < 0) { toast.error("Informe o valor contado na gaveta."); return; }
+    if (!motivoIndireto.trim()) { toast.error("Informe o motivo — ele fica no relatório."); return; }
+    setFechandoIndireto(true);
+    try {
+      const { data, error } = await supabase.schema("erp").rpc("fechar_caixa_indireto", {
+        p_caixa_id: caixaIndireto.id, p_valor_contado: contado, p_motivo: motivoIndireto.trim(),
+      });
+      if (error) throw error;
+      const r = data as any;
+      toast.success(
+        Math.abs(Number(r?.diferenca ?? 0)) < 0.01
+          ? "Caixa fechado. A gaveta conferia."
+          : `Caixa fechado com diferença de ${brl(Number(r?.diferenca ?? 0))}.`);
+      setCaixaIndireto(null);
+      void queryClient.invalidateQueries({ queryKey: ["erp_caixa"] });
+    } catch (e: any) {
+      toast.error(`Não foi possível fechar: ${e.message ?? e}`);
+    } finally {
+      setFechandoIndireto(false);
+    }
+  };
+
   const [lojaFiltro, setLojaFiltro] = useState<string>("todas");
 
   // Buscar caixas - se lojaFiltro="todas", não filtra
@@ -169,12 +206,55 @@ export function CaixaPage() {
         </div>
       </div>
 
-      {/* Aviso: existem caixas abertos mas nenhum é do usuário atual */}
-      {!caixaAberto && caixasAbertos.length > 0 && (
-        <p className="text-sm text-muted-foreground">
-          Há {caixasAbertos.length} caixa(s) aberto(s) de outros operadores. Para registrar
-          sangria ou entrada extra, abra o seu próprio caixa no PDV.
-        </p>
+      {/* Caixa de outro operador aberto — inclusive de dias anteriores.
+          Caixa esquecido aberto trava quem chega e distorce o relatório do
+          período; o gerente fecha por fora, e o fechamento fica MARCADO
+          como indireto. */}
+      {caixasAbertos.length > 0 && (
+        <Card className="border-amber-300 bg-amber-50 dark:bg-amber-950/20">
+          <CardContent className="space-y-2 p-4">
+            <p className="text-sm font-medium">
+              {caixasAbertos.length} caixa(s) aberto(s){!caixaAberto && " de outros operadores"}
+            </p>
+            {caixasAbertos.map((c: any) => {
+              const diasAberto = Math.floor(
+                (Date.now() - new Date(c.data_abertura).getTime()) / 86400000);
+              const meu = c.usuario_id === user?.id;
+              return (
+                <div key={c.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-background px-3 py-2 text-sm">
+                  <div>
+                    <span className="font-medium">
+                      {c.ponto?.nome ?? `Caixa ${c.numero_caixa}`}
+                    </span>
+                    <span className="ml-2 text-muted-foreground">
+                      {c.usuario?.nome ?? "—"} · aberto {new Date(c.data_abertura).toLocaleString("pt-BR")}
+                      {diasAberto >= 1 && (
+                        <b className="ml-1 text-amber-700 dark:text-amber-400">
+                          há {diasAberto} dia{diasAberto > 1 ? "s" : ""}
+                        </b>
+                      )}
+                    </span>
+                  </div>
+                  {meu ? (
+                    <span className="text-xs text-muted-foreground">feche pelo PDV</span>
+                  ) : podeFecharDeOutro ? (
+                    <Button size="sm" variant="outline"
+                      onClick={() => { setCaixaIndireto(c); setValorIndireto(""); setMotivoIndireto(""); }}>
+                      Fechar por fora
+                    </Button>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">só gerente fecha</span>
+                  )}
+                </div>
+              );
+            })}
+            {!caixaAberto && (
+              <p className="text-xs text-muted-foreground">
+                Para registrar sangria ou entrada extra, abra o seu próprio caixa no PDV.
+              </p>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {/* Cards de Resumo */}
@@ -476,6 +556,56 @@ export function CaixaPage() {
             </Button>
             <Button onClick={handleEntrada} disabled={!valorEntrada || !motivoEntrada || createEntrada.isPending}>
               {createEntrada.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Registrar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Fechamento indireto: o gerente conta a gaveta e fecha o caixa que
+          ficou aberto. O motivo é obrigatório e vai para o relatório — um
+          caixa fechado por terceiro não tem o mesmo peso de um conferido
+          pelo próprio operador, e esconder isso seria pior que não ter. */}
+      <Dialog open={!!caixaIndireto} onOpenChange={(o) => !o && setCaixaIndireto(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Fechar caixa por fora</DialogTitle>
+          </DialogHeader>
+          {caixaIndireto && (
+            <div className="space-y-3">
+              <div className="rounded-md bg-muted/40 p-3 text-sm">
+                <p className="font-medium">
+                  {caixaIndireto.ponto?.nome ?? `Caixa ${caixaIndireto.numero_caixa}`}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {caixaIndireto.usuario?.nome ?? "—"} · aberto em{" "}
+                  {new Date(caixaIndireto.data_abertura).toLocaleString("pt-BR")}
+                </p>
+                <p className="mt-1 text-xs">
+                  Esperado na gaveta:{" "}
+                  <b>{brl(Number(caixaIndireto.valor_esperado_gaveta ?? caixaIndireto.valor_inicial ?? 0))}</b>
+                </p>
+              </div>
+              <div>
+                <Label>Valor contado na gaveta *</Label>
+                <Input type="number" step="0.01" min="0" autoFocus className="mt-1"
+                  value={valorIndireto} onChange={(e) => setValorIndireto(e.target.value)} />
+              </div>
+              <div>
+                <Label>Motivo *</Label>
+                <Input className="mt-1" value={motivoIndireto}
+                  onChange={(e) => setMotivoIndireto(e.target.value)}
+                  placeholder="Ex.: operador saiu de férias e esqueceu o caixa aberto" />
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Fica registrado no relatório, junto com o seu nome.
+                </p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCaixaIndireto(null)}>Cancelar</Button>
+            <Button onClick={() => void fecharIndireto()} disabled={fechandoIndireto}>
+              {fechandoIndireto ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Fechar caixa
             </Button>
           </DialogFooter>
         </DialogContent>
