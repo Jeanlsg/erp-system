@@ -14,13 +14,23 @@
 import { supabase } from "@/lib/supabase";
 import type { Coluna } from "@/lib/exportar-csv";
 
+export interface FiltrosRelatorio {
+  de: string;
+  ate: string;
+  lojaId?: string;
+  /** id do funcionário, quando o relatório aceita esse filtro */
+  vendedorId?: string;
+}
+
 export interface Relatorio {
   titulo: string;
   descricao: string;
   /** o que o operador faz com este número */
   paraQue?: string;
   colunas: Coluna<any>[];
-  buscar: (f: { de: string; ate: string; lojaId?: string }) => Promise<any[]>;
+  /** filtros próprios além de período e loja */
+  filtros?: ("vendedor")[];
+  buscar: (f: FiltrosRelatorio) => Promise<any[]>;
 }
 
 const ate = (d: string) => d + "T23:59:59";
@@ -30,27 +40,80 @@ export const RELATORIOS: Record<string, Relatorio> = {
     titulo: "Fechamentos de caixa",
     descricao: "Cada turno fechado, com o esperado na gaveta, o contado e a diferença.",
     paraQue: "Diferença que se repete no mesmo operador ou no mesmo caixa é o sinal de olhar a gaveta.",
+    filtros: ["vendedor"],
     colunas: [
       { chave: "data_fechamento", titulo: "Fechamento", tipo: "data" },
       { chave: "caixa", titulo: "Caixa", valor: (f) => f.caixa?.ponto?.nome ?? (f.caixa?.numero_caixa != null ? `Caixa ${f.caixa.numero_caixa}` : "—") },
       { chave: "operador", titulo: "Operador", valor: (f) => f.usuario?.nome ?? "—" },
-      { chave: "valor_inicial", titulo: "Troco inicial", tipo: "dinheiro", total: true },
-      { chave: "valor_vendas", titulo: "Vendas", tipo: "dinheiro", total: true },
-      { chave: "valor_entradas", titulo: "Entradas", tipo: "dinheiro", total: true },
-      { chave: "valor_sangrias", titulo: "Sangrias", tipo: "dinheiro", total: true },
+      { chave: "qtd_vendedores", titulo: "Qtd. vendedor", tipo: "numero" },
+      { chave: "valor_inicial", titulo: "Saldo inicial (troco)", tipo: "dinheiro", total: true },
+      { chave: "valor_entradas", titulo: "Entradas extra caixa", tipo: "dinheiro", total: true },
+      { chave: "valor_sangrias", titulo: "Total sangria", tipo: "dinheiro", total: true },
+      { chave: "total_frete", titulo: "Total frete", tipo: "dinheiro", total: true },
+      { chave: "valor_vendas", titulo: "Total vendas", tipo: "dinheiro", total: true },
       { chave: "esperado", titulo: "Esperado", tipo: "dinheiro", total: true,
         valor: (f) => Number(f.valor_final ?? 0) - Number(f.diferenca ?? 0) },
-      { chave: "valor_final", titulo: "Contado", tipo: "dinheiro", total: true },
-      { chave: "diferenca", titulo: "Diferença", tipo: "dinheiro", total: true },
+      { chave: "total_entradas", titulo: "Total entradas", tipo: "dinheiro", total: true,
+        valor: (f) => Number(f.valor_inicial ?? 0) + Number(f.valor_vendas ?? 0) + Number(f.valor_entradas ?? 0) },
+      // o que passou pelo caixa em TODAS as formas, não só na gaveta
+      { chave: "valor_em_caixa", titulo: "Valor em caixa", tipo: "dinheiro", total: true,
+        valor: (f) => ["valor_dinheiro","valor_pix","valor_cartao_credito","valor_cartao_debito",
+                       "valor_crediario","valor_boleto","valor_outros"]
+          .reduce((t, k) => t + Number(f[k] ?? 0), 0) },
+      { chave: "valor_final", titulo: "Informado no fechamento", tipo: "dinheiro", total: true },
+      { chave: "diferenca", titulo: "Saldo (diferença)", tipo: "dinheiro", total: true },
+      { chave: "tipo_fechamento", titulo: "Tipo fechamento", valor: () => "Normal" },
+      { chave: "origem", titulo: "Origem", valor: (f) => f.origem ?? "PDV" },
+      { chave: "abertura", titulo: "Abertura caixa", tipo: "data", valor: (f) => f.caixa?.data_abertura },
+      { chave: "recibo", titulo: "Cód. recibo", valor: (f) => String(f.id ?? "").slice(0, 8) },
     ],
-    buscar: async ({ de, ate: fim, lojaId }) => {
+    buscar: async ({ de, ate: fim, lojaId, vendedorId }) => {
       const { data, error } = await supabase
         .from("erp_fechamentos_caixa")
-        .select("*, caixa:erp_caixa(numero_caixa, loja_id, ponto:erp_pontos_venda(nome)), usuario:erp_usuarios(nome)")
+        .select("*, caixa:erp_caixa(numero_caixa, loja_id, data_abertura, usuario_id, ponto:erp_pontos_venda(nome)), usuario:erp_usuarios(nome)")
         .gte("data_fechamento", de).lte("data_fechamento", ate(fim))
         .order("data_fechamento", { ascending: false });
       if (error) throw error;
-      return (data ?? []).filter((f: any) => !lojaId || f.caixa?.loja_id === lojaId);
+      let linhas = (data ?? []).filter((f: any) => !lojaId || f.caixa?.loja_id === lojaId);
+
+      // Quantos vendedores atuaram, quanto de frete e de onde vieram as
+      // vendas. Uma consulta para todos os turnos da lista — por linha
+      // seriam dezenas de idas ao banco.
+      const ids = linhas.map((f: any) => f.caixa_id).filter(Boolean);
+      if (ids.length) {
+        const { data: vendas } = await supabase
+          .from("erp_vendas")
+          .select("caixa_id, vendedor_id, taxa_entrega, tipo_venda, origem_offline")
+          .in("caixa_id", ids)
+          .eq("status", "finalizada");
+        const porCaixa = new Map<string, { vendedores: Set<string>; frete: number; origens: Set<string> }>();
+        for (const v of (vendas ?? []) as any[]) {
+          const a = porCaixa.get(v.caixa_id) ?? { vendedores: new Set<string>(), frete: 0, origens: new Set<string>() };
+          if (v.vendedor_id) a.vendedores.add(v.vendedor_id);
+          a.frete += Number(v.taxa_entrega ?? 0);
+          a.origens.add(v.origem_offline ? "Offline" : (v.tipo_venda ?? "PDV"));
+          porCaixa.set(v.caixa_id, a);
+        }
+        linhas = linhas.map((f: any) => {
+          const a = porCaixa.get(f.caixa_id);
+          return {
+            ...f,
+            qtd_vendedores: a?.vendedores.size ?? 0,
+            total_frete: a?.frete ?? 0,
+            origem: a && a.origens.size ? [...a.origens].join(", ") : "PDV",
+          };
+        });
+      }
+
+      if (vendedorId) {
+        // o fechamento guarda o USUÁRIO; o filtro é por funcionário, então
+        // passa pelo vínculo usuario_id de v_erp_vendedores
+        const { data: v } = await supabase
+          .from("v_erp_vendedores").select("usuario_id").eq("id", vendedorId).maybeSingle();
+        const uid = (v as any)?.usuario_id;
+        linhas = linhas.filter((f: any) => f.usuario_id === uid || f.caixa?.usuario_id === uid);
+      }
+      return linhas;
     },
   },
 
@@ -65,16 +128,25 @@ export const RELATORIOS: Record<string, Relatorio> = {
       { chave: "motivo", titulo: "Motivo" },
       { chave: "forma_pagamento", titulo: "Saiu de", valor: (s) => String(s.forma_pagamento ?? "dinheiro").replace("_", " ") },
       { chave: "valor", titulo: "Valor", tipo: "dinheiro", total: true },
+      { chave: "saldo_inicial", titulo: "Saldo inicial do caixa", tipo: "dinheiro",
+        valor: (s) => Number(s.caixa?.valor_inicial ?? 0) },
       { chave: "observacoes", titulo: "Observações" },
     ],
-    buscar: async ({ de, ate: fim, lojaId }) => {
+    filtros: ["vendedor"],
+    buscar: async ({ de, ate: fim, lojaId, vendedorId }) => {
       const { data, error } = await supabase
         .from("erp_sangrias")
-        .select("*, usuario:erp_usuarios(nome), caixa:erp_caixa(numero_caixa, loja_id, ponto:erp_pontos_venda(nome))")
+        .select("*, usuario:erp_usuarios(nome), caixa:erp_caixa(numero_caixa, loja_id, valor_inicial, ponto:erp_pontos_venda(nome))")
         .gte("data_hora", de).lte("data_hora", ate(fim))
         .order("data_hora", { ascending: false });
       if (error) throw error;
-      return (data ?? []).filter((s: any) => !lojaId || s.caixa?.loja_id === lojaId);
+      let linhas = (data ?? []).filter((s: any) => !lojaId || s.caixa?.loja_id === lojaId);
+      if (vendedorId) {
+        const { data: v } = await supabase
+          .from("v_erp_vendedores").select("usuario_id").eq("id", vendedorId).maybeSingle();
+        linhas = linhas.filter((s: any) => s.usuario_id === (v as any)?.usuario_id);
+      }
+      return linhas;
     },
   },
 

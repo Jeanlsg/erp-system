@@ -26,7 +26,7 @@ import { FiltrosRelatorio, periodoPadrao, type Periodo } from "@/components/rela
 import { TabelaRelatorio } from "@/components/relatorio/tabela-relatorio";
 import { DetalhesCaixaDialog } from "@/components/detalhes-caixa";
 import { RELATORIOS } from "@/lib/relatorios/catalogo";
-import { useLojas, isSupabaseConfigured } from "@/lib/supabase-queries";
+import { useLojas, useVendedores, isSupabaseConfigured } from "@/lib/supabase-queries";
 
 const TODAS = "__todas__";
 
@@ -37,13 +37,17 @@ export function RelatorioDetalhePage() {
   const [periodo, setPeriodo] = useState<Periodo>(periodoPadrao(30));
   const [loja, setLoja] = useState<string>(TODAS);
   const [caixaDetalhe, setCaixaDetalhe] = useState<string | null>(null);
+  const [vendedor, setVendedor] = useState<string>(TODAS);
   const { data: lojas = [] } = useLojas();
+  const { data: vendedores = [] } = useVendedores();
 
   const lojaId = loja === TODAS ? undefined : loja;
+  const vendedorId = vendedor === TODAS ? undefined : vendedor;
+  const aceitaVendedor = rel?.filtros?.includes("vendedor") ?? false;
 
   const { data: linhas = [], isLoading, error } = useQuery<any[]>({
-    queryKey: ["relatorio", tipo, periodo.de, periodo.ate, lojaId],
-    queryFn: () => rel.buscar({ de: periodo.de, ate: periodo.ate, lojaId }),
+    queryKey: ["relatorio", tipo, periodo.de, periodo.ate, lojaId, vendedorId],
+    queryFn: () => rel.buscar({ de: periodo.de, ate: periodo.ate, lojaId, vendedorId }),
     enabled: !!rel,
   });
 
@@ -87,8 +91,22 @@ export function RelatorioDetalhePage() {
       <FiltrosRelatorio
         periodo={periodo}
         aoMudarPeriodo={setPeriodo}
-        aoLimpar={() => { setPeriodo(periodoPadrao(30)); setLoja(TODAS); }}
+        aoLimpar={() => { setPeriodo(periodoPadrao(30)); setLoja(TODAS); setVendedor(TODAS); }}
       >
+        {aceitaVendedor && (
+          <div>
+            <Label className="text-xs">Operador</Label>
+            <Select value={vendedor} onValueChange={setVendedor}>
+              <SelectTrigger className="mt-1 w-48"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={TODAS}>Todos</SelectItem>
+                {(vendedores as any[]).map((v) => (
+                  <SelectItem key={v.id} value={v.id}>{v.nome ?? v.cargo}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         {lojas.length > 1 && (
           <div>
             <Label className="text-xs">Loja</Label>
