@@ -22,10 +22,9 @@ import { useAuth, logout, roleLabels, ehOperadorDeBalcao, type Role } from "@/li
 import { usePdvModo } from "@/lib/store/pdv-modo";
 import { AppSidebar } from "@/components/app-sidebar";
 import { useLojaAtualStore } from "@/lib/store/loja-atual";
-import { useLojas, useCaixasAbertosDoUsuario, isSupabaseConfigured } from "@/lib/supabase-queries";
+import { useLojas, isSupabaseConfigured } from "@/lib/supabase-queries";
 import { useConexao } from "@/lib/offline/conexao";
 import { podeTrocarDeLoja } from "@/lib/loja-do-caixa";
-import { caixaAtivo } from "@/lib/caixas-permitidos";
 
 export function PdvLayout() {
   const navigate = useNavigate();
@@ -36,20 +35,15 @@ export function PdvLayout() {
   const online = useConexao();
   const vendendo = usePdvModo((s) => s.vendendo);
 
-  // Caixa aberto define a loja. Enquanto ele estiver aberto o seletor sai do
-  // ar: trocar de loja com caixa aberto gravava a venda numa loja e o caixa
-  // em outra. O seletor volta quando o caixa fecha — é aí que se escolhe
-  // onde abrir o próximo.
-  const { data: caixasAbertos = [] } = useCaixasAbertosDoUsuario(user?.id);
-  // O caixa que a PÁGINA está operando, não o mais recente: com dois caixas
-  // abertos em lojas diferentes, travar no mais recente poria o cabeçalho
-  // numa loja e a venda em outra.
-  const caixaAtivoId = usePdvModo((s) => s.caixaAtivoId);
-  const caixaAberto = caixaAtivo(caixasAbertos as any[], caixaAtivoId);
-  const lojaDoCaixa = (caixaAberto as any)?.loja_id as string | undefined;
-  // `vendendo` é falso quando o operador saiu da frente de caixa — e é de lá
-  // que ele abre outro caixa, então a loja volta a ser escolhível.
-  const lojaTravada = !podeTrocarDeLoja(caixaAberto as any, vendendo);
+  // A filial é a do seletor do topo; o caixa operado é o aberto NESTA filial
+  // (lib/loja-do-caixa). Trocar a filial com o caixa de Petrolina aberto leva
+  // a Juazeiro: ao caixa aberto lá, ou à abertura dele.
+  //
+  // Só trava com venda em andamento — o cupom começado numa loja não pode
+  // terminar na outra. Antes travava com o caixa aberto, cupom vazio ou não,
+  // e ainda devolvia o seletor para a loja do caixa ao entrar no PDV.
+  const cupomComItens = usePdvModo((s) => s.cupomComItens);
+  const lojaTravada = !podeTrocarDeLoja(cupomComItens);
 
   // Fora da venda a tela é administrativa (escolher caixa, conferir
   // fechamento) e o menu ajuda. Com a venda aberta ele sai: o balcão quer a
@@ -70,12 +64,6 @@ export function PdvLayout() {
     }
   }, [lojas, currentLojaId, setCurrentLojaId]);
 
-  // Alinha a loja global à do caixa: as telas de gestão que o operador abre
-  // entre uma venda e outra (caixa, relatórios) precisam responder pela mesma
-  // loja em que ele está vendendo.
-  useEffect(() => {
-    if (vendendo && lojaDoCaixa && lojaDoCaixa !== currentLojaId) setCurrentLojaId(lojaDoCaixa);
-  }, [vendendo, lojaDoCaixa, currentLojaId, setCurrentLojaId]);
 
   if (!hidratado || !isAuthenticated) return null;
 
@@ -89,20 +77,18 @@ export function PdvLayout() {
       <header className="flex shrink-0 items-center justify-between gap-3 border-b bg-card px-4 py-2">
         <div className="flex items-center gap-3 min-w-0">
           <span className="font-semibold tracking-tight">Frente de caixa</span>
-          {/* O caixa ABERTO trava a loja; o caixa fechado, não.
-              Com caixa aberto, trocar de loja gravava o cupom numa loja com o
-              caixa em outra — some o seletor e fica o nome com cadeado. Com o
-              caixa fechado esta tela é a de abertura: escolher a loja aqui é
-              justamente como se decide onde abrir, e é o único caminho de quem
-              só opera o balcão, que não tem menu lateral. */}
+          {/* Trava só com venda em andamento. Com o cupom vazio, trocar a
+              filial leva ao caixa aberto dela ou à abertura — é assim que o
+              admin alterna entre Petrolina e Juazeiro, e que quem só opera o
+              balcão (sem menu lateral) escolhe onde abrir. */}
           {lojaTravada ? (
             <span
               className="flex items-center gap-1 rounded-md border bg-muted/50 px-2 py-1 text-sm"
-              title="A loja vem do caixa aberto. Para operar em outra loja, feche o caixa."
+              title="Venda em andamento. Finalize ou cancele o cupom para trocar de filial."
             >
               <Store className="h-3.5 w-3.5" />
-              {(lojas.find((l: any) => l.id === lojaDoCaixa) as any)?.apelido
-                ?? (lojas.find((l: any) => l.id === lojaDoCaixa) as any)?.nome
+              {(lojas.find((l: any) => l.id === currentLojaId) as any)?.apelido
+                ?? (lojas.find((l: any) => l.id === currentLojaId) as any)?.nome
                 ?? "—"}
               <Lock className="h-3 w-3 text-muted-foreground" />
             </span>

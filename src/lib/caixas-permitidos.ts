@@ -1,5 +1,6 @@
 /**
- * Quais caixas uma conta pode abrir, e qual caixa a frente de caixa opera.
+ * Quais caixas uma conta pode abrir, e se ela pode manter vários abertos.
+ * Qual caixa a frente de caixa opera está em lib/loja-do-caixa.
  *
  * Duas regras que decidem onde o dinheiro entra, por isso moram fora do
  * componente e têm teste.
@@ -21,22 +22,6 @@ export function pontosQuePodeAbrir<T extends Ponto>(
   if (!permitidos || permitidos.length === 0) return pontos;
   const ok = new Set(permitidos);
   return pontos.filter((p) => ok.has(p.id));
-}
-
-/**
- * Qual caixa aberto a tela opera.
- *
- * O escolhido, se ainda estiver aberto; senão o mais recente. A segunda parte
- * importa: o caixa escolhido some da lista quando é fechado — de outro
- * terminal, ou pelo fechamento indireto — e sem o recuo a tela ficaria presa
- * num caixa que não existe mais.
- */
-export function caixaAtivo<T extends { id: string }>(
-  abertos: T[],
-  escolhidoId: string | null | undefined,
-): T | null {
-  if (!abertos || abertos.length === 0) return null;
-  return abertos.find((c) => c.id === escolhidoId) ?? abertos[0];
 }
 
 /**

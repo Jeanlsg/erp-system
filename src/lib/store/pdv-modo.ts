@@ -24,6 +24,12 @@ interface PdvModo {
    */
   caixaAtivoId: string | null;
   setCaixaAtivoId: (id: string | null) => void;
+  /**
+   * Há venda em andamento? O topo trava a troca de filial só nesse caso: o
+   * cupom começado numa loja não pode terminar na outra.
+   */
+  cupomComItens: boolean;
+  setCupomComItens: (v: boolean) => void;
 }
 
 export const usePdvModo = create<PdvModo>((set) => ({
@@ -31,4 +37,6 @@ export const usePdvModo = create<PdvModo>((set) => ({
   setVendendo: (vendendo) => set({ vendendo }),
   caixaAtivoId: null,
   setCaixaAtivoId: (caixaAtivoId) => set({ caixaAtivoId }),
+  cupomComItens: false,
+  setCupomComItens: (cupomComItens) => set({ cupomComItens }),
 }));

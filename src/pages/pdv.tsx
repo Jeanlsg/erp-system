@@ -18,9 +18,10 @@ import {
   Bike,
 } from "lucide-react";
 import { useProdutos, useClientes, useCreateCaixa, useFecharCaixa, useKits, useCaixas, useCreateSangria, useCreateEntradaExtra, useEmitirNFeVenda, isSupabaseConfigured, useVendedores, useEstoqueLoja, usePontosVenda, useCriarPontoVenda, useConfigsCaixa, useSaldosPedidos, useAplicarEntradaPedido, useCaixasAbertosDoUsuario, useCaixasPermitidos } from "@/lib/supabase-queries";
-import { lojaEfetivaDoPdv } from "@/lib/loja-do-caixa";
+import { caixaAtivoNaLoja, caixasEmOutrasLojas, podeAbrirOutroCaixa } from "@/lib/loja-do-caixa";
+import { useLojaAtualStore } from "@/lib/store/loja-atual";
 import { quantidadeParaLancar, QTD_MAXIMA_POR_LANCAMENTO } from "@/lib/quantidade-lancamento";
-import { pontosQuePodeAbrir, caixaAtivo, podeVariosCaixas } from "@/lib/caixas-permitidos";
+import { pontosQuePodeAbrir, podeVariosCaixas } from "@/lib/caixas-permitidos";
 import { formasParaDeclarar as escolherFormas, faltaDeclarar as temFormaPendente, argumentosDeFechamento } from "@/lib/fechamento-por-forma";
 import { toast } from "sonner";
 import {
@@ -63,29 +64,35 @@ interface CartItem {
 export function PDVPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  // Quem manda na loja é o CAIXA ABERTO, não o seletor do topo.
+  // A filial é a do seletor do topo, como em toda tela; o PDV opera o caixa
+  // aberto do usuário NAQUELA filial (regras em lib/loja-do-caixa). Antes o
+  // caixa aberto mandava na filial: com o de Petrolina aberto, escolher
+  // Juazeiro no topo não levava a Juazeiro.
   //
-  // Com o caixa #1 aberto em Juazeiro, trocar a loja no cabeçalho fazia a
-  // venda ser gravada com loja_id de Petrolina amarrada ao caixa de Juazeiro:
-  // estoque baixado na loja errada e a venda fora do fechamento do caixa que
-  // a recebeu. O seletor do topo só vale enquanto não há caixa aberto — é
-  // assim que se escolhe ONDE abrir.
-  // O admin pode manter mais de um caixa aberto (migration 092) e alternar
-  // entre eles — caixa 1 de Petrolina e caixa 1 de Juazeiro ao mesmo tempo.
-  // Para as outras contas a lista tem no máximo um elemento, e nada muda.
+  // O admin pode manter um caixa aberto em cada filial (migration 092) e
+  // alterna entre eles trocando a filial.
+  //
   // Sair da frente de caixa NÃO fecha o caixa: volta para a tela de seleção,
-  // com o turno em aberto, como no sistema anterior da loja (F12). Fica aqui
-  // em cima porque a loja da tela depende dele.
+  // com o turno em aberto, como no sistema anterior da loja (F12).
   const [saiuDaFrente, setSaiuDaFrente] = useState(false);
   const { data: caixasAbertosMeus = [] } = useCaixasAbertosDoUsuario(user?.id);
   const caixaEscolhidoId = usePdvModo((st) => st.caixaAtivoId);
   const setCaixaEscolhidoId = usePdvModo((st) => st.setCaixaAtivoId);
-  const caixaAberto = caixaAtivo(caixasAbertosMeus as any[], caixaEscolhidoId) as any;
   const variosCaixas = podeVariosCaixas(user as any);
   const { lojaId: lojaDoCabecalho, lojas } = useAutoSelectLoja();
-  // Fora da frente de venda a loja volta a seguir o cabeçalho: é de lá que o
-  // admin abre um segundo caixa, quase sempre na outra loja.
-  const lojaId = lojaEfetivaDoPdv(caixaAberto as any, lojaDoCabecalho, !saiuDaFrente);
+  const setLojaGlobal = useLojaAtualStore((st) => st.setCurrentLojaId);
+  const lojaId = lojaDoCabecalho;
+  const caixaAberto = caixaAtivoNaLoja(caixasAbertosMeus as any[], lojaId, caixaEscolhidoId) as any;
+  const abertosEmOutrasLojas = caixasEmOutrasLojas(caixasAbertosMeus as any[], lojaId);
+  const aberturaPermitida = podeAbrirOutroCaixa(caixasAbertosMeus as any[], variosCaixas);
+  const nomeDaLoja = (id?: string | null) =>
+    (lojas as any[]).find((l) => l.id === id)?.apelido ?? "outra filial";
+  /** Vai para um caixa aberto: troca a filial do topo e escolhe o caixa. */
+  const irParaCaixa = (c: any) => {
+    setLojaGlobal(c.loja_id);
+    setCaixaEscolhidoId(c.id);
+    setSaiuDaFrente(false);
+  };
   const emitirNFCe = useEmitirNFeVenda();
   const createCaixa = useCreateCaixa();
   const fecharCaixa = useFecharCaixa();
@@ -163,6 +170,17 @@ export function PDVPage() {
     setVendendo(!!caixaAberto && !saiuDaFrente);
     return () => setVendendo(false);   // sair do PDV devolve o menu
   }, [caixaAberto, saiuDaFrente, setVendendo]);
+
+  // Trocar de filial volta à frente de venda: se houver caixa aberto na
+  // filial escolhida, é nele que se continua; se não, cai na abertura dela.
+  useEffect(() => { setSaiuDaFrente(false); }, [lojaId]);
+
+  // O topo só trava a troca de filial com venda em andamento.
+  const setCupomComItens = usePdvModo((s) => s.setCupomComItens);
+  useEffect(() => {
+    setCupomComItens(cart.length > 0);
+    return () => setCupomComItens(false);
+  }, [cart.length, setCupomComItens]);
 
   // ---- caixas cadastrados desta loja ----
   const { data: pontosVendaDaLoja = [] } = usePontosVenda(lojaId ?? undefined);
@@ -514,6 +532,11 @@ export function PDVPage() {
 
   const abrirCaixa = async () => {
     if (!user || !lojaId || !caixaSelecionado) return;
+    if (!aberturaPermitida.ok) {
+      // No banco, abrir o segundo caixa fecha o primeiro sem conferência.
+      toast.error(`Feche antes o caixa aberto em ${nomeDaLoja((aberturaPermitida as any).aberto.loja_id)}.`);
+      return;
+    }
     if (!(await conferirSenha())) return;
     setModalAbertura(true);
   };
@@ -882,13 +905,20 @@ export function PDVPage() {
           <Calculator className="h-6 w-6" />
           {caixaAberto && caixasAbertosMeus.length > 1 ? (
             /* Mais de um caixa aberto no mesmo nome: o crachá vira seletor.
-               Sem ele, o admin que abrisse o segundo caixa perderia o
-               primeiro de vista e venderia no caixa errado sem perceber. */
+               Escolher o caixa de outra filial troca a filial do topo — é a
+               mesma decisão, e as duas não podem discordar. Com venda em
+               andamento fica travado: o cupom não muda de loja no meio. */
             <select
-              className="h-8 rounded-md border border-green-600 bg-green-50 px-2 text-sm font-medium text-green-800 dark:bg-green-950/30 dark:text-green-200"
+              className="h-8 rounded-md border border-green-600 bg-green-50 px-2 text-sm font-medium text-green-800 disabled:opacity-60 dark:bg-green-950/30 dark:text-green-200"
               value={caixaAberto.id}
-              onChange={(e) => setCaixaEscolhidoId(e.target.value)}
-              title="Alternar entre os caixas que você tem abertos"
+              disabled={cart.length > 0}
+              onChange={(e) => {
+                const c = (caixasAbertosMeus as any[]).find((x) => x.id === e.target.value);
+                if (c) irParaCaixa(c);
+              }}
+              title={cart.length > 0
+                ? "Finalize ou cancele a venda para trocar de caixa"
+                : "Alternar entre os caixas que você tem abertos"}
             >
               {(caixasAbertosMeus as any[]).map((c) => (
                 <option key={c.id} value={c.id}>
@@ -946,6 +976,32 @@ export function PDVPage() {
           <div className="max-w-4xl mx-auto space-y-6">
             {/* Saiu da frente com o turno em aberto: o caminho de volta tem de
                 estar à vista, senão o operador abre um segundo caixa por engano */}
+            {/* Caixa que ficou aberto na outra filial. Sem este aviso, quem troca
+                de filial no topo vê a tela de abertura e acha que o turno sumiu. */}
+            {!caixaAberto && abertosEmOutrasLojas.length > 0 && (
+              <Card className="border-amber-400 bg-amber-50 dark:bg-amber-950/20">
+                <CardContent className="space-y-3 p-4">
+                  {(abertosEmOutrasLojas as any[]).map((c) => (
+                    <div key={c.id} className="flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-sm">
+                        Seu caixa <b>#{c.numero_caixa}</b> continua aberto em <b>{nomeDaLoja(c.loja_id)}</b>.
+                      </p>
+                      <Button size="sm" variant="outline" onClick={() => irParaCaixa(c)}>
+                        Ir para o caixa de {nomeDaLoja(c.loja_id)}
+                      </Button>
+                    </div>
+                  ))}
+                  {!aberturaPermitida.ok && (
+                    <p className="text-xs text-muted-foreground">
+                      Para abrir um caixa em {nomeDaLoja(lojaId)}, feche antes o de{" "}
+                      {nomeDaLoja((aberturaPermitida as any).aberto.loja_id)}. Esta conta
+                      opera um caixa por vez.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
             {caixaAberto && saiuDaFrente && (
               <Card className="border-green-600 bg-green-50 dark:bg-green-950/20">
                 <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
@@ -1084,7 +1140,8 @@ export function PDVPage() {
                 </div>
                 <Button
                   className="mt-4"
-                  disabled={!caixaSelecionado || !pontoSelecionado}
+                  disabled={!caixaSelecionado || !pontoSelecionado || !aberturaPermitida.ok}
+                  title={!aberturaPermitida.ok ? "Feche o caixa que está aberto antes de abrir outro" : undefined}
                   onClick={() => void abrirCaixa()}
                 >
                   <Lock className="h-4 w-4 mr-2" />

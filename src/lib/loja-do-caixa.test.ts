@@ -1,46 +1,56 @@
 import { describe, it, expect } from "vitest";
-import { lojaEfetivaDoPdv, podeTrocarDeLoja } from "./loja-do-caixa";
+import {
+  caixaAtivoNaLoja, caixasEmOutrasLojas, podeTrocarDeLoja, podeAbrirOutroCaixa,
+} from "./loja-do-caixa";
 
 const JUAZEIRO = "e385d4aa-e724-440b-8336-88daafe06ed4";
 const PETROLINA = "7b26a64b-7832-415c-b1c5-641e3f624d54";
+const cxPetrolina = { id: "cx-p", loja_id: PETROLINA };
+const cxJuazeiro = { id: "cx-j", loja_id: JUAZEIRO };
 
-describe("lojaEfetivaDoPdv", () => {
-  it("caixa aberto vence o seletor do cabeçalho", () => {
-    expect(lojaEfetivaDoPdv({ loja_id: JUAZEIRO }, PETROLINA)).toBe(JUAZEIRO);
+describe("caixaAtivoNaLoja — a filial do topo manda", () => {
+  it("o defeito: caixa de Petrolina aberto e Juazeiro no topo não opera Petrolina", () => {
+    expect(caixaAtivoNaLoja([cxPetrolina], JUAZEIRO, null)).toBeNull();
   });
 
-  it("sem caixa aberto, vale o cabeçalho — é assim que se escolhe onde abrir", () => {
-    expect(lojaEfetivaDoPdv(null, PETROLINA)).toBe(PETROLINA);
-    expect(lojaEfetivaDoPdv(undefined, PETROLINA)).toBe(PETROLINA);
+  it("opera o caixa da filial escolhida", () => {
+    expect(caixaAtivoNaLoja([cxPetrolina, cxJuazeiro], JUAZEIRO, null)).toBe(cxJuazeiro);
+    expect(caixaAtivoNaLoja([cxPetrolina, cxJuazeiro], PETROLINA, null)).toBe(cxPetrolina);
   });
 
-  it("sem nenhum dos dois devolve null em vez de undefined", () => {
-    expect(lojaEfetivaDoPdv(null, null)).toBeNull();
+  it("escolha de caixa de outra filial não vale — venda e caixa nunca ficam em lojas diferentes", () => {
+    expect(caixaAtivoNaLoja([cxPetrolina, cxJuazeiro], JUAZEIRO, "cx-p")).toBe(cxJuazeiro);
   });
 
-  it("caixa sem loja_id não sobrepõe o cabeçalho", () => {
-    expect(lojaEfetivaDoPdv({ loja_id: null }, PETROLINA)).toBe(PETROLINA);
+  it("sem filial ou sem caixa aberto, nenhum", () => {
+    expect(caixaAtivoNaLoja([cxPetrolina], null, null)).toBeNull();
+    expect(caixaAtivoNaLoja([], PETROLINA, null)).toBeNull();
+  });
+});
+
+describe("caixasEmOutrasLojas", () => {
+  it("lista o que ficou aberto na outra filial", () => {
+    expect(caixasEmOutrasLojas([cxPetrolina, cxJuazeiro], JUAZEIRO)).toEqual([cxPetrolina]);
   });
 });
 
 describe("podeTrocarDeLoja", () => {
-  it("trava com caixa aberto durante a venda", () => {
-    expect(podeTrocarDeLoja({ loja_id: JUAZEIRO })).toBe(false);
+  it("troca livre com o cupom vazio, mesmo com caixa aberto", () => {
+    expect(podeTrocarDeLoja(false)).toBe(true);
   });
-  it("libera sem caixa aberto", () => {
-    expect(podeTrocarDeLoja(null)).toBe(true);
-  });
-  it("libera fora da frente de venda, mesmo com caixa aberto", () => {
-    // é de lá que o admin abre o segundo caixa, quase sempre na outra loja
-    expect(podeTrocarDeLoja({ loja_id: JUAZEIRO }, false)).toBe(true);
+  it("trava com venda em andamento", () => {
+    expect(podeTrocarDeLoja(true)).toBe(false);
   });
 });
 
-describe("lojaEfetivaDoPdv fora da frente de venda", () => {
-  it("volta a seguir o cabeçalho para permitir abrir caixa em outra loja", () => {
-    expect(lojaEfetivaDoPdv({ loja_id: JUAZEIRO }, PETROLINA, false)).toBe(PETROLINA);
+describe("podeAbrirOutroCaixa", () => {
+  it("admin abre outro com um já aberto", () => {
+    expect(podeAbrirOutroCaixa([cxPetrolina], true)).toEqual({ ok: true });
   });
-  it("na frente de venda continua no caixa", () => {
-    expect(lojaEfetivaDoPdv({ loja_id: JUAZEIRO }, PETROLINA, true)).toBe(JUAZEIRO);
+  it("quem não pode ter vários é recusado — o banco fecharia o primeiro sem conferência", () => {
+    expect(podeAbrirOutroCaixa([cxPetrolina], false)).toEqual({ ok: false, aberto: cxPetrolina });
+  });
+  it("sem caixa aberto, qualquer um abre", () => {
+    expect(podeAbrirOutroCaixa([], false)).toEqual({ ok: true });
   });
 });
