@@ -1313,14 +1313,20 @@ export function useFecharCaixa() {
         .eq('id', caixaId);
       if (errorCaixa) throw errorCaixa;
 
+      // Da VIEW, não da tabela: erp_caixa.total_vendas, total_sangrias e
+      // total_entradas_extras nunca são preenchidas — ficam 0.00 sempre. Lendo
+      // dali, o fechamento gravava "vendas: R$ 0,00" mesmo com venda no caixa,
+      // e a diferença saía igual ao valor vendido: um caixa de 19/09 com venda
+      // de R$ 89 em dinheiro registrou R$ 89 de diferença que não existia.
       const { data: caixa } = await supabase
-        .from('erp_caixa')
+        .from('vw_caixa_resumo')
         .select('*')
         .eq('id', caixaId)
         .single();
 
       if (caixa) {
-        const diferenca = valorFinal - (caixa.valor_inicial + caixa.total_vendas - caixa.total_sangrias + caixa.total_entradas_extras - caixa.valor_troco);
+        // esperado na gaveta é só dinheiro vivo; a view já faz essa conta
+        const diferenca = valorFinal - Number(caixa.valor_esperado_gaveta ?? 0);
         // Upsert por caixa_id: evita duplicidade caso um trigger do banco
         // também registre o fechamento (UNIQUE em caixa_id no banco)
         const { error: errorFechamento } = await supabase
@@ -1331,10 +1337,10 @@ export function useFecharCaixa() {
             data_fechamento: new Date().toISOString(),
             valor_inicial: caixa.valor_inicial,
             valor_final: valorFinal,
-            valor_vendas: caixa.total_vendas,
-            valor_sangrias: caixa.total_sangrias,
-            valor_entradas: caixa.total_entradas_extras,
-            valor_troco: caixa.valor_troco,
+            valor_vendas: Number(caixa.total_vendas_real ?? 0),
+            valor_sangrias: Number(caixa.total_sangrias_real ?? 0),
+            valor_entradas: Number(caixa.total_entradas_extras_real ?? 0),
+            valor_troco: Number(caixa.valor_troco_real ?? 0),
             valor_dinheiro: valorDinheiro ?? 0,
             valor_pix: valorPix ?? 0,
             valor_cartao_credito: valorCartaoCredito ?? 0,
