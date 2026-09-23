@@ -13,7 +13,7 @@
 
 import { useEffect, useState } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
-import { LogOut, Store, WifiOff } from "lucide-react";
+import { Lock, LogOut, Store, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -22,8 +22,9 @@ import { useAuth, logout, roleLabels, ehOperadorDeBalcao, type Role } from "@/li
 import { usePdvModo } from "@/lib/store/pdv-modo";
 import { AppSidebar } from "@/components/app-sidebar";
 import { useLojaAtualStore } from "@/lib/store/loja-atual";
-import { useLojas, isSupabaseConfigured } from "@/lib/supabase-queries";
+import { useLojas, useCaixaAberto, isSupabaseConfigured } from "@/lib/supabase-queries";
 import { useConexao } from "@/lib/offline/conexao";
+import { podeTrocarDeLoja } from "@/lib/loja-do-caixa";
 
 export function PdvLayout() {
   const navigate = useNavigate();
@@ -33,6 +34,14 @@ export function PdvLayout() {
   const setCurrentLojaId = useLojaAtualStore((s) => s.setCurrentLojaId);
   const online = useConexao();
   const vendendo = usePdvModo((s) => s.vendendo);
+
+  // Caixa aberto define a loja. Enquanto ele estiver aberto o seletor sai do
+  // ar: trocar de loja com caixa aberto gravava a venda numa loja e o caixa
+  // em outra. O seletor volta quando o caixa fecha — é aí que se escolhe
+  // onde abrir o próximo.
+  const { data: caixaAberto } = useCaixaAberto(user?.id);
+  const lojaDoCaixa = (caixaAberto as any)?.loja_id as string | undefined;
+  const lojaTravada = !podeTrocarDeLoja(caixaAberto as any);
 
   // Fora da venda a tela é administrativa (escolher caixa, conferir
   // fechamento) e o menu ajuda. Com a venda aberta ele sai: o balcão quer a
@@ -53,6 +62,13 @@ export function PdvLayout() {
     }
   }, [lojas, currentLojaId, setCurrentLojaId]);
 
+  // Alinha a loja global à do caixa: as telas de gestão que o operador abre
+  // entre uma venda e outra (caixa, relatórios) precisam responder pela mesma
+  // loja em que ele está vendendo.
+  useEffect(() => {
+    if (lojaDoCaixa && lojaDoCaixa !== currentLojaId) setCurrentLojaId(lojaDoCaixa);
+  }, [lojaDoCaixa, currentLojaId, setCurrentLojaId]);
+
   if (!hidratado || !isAuthenticated) return null;
 
   const papeis = (user?.papeis?.length ? user.papeis : [user?.role]) as Role[];
@@ -65,7 +81,18 @@ export function PdvLayout() {
       <header className="flex shrink-0 items-center justify-between gap-3 border-b bg-card px-4 py-2">
         <div className="flex items-center gap-3 min-w-0">
           <span className="font-semibold tracking-tight">Frente de caixa</span>
-          {isSupabaseConfigured() && lojas.length > 1 ? (
+          {lojaTravada ? (
+            <span
+              className="flex items-center gap-1 rounded-md border bg-muted/50 px-2 py-1 text-sm"
+              title="A loja vem do caixa aberto. Feche o caixa para operar em outra loja."
+            >
+              <Store className="h-3.5 w-3.5" />
+              {(lojas.find((l: any) => l.id === lojaDoCaixa) as any)?.apelido
+                ?? (lojas.find((l: any) => l.id === lojaDoCaixa) as any)?.nome
+                ?? "—"}
+              <Lock className="h-3 w-3 text-muted-foreground" />
+            </span>
+          ) : isSupabaseConfigured() && lojas.length > 1 ? (
             <Select value={currentLojaId ?? ""} onValueChange={setCurrentLojaId}>
               <SelectTrigger className="h-8 w-56"><SelectValue placeholder="Escolha a loja" /></SelectTrigger>
               <SelectContent>
