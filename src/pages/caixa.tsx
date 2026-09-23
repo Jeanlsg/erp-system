@@ -18,10 +18,12 @@ import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { useAuth } from "@/lib/store/auth-store";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
+import { DetalhesCaixaDialog } from "@/components/detalhes-caixa";
 import { brl } from "@/lib/format";
 import { toast } from "sonner";
 
 export function CaixaPage() {
+  const [caixaDetalhe, setCaixaDetalhe] = useState<string | null>(null);
   const { user } = useAuth();
   const { lojaId, lojas } = useAutoSelectLoja();
   const [lojaFiltro, setLojaFiltro] = useState<string>("todas");
@@ -343,7 +345,10 @@ export function CaixaPage() {
                 </thead>
                 <tbody>
                   {caixas.slice(0, 50).map((c: any) => (
-                    <tr key={c.id} className="border-b hover:bg-accent transition-colors">
+                    <tr key={c.id}
+                      onClick={() => setCaixaDetalhe(c.id)}
+                      title="Ver detalhes do turno"
+                      className="cursor-pointer border-b transition-colors hover:bg-accent">
                       <td className="p-3 font-mono font-medium">#{c.numero_caixa ?? "—"}</td>
                       <td className="p-3 text-sm">
                         {c.loja?.apelido || c.loja?.nome || (lojas.find((l) => l.id === c.loja_id)?.apelido) || "—"}
@@ -475,6 +480,8 @@ export function CaixaPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <DetalhesCaixaDialog caixaId={caixaDetalhe} onOpenChange={(v) => !v && setCaixaDetalhe(null)} />
     </div>
   );
 }

@@ -25,6 +25,7 @@ import {
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { FiltrosRelatorio, periodoPadrao, type Periodo } from "@/components/relatorio/filtros-relatorio";
 import { TabelaRelatorio } from "@/components/relatorio/tabela-relatorio";
+import { DetalhesCaixaDialog } from "@/components/detalhes-caixa";
 import type { Coluna } from "@/lib/exportar-csv";
 import {
   useRelatorioVendas, useRelatorioFechamentos, useContas, useVendedores, useLojas,
@@ -38,6 +39,7 @@ const TODOS = "__todos__";
 export function RelatoriosPage() {
   const { lojaId } = useAutoSelectLoja();
   const [aba, setAba] = useState("vendas");
+  const [caixaDetalhe, setCaixaDetalhe] = useState<string | null>(null);
   const [periodo, setPeriodo] = useState<Periodo>(periodoPadrao(30));
   // começa na loja do cabeçalho: é a que o operador está olhando
   const [loja, setLoja] = useState<string>(TODOS);
@@ -278,8 +280,11 @@ export function RelatoriosPage() {
         </TabsContent>
 
         <TabsContent value="caixa">
+          {/* clicar na linha abre o turno inteiro, com as vendas e os
+              movimentos, e reimprime o comprovante */}
           <TabelaRelatorio titulo="Fechamentos de caixa" itens={fechamentosFiltrados} colunas={colFechamentos}
             carregando={carregandoFech} de={periodo.de} ate={periodo.ate}
+            aoClicar={(f: any) => setCaixaDetalhe(f.caixa_id)}
             vazio="Nenhum caixa fechado no período." />
         </TabsContent>
 
@@ -289,6 +294,8 @@ export function RelatoriosPage() {
             vazio="Nenhuma conta vencendo no período." />
         </TabsContent>
       </Tabs>
+
+      <DetalhesCaixaDialog caixaId={caixaDetalhe} onOpenChange={(v) => !v && setCaixaDetalhe(null)} />
     </div>
   );
 }
