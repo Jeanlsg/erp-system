@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { pontosQuePodeAbrir, podeVariosCaixas } from "./caixas-permitidos";
+import { pontosQuePodeAbrir, podeVariosCaixas, podeGerirCaixas } from "./caixas-permitidos";
 
 const PETROLINA = { id: "57cf59e2-6240-4d14-bc21-2dac4b2a089b", nome: "Caixa 1 — Petrolina" };
 const JUAZEIRO = { id: "cdffb6eb-ba5a-4767-99c0-6c904e8d5b0c", nome: "Caixa 1 — Juazeiro" };
@@ -34,5 +34,19 @@ describe("podeVariosCaixas", () => {
   });
   it("sem usuário, não", () => {
     expect(podeVariosCaixas(null)).toBe(false);
+  });
+});
+
+describe("podeGerirCaixas", () => {
+  it("admin e gerente gerem caixas — o mesmo critério do banco", () => {
+    expect(podeGerirCaixas({ role: "admin" })).toBe(true);
+    expect(podeGerirCaixas({ role: "gerente" })).toBe(true);
+    expect(podeGerirCaixas({ role: "caixa", papeis: ["caixa", "gerente"] })).toBe(true);
+    expect(podeGerirCaixas({ admin_principal: true, role: "caixa" })).toBe(true);
+  });
+  it("operador de caixa e estoquista não", () => {
+    expect(podeGerirCaixas({ role: "caixa" })).toBe(false);
+    expect(podeGerirCaixas({ role: "estoquista" })).toBe(false);
+    expect(podeGerirCaixas(null)).toBe(false);
   });
 });

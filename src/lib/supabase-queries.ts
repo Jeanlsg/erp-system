@@ -1524,22 +1524,68 @@ export function usePontosVenda(lojaId?: string) {
   });
 }
 
-export function useCriarPontoVenda() {
+/**
+ * Cria N caixas na loja, já com nome "Caixa <número>" na sequência dela.
+ * A numeração é feita no banco com a loja travada — calculada aqui, dois
+ * cliques ao mesmo tempo criariam o mesmo número (migration 094).
+ */
+export function useCriarPontosVenda() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ lojaId, nome }: { lojaId: string; nome: string }) => {
-      // o número é sequencial DENTRO da loja: é ele que sai no cupom
-      const { data: existentes, error: e1 } = await supabase
-        .from("erp_pontos_venda").select("numero").eq("loja_id", lojaId);
-      if (e1) throw e1;
-      const proximo = Math.max(0, ...(existentes ?? []).map((p: any) => Number(p.numero) || 0)) + 1;
-      const { data, error } = await supabase.from("erp_pontos_venda")
-        .insert({ loja_id: lojaId, numero: proximo, nome: nome.trim() || `Caixa ${proximo}` })
-        .select().single();
+    mutationFn: async ({ lojaId, quantidade }: { lojaId: string; quantidade: number }) => {
+      const { data, error } = await supabase.schema("erp").rpc("criar_pontos_venda", {
+        p_loja_id: lojaId, p_quantidade: quantidade,
+      });
       if (error) throw error;
+      return (data ?? []) as any[];
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["erp_pontos_venda"] });
+      qc.invalidateQueries({ queryKey: ["erp_pontos_venda_todos"] });
+    },
+  });
+}
+
+/** Renomeia um caixa. O número não muda: é ele que está nos turnos já fechados. */
+export function useRenomearPontoVenda() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, nome }: { id: string; nome: string }) => {
+      const limpo = nome.trim();
+      if (!limpo) throw new Error("O nome do caixa não pode ficar vazio.");
+      const { data, error } = await supabase.from("erp_pontos_venda")
+        .update({ nome: limpo }).eq("id", id).select().single();
+      if (error) {
+        // índice único de nome por loja (migration 094)
+        if ((error as any).code === "23505") throw new Error(`Já existe um caixa chamado "${limpo}" nesta loja.`);
+        throw error;
+      }
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["erp_pontos_venda"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["erp_pontos_venda"] });
+      qc.invalidateQueries({ queryKey: ["erp_pontos_venda_todos"] });
+    },
+  });
+}
+
+/**
+ * Apaga um caixa. Com turnos no histórico ele é ARQUIVADO — some das listas,
+ * mas os turnos continuam dizendo de qual caixa foram. Devolve o que o banco
+ * fez: "apagado" ou "arquivado".
+ */
+export function useRemoverPontoVenda() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase.schema("erp").rpc("remover_ponto_venda", { p_id: id });
+      if (error) throw error;
+      return data as "apagado" | "arquivado";
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["erp_pontos_venda"] });
+      qc.invalidateQueries({ queryKey: ["erp_pontos_venda_todos"] });
+    },
   });
 }
 

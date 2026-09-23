@@ -18,11 +18,11 @@ import {
   Search, Keyboard,
   Bike,
 } from "lucide-react";
-import { useProdutos, useClientes, useCreateCaixa, useFecharCaixa, useKits, useCaixas, useCreateSangria, useCreateEntradaExtra, useEmitirNFeVenda, isSupabaseConfigured, useVendedores, useEstoqueLoja, usePontosVenda, useCriarPontoVenda, useConfigsCaixa, useSaldosPedidos, useAplicarEntradaPedido, useCaixasAbertosDoUsuario, useCaixasPermitidos } from "@/lib/supabase-queries";
+import { useProdutos, useClientes, useCreateCaixa, useFecharCaixa, useKits, useCaixas, useCreateSangria, useCreateEntradaExtra, useEmitirNFeVenda, isSupabaseConfigured, useVendedores, useEstoqueLoja, usePontosVenda, useCriarPontosVenda, useRenomearPontoVenda, useRemoverPontoVenda, useConfigsCaixa, useSaldosPedidos, useAplicarEntradaPedido, useCaixasAbertosDoUsuario, useCaixasPermitidos } from "@/lib/supabase-queries";
 import { caixaAtivoNaLoja, caixasEmOutrasLojas, podeAbrirOutroCaixa } from "@/lib/loja-do-caixa";
 import { useLojaAtualStore } from "@/lib/store/loja-atual";
 import { quantidadeParaLancar, QTD_MAXIMA_POR_LANCAMENTO } from "@/lib/quantidade-lancamento";
-import { pontosQuePodeAbrir, podeVariosCaixas } from "@/lib/caixas-permitidos";
+import { pontosQuePodeAbrir, podeVariosCaixas, podeGerirCaixas } from "@/lib/caixas-permitidos";
 import { formasParaDeclarar as escolherFormas, faltaDeclarar as temFormaPendente, argumentosDeFechamento } from "@/lib/fechamento-por-forma";
 import { toast } from "sonner";
 import {
@@ -211,10 +211,15 @@ export function PDVPage() {
   const abertoHaMaisDeUmDia = (iso: string) =>
     new Date(iso).toDateString() !== new Date().toDateString();
 
-  const criarPonto = useCriarPontoVenda();
+  const criarPontos = useCriarPontosVenda();
+  const renomearPonto = useRenomearPontoVenda();
+  const removerPonto = useRemoverPontoVenda();
+  // cadastrar, renomear e apagar caixa é gestão; o banco recusa os demais
+  const gereCaixas = podeGerirCaixas(user as any);
+  const [qtdNovosPontos, setQtdNovosPontos] = useState("1");
+  const [renomeando, setRenomeando] = useState<{ id: string; nome: string } | null>(null);
   const [pontoSelecionado, setPontoSelecionado] = useState<string | null>(null);
   const [modalNovoPonto, setModalNovoPonto] = useState(false);
-  const [nomeNovoPonto, setNomeNovoPonto] = useState("");
 
   // Trocar de loja com o caixa fechado tem de limpar a escolha do caixa:
   // "Caixa 1 — Juazeiro" continuava marcado depois de mudar para Petrolina, e
@@ -1044,10 +1049,12 @@ export function PDVPage() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-base">Selecione o caixa</CardTitle>
-                <Button variant="outline" size="sm" onClick={() => setModalNovoPonto(true)}
-                  title="Cadastrar um caixa nesta loja">
-                  <Plus className="mr-1 h-4 w-4" /> Adicionar caixa
-                </Button>
+                {gereCaixas && (
+                  <Button variant="outline" size="sm" onClick={() => setModalNovoPonto(true)}
+                    title="Cadastrar caixas nesta loja">
+                    <Plus className="mr-1 h-4 w-4" /> Adicionar caixas
+                  </Button>
+                )}
               </CardHeader>
               <CardContent>
                 {ocupadosPorOutros.length > 0 && (
@@ -1757,37 +1764,44 @@ export function PDVPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Adicionar caixa a esta loja */}
+      {/* Adicionar caixas a esta loja, por quantidade */}
       <Dialog open={modalNovoPonto} onOpenChange={setModalNovoPonto}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Adicionar caixa</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Adicionar caixas</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <p className="text-xs text-muted-foreground">
-              O caixa pertence a esta loja e recebe o próximo número livre — é esse número
-              que sai no cupom e separa os turnos no relatório.
-            </p>
             <div>
-              <Label>Nome do caixa</Label>
-              <Input autoFocus value={nomeNovoPonto} onChange={(e) => setNomeNovoPonto(e.target.value)}
-                placeholder="Ex.: Caixa do balcão, Caixa 2" />
+              <Label>Quantos caixas criar em {nomeDaLoja(lojaId)}?</Label>
+              <Input autoFocus type="number" min="1" max="20" className="mt-1 w-28"
+                value={qtdNovosPontos} onChange={(e) => setQtdNovosPontos(e.target.value)} />
             </div>
+            <p className="text-xs text-muted-foreground">
+              Cada um recebe o nome <b>Caixa</b> e o próximo número desta loja — Caixa 1,
+              Caixa 2… O número sai no cupom e separa os turnos no relatório. O nome dá para
+              trocar depois em Configurações.
+            </p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setModalNovoPonto(false)}>Cancelar</Button>
-            <Button disabled={criarPonto.isPending || !lojaId}
+            <Button disabled={criarPontos.isPending || !lojaId}
               onClick={async () => {
                 if (!lojaId) return;
+                const qtd = Math.floor(Number(qtdNovosPontos));
+                if (!Number.isFinite(qtd) || qtd < 1 || qtd > 20) {
+                  toast.error("Informe uma quantidade de 1 a 20.");
+                  return;
+                }
                 try {
-                  const novo = await criarPonto.mutateAsync({ lojaId, nome: nomeNovoPonto });
-                  setPontoSelecionado(novo.id); setCaixaSelecionado(novo.numero);
-                  setNomeNovoPonto(""); setModalNovoPonto(false);
-                  toast.success(`${novo.nome} criado.`);
+                  const novos = await criarPontos.mutateAsync({ lojaId, quantidade: qtd });
+                  // com um caixa só criado, já deixa ele escolhido para abrir
+                  if (novos.length === 1) { setPontoSelecionado(novos[0].id); setCaixaSelecionado(novos[0].numero); }
+                  setQtdNovosPontos("1"); setModalNovoPonto(false);
+                  toast.success(`Criado(s): ${novos.map((n) => n.nome).join(", ")}.`);
                 } catch (e: any) {
                   toast.error(`Não foi possível criar: ${e.message ?? e}`);
                 }
               }}>
-              {criarPonto.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="mr-1 h-4 w-4" />}
-              Criar caixa
+              {criarPontos.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="mr-1 h-4 w-4" />}
+              Criar
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2274,29 +2288,91 @@ export function PDVPage() {
           Era "Quantidade de Caixas": um número global que criava os mesmos
           caixas em toda loja. Com o cadastro por loja (erp_pontos_venda) o
           número perdeu sentido — aqui se vê e se cria o que existe. */}
-      <Dialog open={modalConfigCaixa} onOpenChange={setModalConfigCaixa}>
+      <Dialog open={modalConfigCaixa} onOpenChange={(o) => { setModalConfigCaixa(o); if (!o) setRenomeando(null); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Caixas desta loja</DialogTitle>
+            <DialogTitle>Caixas de {nomeDaLoja(lojaId)}</DialogTitle>
           </DialogHeader>
           <div className="space-y-2 py-2">
-            {pontosVenda.length === 0 ? (
+            {pontosVendaDaLoja.length === 0 ? (
               <p className="text-sm text-muted-foreground">Nenhum caixa cadastrado nesta loja.</p>
-            ) : pontosVenda.map((pv: any) => (
-              <div key={pv.id} className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
-                <span>{pv.nome}</span>
-                <span className="text-xs text-muted-foreground">nº {pv.numero}</span>
-              </div>
-            ))}
+            ) : (pontosVendaDaLoja as any[]).map((pv) => {
+              const aberto = (caixas as any[]).some((c) =>
+                c.ponto_venda_id === pv.id && c.status === "aberto" && !c.data_fechamento);
+              const editando = renomeando?.id === pv.id;
+              return (
+                <div key={pv.id} className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+                  <span className="w-10 shrink-0 text-xs text-muted-foreground">nº {pv.numero}</span>
+                  {editando ? (
+                    <Input autoFocus className="h-8 flex-1" value={renomeando!.nome}
+                      onChange={(e) => setRenomeando({ id: pv.id, nome: e.target.value })}
+                      onKeyDown={async (e) => {
+                        if (e.key === "Escape") setRenomeando(null);
+                        if (e.key !== "Enter") return;
+                        try {
+                          await renomearPonto.mutateAsync({ id: pv.id, nome: renomeando!.nome });
+                          setRenomeando(null);
+                          toast.success("Caixa renomeado.");
+                        } catch (err: any) { toast.error(err.message ?? String(err)); }
+                      }} />
+                  ) : (
+                    <span className="flex-1 truncate">{pv.nome}</span>
+                  )}
+                  {aberto && <Badge variant="outline" className="text-[10px]">turno aberto</Badge>}
+                  {gereCaixas && (editando ? (
+                    <>
+                      <Button size="sm" className="h-8" disabled={renomearPonto.isPending}
+                        onClick={async () => {
+                          try {
+                            await renomearPonto.mutateAsync({ id: pv.id, nome: renomeando!.nome });
+                            setRenomeando(null);
+                            toast.success("Caixa renomeado.");
+                          } catch (err: any) { toast.error(err.message ?? String(err)); }
+                        }}>
+                        Salvar
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-8" onClick={() => setRenomeando(null)}>
+                        Cancelar
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button size="sm" variant="ghost" className="h-8"
+                        onClick={() => setRenomeando({ id: pv.id, nome: pv.nome })}>
+                        Renomear
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-8 text-destructive"
+                        disabled={aberto || removerPonto.isPending}
+                        title={aberto ? "Feche o turno antes de apagar este caixa" : "Apagar este caixa"}
+                        onClick={async () => {
+                          if (!confirm(`Apagar ${pv.nome}?\n\nSe ele já teve turnos, sai da lista mas o histórico continua dizendo de qual caixa cada turno foi.`)) return;
+                          try {
+                            const r = await removerPonto.mutateAsync(pv.id);
+                            if (pontoSelecionado === pv.id) { setPontoSelecionado(null); setCaixaSelecionado(null); }
+                            toast.success(r === "arquivado"
+                              ? `${pv.nome} saiu da lista. Os turnos antigos continuam no histórico.`
+                              : `${pv.nome} apagado.`);
+                          } catch (err: any) { toast.error(err.message ?? String(err)); }
+                        }}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </>
+                  ))}
+                </div>
+              );
+            })}
             <p className="text-xs text-muted-foreground">
-              O número acompanha o cupom e separa os turnos no relatório de fechamento.
+              O número acompanha o cupom e separa os turnos no relatório. Renomear não muda o
+              número; apagar um caixa que já teve turnos só o tira da lista.
             </p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setModalConfigCaixa(false)}>Fechar</Button>
-            <Button onClick={() => { setModalConfigCaixa(false); setModalNovoPonto(true); }}>
-              <Plus className="mr-1 h-4 w-4" /> Adicionar caixa
-            </Button>
+            {gereCaixas && (
+              <Button onClick={() => { setModalConfigCaixa(false); setModalNovoPonto(true); }}>
+                <Plus className="mr-1 h-4 w-4" /> Adicionar caixas
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

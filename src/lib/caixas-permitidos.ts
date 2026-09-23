@@ -41,3 +41,17 @@ export function podeVariosCaixas(
   if (user.role === "admin") return true;
   return !!user.papeis?.includes("admin");
 }
+
+/**
+ * Pode cadastrar, renomear e apagar caixas? Admin ou gerente — o mesmo
+ * critério de erp.is_erp_admin(), que é quem de fato recusa no banco. Aqui é
+ * para não mostrar ao operador botões que falhariam.
+ */
+export function podeGerirCaixas(
+  user: { admin_principal?: boolean | null; role?: string | null; papeis?: string[] | null } | null | undefined,
+): boolean {
+  if (!user) return false;
+  if (user.admin_principal) return true;
+  const papeis = user.papeis?.length ? user.papeis : [user.role ?? ""];
+  return papeis.some((p) => p === "admin" || p === "gerente");
+}
