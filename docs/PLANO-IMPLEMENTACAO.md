@@ -138,6 +138,14 @@ A correção é trocar as policies de SELECT das tabelas com `loja_id` para
 tabelas e muda o que cada usuário enxerga, então espera aprovação e um teste
 logado como cada papel.
 
+**6. Pedido de balcão pode sair com o endereço do cliente anterior.** Em
+`novo-pedido-balcao.tsx`, ao trocar de cliente, o endereço padrão do novo
+cliente só entra se nenhum endereço estiver escolhido. Escolhido o endereço
+do cliente A, trocar para o cliente B mantém o de A no formulário, e a
+entrega vai para o endereço errado. O ESLint aponta a dependência faltando
+no efeito (linha 105). A correção é limpar o endereço escolhido ao trocar de
+cliente.
+
 ### O que falta para fechar os ajustes
 
 Em ordem de quem está esperando o quê.
