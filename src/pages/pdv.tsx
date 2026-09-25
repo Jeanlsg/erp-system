@@ -17,7 +17,7 @@ import {
   Check, X, AlertCircle, CloudOff, RefreshCw, Cloud, Camera,
   UserPlus,
   Search, Keyboard,
-  Bike,
+  Bike, FileText, Receipt, ArrowLeft, WifiOff,
 } from "lucide-react";
 import { useProdutos, useCreateCaixa, useFecharCaixa, useKits, useCaixas, useCreateSangria, useCreateEntradaExtra, useEmitirNFeVenda, isSupabaseConfigured, useVendedores, useEstoqueLoja, usePontosVenda, useCriarPontosVenda, useRenomearPontoVenda, useRemoverPontoVenda, useConfigsCaixa, useSaldosPedidos, useAplicarEntradaPedido, useCaixasAbertosDoUsuario, useCaixasPermitidos } from "@/lib/supabase-queries";
 import { caixaAtivoNaLoja, caixasEmOutrasLojas, podeAbrirOutroCaixa } from "@/lib/loja-do-caixa";
@@ -47,7 +47,7 @@ import { documentoValido, mascaraDocumento } from "@/lib/documento";
 import { ComboboxBusca } from "@/components/ui/combobox-busca";
 import { ClienteRapidoPdvDialog } from "@/components/cliente-rapido-pdv";
 import {
-  PagamentosVenda, faltaPagar, trocoDe, aplicarDigitado, prepararFinalizacao, NOME_FORMA, type Pagamento,
+  PagamentosVenda, faltaPagar, trocoDe, aplicarDigitado, prepararFinalizacao, type Pagamento,
 } from "@/components/pagamentos-venda";
 
 interface CartItem {
@@ -61,6 +61,35 @@ interface CartItem {
   imagem_url?: string | null;
   /** desconto NESTA linha, em reais. O desconto geral continua à parte. */
   desconto?: number;
+}
+
+
+// ---------- documento fiscal da venda ----------
+type DocFiscal = "nenhum" | "nfce" | "nfe";
+const CHAVE_DOC_FISCAL = "erp-pdv-doc-fiscal";
+const OPCOES_DOC: { valor: DocFiscal; titulo: string; descricao: string; Icone: typeof FileText }[] = [
+  { valor: "nenhum", titulo: "Sem nota", descricao: "Só registra a venda. A nota pode ser emitida depois em Notas Fiscais.", Icone: X },
+  { valor: "nfce", titulo: "NFC-e (cupom)", descricao: "Cupom fiscal ao consumidor; CPF opcional. Exige CSC cadastrado.", Icone: Receipt },
+  { valor: "nfe", titulo: "NF-e (nota)", descricao: "Nota modelo 55. Exige cliente com CPF/CNPJ e endereço completo.", Icone: FileText },
+];
+/** Padrão do terminal: a última escolha entre "sem nota" e NFC-e. */
+function lerDocFiscalPadrao(): DocFiscal {
+  try { return localStorage.getItem(CHAVE_DOC_FISCAL) === "nfce" ? "nfce" : "nenhum"; } catch { return "nenhum"; }
+}
+function gravarDocFiscalPadrao(d: DocFiscal) {
+  try { localStorage.setItem(CHAVE_DOC_FISCAL, d); } catch { /* aba anônima */ }
+}
+/**
+ * O que impede a NF-e para este cliente, ou null. É a MESMA regra do
+ * erp-emitir-nfe (cpf_cnpj; logradouro, município e UF): dizer aqui evita
+ * gravar a venda para a nota ser recusada em seguida.
+ */
+function faltaParaNFe(cliente: any): string | null {
+  if (!cliente) return "NF-e exige cliente identificado — escolha o cliente (F2).";
+  if (!cliente.cpf_cnpj) return "O cliente não tem CPF/CNPJ no cadastro.";
+  const e = cliente.endereco ?? {};
+  const faltas = [!e.logradouro && "logradouro", !(e.cidade || e.municipio) && "município", !e.uf && "UF"].filter(Boolean);
+  return faltas.length ? `Endereço do cliente incompleto: falta ${faltas.join(", ")}.` : null;
 }
 
 export function PDVPage() {
@@ -294,16 +323,25 @@ export function PDVPage() {
   const [modalFechamento, setModalFechamento] = useState(false);
   const [modalConfigCaixa, setModalConfigCaixa] = useState(false);
   const [modalCaixasAbertos, setModalCaixasAbertos] = useState(false);
-  const [modalConfirmarVenda, setModalConfirmarVenda] = useState(false);
+  // Tela de pagamento: ocupa a frente de caixa inteira. Forma, valor, desconto
+  // e documento fiscal se decidem ali, e o "Confirmar" dela É a finalização —
+  // antes eram o painel apertado ao lado do cupom e mais um modal de
+  // confirmação repetindo o que já estava na tela.
+  const [telaPagamento, setTelaPagamento] = useState(false);
   // Formas com que esta venda está sendo paga. Vazio = uma forma só, pelo
   // seletor de sempre; com linhas, a venda é mista e vai detalhada ao banco.
   const [pagamentos, setPagamentos] = useState<Pagamento[]>([]);
   const [parcelasPagamento, setParcelasPagamento] = useState("1");
   const campoValorPagamento = useRef<HTMLInputElement>(null);
-  const [emitirCupom, setEmitirCupom] = useState(false);
+  // Documento fiscal da venda. O padrão do terminal é a última escolha entre
+  // "sem nota" e NFC-e; NF-e é decisão de uma venda (exige cliente com
+  // endereço) e nunca vira padrão.
+  const [docFiscal, setDocFiscal] = useState<DocFiscal>(lerDocFiscalPadrao);
   // "É CPF na nota?" — consumidor identificado sem precisar de cadastro
   const [cpfNota, setCpfNota] = useState("");
   const [nomeNota, setNomeNota] = useState("");
+
+  const clienteDaVenda = clienteId ? (clientes as any[]).find((c) => c.id === clienteId) ?? null : null;
 
   // Calculados
   const subtotal = cart.reduce((s, i) => s + i.preco_unitario * i.quantidade, 0);
@@ -324,7 +362,6 @@ export function PDVPage() {
   // aqui vira divergência de caixa no fim do dia, e aí ninguém lembra de
   // qual venda foi. Sem linha nenhuma, falta tudo.
   const faltaReceber = pagamentos.length > 0 ? faltaPagar(total, pagamentos) : total;
-  const recebidoTotal = pagamentos.reduce((t, p) => t + (Number(p.valor_recebido ?? p.valor) || 0), 0);
 
   // O que tem de estar na gaveta, calculado pelo banco (vw_caixa_resumo).
   //
@@ -502,8 +539,20 @@ export function PDVPage() {
     pedirORestante(r.pagamentos);
   };
 
+  /** Abre a tela de pagamento, com o cursor já no valor. */
   const finalizar = () => {
     if (cart.length === 0) return;
+    setTelaPagamento(true);
+    focarValorPagamento();
+  };
+
+  /**
+   * "Confirmar venda" da tela de pagamento. O que está digitado no campo de
+   * valor entra como pagamento (em branco = o total na forma escolhida); se
+   * ainda faltar, a tela pede o resto em vez de gravar.
+   */
+  const confirmarPagamento = () => {
+    if (cart.length === 0 || finalizando) return;
     const r = prepararFinalizacao(total, pagamentos, forma as any, valorRecebido, Number(parcelasPagamento) || 1);
     if (!r.ok) { toast.error(r.erro); return; }
     setPagamentos(r.pagamentos);
@@ -514,7 +563,9 @@ export function PDVPage() {
       return;
     }
     setValorRecebido("");
-    setModalConfirmarVenda(true);
+    // ⚠️ passa as linhas ADIANTE: o setPagamentos acima só vale no próximo
+    // render, e gravar o estado velho perderia o último pagamento lançado.
+    void handleFinalizarVenda(r.pagamentos);
   };
 
   // Limpar carrinho
@@ -528,6 +579,8 @@ export function PDVPage() {
     setForma("dinheiro");
     setPagamentos([]);
     setParcelasPagamento("1");
+    // NF-e é da venda; o padrão do terminal (sem nota / NFC-e) continua
+    setDocFiscal((d) => (d === "nfe" ? lerDocFiscalPadrao() : d));
   }, []);
 
   // Abrir caixa
@@ -668,13 +721,21 @@ export function PDVPage() {
 
   // Finalizar venda
   const [finalizando, setFinalizando] = useState(false);
-  const handleFinalizarVenda = async () => {
+  const handleFinalizarVenda = async (pags: Pagamento[] = pagamentos) => {
     if (!lojaId || !user || cart.length === 0 || finalizando) return;
-    if (pagamentos.length === 0 || faltaReceber > 0) {
-      toast.error(`Ainda falta receber ${brl(faltaReceber)}.`);
-      setModalConfirmarVenda(false);
+    const faltaAgora = pags.length > 0 ? faltaPagar(total, pags) : total;
+    if (pags.length === 0 || faltaAgora > 0) {
+      toast.error(`Ainda falta receber ${brl(faltaAgora)}.`);
       focarValorPagamento();
       return;
+    }
+    // Sem internet a nota não sai agora: a venda vai para a fila e o cupom é
+    // emitido depois em Notas Fiscais. A tela já desliga as opções; isto é a
+    // mesma regra na hora de gravar.
+    const doc: DocFiscal = online ? docFiscal : "nenhum";
+    if (doc === "nfe") {
+      const falta = faltaParaNFe(clienteDaVenda);
+      if (falta) { toast.error(falta, { duration: 8000 }); return; }
     }
     // CPF digitado mas inválido: recusa AGORA, com o cliente na frente —
     // deixar passar viraria rejeição da SEFAZ na hora do cupom.
@@ -698,16 +759,16 @@ export function PDVPage() {
         desconto: totalDesconto,
         desconto_percentual: descontoPercentual ? desc : 0,
         acrescimo: acresc,
-        troco,
-        valor_recebido: Math.round(recebidoTotal * 100) / 100,
+        troco: trocoDe(pags),
+        valor_recebido: Math.round(pags.reduce((t, p) => t + (Number(p.valor_recebido ?? p.valor) || 0), 0) * 100) / 100,
         total,
         custo_total: custoTotal,
         lucro_total: total - custoTotal,
         // a forma "principal" é a de maior valor; o banco reconfere
-        forma_pagamento: [...pagamentos].sort((x, y) => y.valor - x.valor)[0].forma,
+        forma_pagamento: [...pags].sort((x, y) => y.valor - x.valor)[0].forma,
         // sempre por linha: é por elas que a gaveta sabe quanto entrou em
         // dinheiro, e o banco recusa soma menor que o total
-        pagamentos,
+        pagamentos: pags,
         // sem cliente cadastrado, vale o CPF digitado no balcão
         ...(!clienteId && cpfNota.trim()
           ? { consumidor_cpf: cpfNota, consumidor_nome: nomeNota.trim() || undefined }
@@ -727,8 +788,9 @@ export function PDVPage() {
         caixa_id: caixaAberto?.id,
       });
 
+      if (doc !== "nfe") gravarDocFiscalPadrao(doc);
       limparCarrinho();
-      setModalConfirmarVenda(false);
+      setTelaPagamento(false);
       void fila.recarregar();
 
       if (!envio.enviada) {
@@ -745,21 +807,22 @@ export function PDVPage() {
       toast.success("Venda finalizada com sucesso.");
       const vendaCriada = envio.resultado;
 
-      // NFC-e é acessória à venda: se a SEFAZ recusar, a venda continua
-      // registrada e o cupom pode ser reemitido em Notas Fiscais.
-      if (emitirCupom && vendaCriada?.venda_id) {
+      // A nota é acessória à venda: se a SEFAZ recusar, a venda continua
+      // registrada e a nota pode ser emitida depois em Notas Fiscais.
+      if (doc !== "nenhum" && vendaCriada?.venda_id) {
+        const nome = doc === "nfe" ? "NF-e" : "NFC-e";
         try {
           const nota = await emitirNFCe.mutateAsync({
             venda_id: vendaCriada.venda_id,
             loja_id: lojaId,
-            tipo: "nfce",
+            tipo: doc,
           });
           toast.success(
-            `NFC-e nº ${nota.numero} autorizada${nota.ambiente !== "producao" ? " (HOMOLOGAÇÃO — sem valor fiscal)" : ""}.`
+            `${nome} nº ${nota.numero} autorizada${nota.ambiente !== "producao" ? " (HOMOLOGAÇÃO — sem valor fiscal)" : ""}.`
           );
         } catch (errNota: any) {
           toast.error(
-            `Venda registrada, mas a NFC-e falhou: ${errNota?.message ?? "erro desconhecido"}. Emita em Notas Fiscais.`,
+            `Venda registrada, mas a ${nome} falhou: ${errNota?.message ?? "erro desconhecido"}. Emita em Notas Fiscais.`,
             { duration: 12000 }
           );
         }
@@ -891,13 +954,7 @@ export function PDVPage() {
       }, ativo: cart.length > 0 },
     { tecla: "F9", rotulo: "Consultar preço", acao: () => setModalPrecos(true) },
     { tecla: "F8", rotulo: "Cancelar item", acao: () => { if (itemSelecionado) { remover(itemSelecionado); setItemSelecionado(null); } else toast.info("Escolha o item no cupom antes."); }, ativo: cart.length > 0 },
-    { tecla: "F10", rotulo: "Add Pagamento", acao: () => {
-        if (!cart.length) return;
-        // "Adicionar pagamento" é ir ao campo de valor do painel, já com o
-        // que falta — Enter lança, e o resto é pedido em seguida.
-        if (valorRecebido === "") setValorRecebido(String(faltaReceber));
-        focarValorPagamento();
-      }, ativo: cart.length > 0 },
+    { tecla: "F10", rotulo: "Pagamento", acao: finalizar, ativo: cart.length > 0 },
     { tecla: "F11", rotulo: "Cancelar venda", acao: () => { if (cart.length && confirm("Cancelar a venda e limpar o cupom?")) limparCarrinho(); }, ativo: cart.length > 0 },
     { tecla: "Ctrl+S", rotulo: "Sangria", acao: () => setModalSangria(true), ativo: !!caixaAberto },
     { tecla: "Ctrl+E", rotulo: "Entrada de valores", acao: () => setModalEntrada(true), ativo: !!caixaAberto },
@@ -910,7 +967,13 @@ export function PDVPage() {
     { tecla: "Ctrl+F12", rotulo: "Sair da frente de caixa", acao: () => setSaiuDaFrente(true) },
     { tecla: "Ctrl+H", rotulo: "Ver todos os atalhos", acao: () => setModalAtalhos(true) },
   ];
-  useAtalhosPdv(ATALHOS);
+  // ⚠️ Com a tela de pagamento aberta, os atalhos do cupom ficam DESLIGADOS:
+  // eles escutam a janela inteira, e um F11 ali cancelaria a venda que está
+  // sendo paga. A tela tem os dela.
+  useAtalhosPdv(ATALHOS, !telaPagamento);
+  useAtalhosPdv([
+    { tecla: "F10", rotulo: "Confirmar venda", acao: confirmarPagamento },
+  ], telaPagamento);
   // a barra de baixo mostra só o que o operador usa a todo momento
   const ATALHOS_VISIVEIS = ATALHOS.filter((a) =>
     ["F4", "F5", "F7", "F8", "F9", "F10", "F11", "Ctrl+S", "Ctrl+X", "F12", "Ctrl+H"].includes(a.tecla));
@@ -1525,74 +1588,29 @@ export function PDVPage() {
               </div>
             </div>
 
-            {/* Totais e Pagamento */}
-            <div className="border-t bg-background p-4 space-y-3">
-              {/* Subtotal */}
+            {/* Totais — o pagamento em si é a tela exclusiva (F10) */}
+            <div className="border-t bg-background p-4 space-y-2">
               <div className="flex justify-between text-sm">
                 <span>Subtotal</span>
                 <span>{brl(subtotal)}</span>
               </div>
-
-              {/* Desconto */}
-              <div className="flex items-center gap-2">
-                <div className="flex-1">
-                  <Label className="text-xs">Desconto</Label>
-                  <div className="flex gap-1">
-                    <Input
-                      type="number"
-                      step="0.01"
-                      placeholder="0,00"
-                      value={desconto}
-                      onChange={(e) => setDesconto(e.target.value)}
-                      className="h-8 text-sm"
-                    />
-                    <Button
-                      variant={descontoPercentual ? "default" : "outline"}
-                      size="sm"
-                      className="h-8 px-2"
-                      onClick={() => setDescontoPercentual(!descontoPercentual)}
-                    >
-                      %
-                    </Button>
-                  </div>
+              {totalDesconto > 0 && (
+                <div className="flex justify-between text-sm text-red-600">
+                  <span>Descontos</span>
+                  <span>-{brl(totalDesconto)}</span>
                 </div>
-                <div className="flex-1">
-                  <Label className="text-xs">Acréscimo</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    placeholder="0,00"
-                    value={acrescimo}
-                    onChange={(e) => setAcrescimo(e.target.value)}
-                    className="h-8 text-sm"
-                  />
+              )}
+              {acresc > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span>Acréscimo</span>
+                  <span>+{brl(acresc)}</span>
                 </div>
-              </div>
-
-              {/* Total */}
+              )}
               <div className="flex justify-between text-lg font-bold border-t pt-2">
                 <span>TOTAL</span>
                 <span className="text-green-600">{brl(total)}</span>
               </div>
 
-              {/* Pagamento: um lugar só para a forma, o valor e a divisão em
-                  várias formas. Antes a forma ficava aqui e a divisão num
-                  modal à parte, com dois caminhos que não concordavam. */}
-              <PagamentosVenda
-                total={total}
-                pagamentos={pagamentos}
-                aoMudar={(p) => { setPagamentos(p); pedirORestante(p); }}
-                forma={forma as any}
-                aoMudarForma={(f) => { setForma(f as any); focarValorPagamento(); }}
-                valor={valorRecebido}
-                aoMudarValor={setValorRecebido}
-                parcelas={parcelasPagamento}
-                aoMudarParcelas={setParcelasPagamento}
-                aoLancar={lancarDigitado}
-                campoValorRef={campoValorPagamento}
-              />
-
-              {/* Botões de Ação */}
               <div className="flex gap-2 pt-2">
                 <Button variant="outline" className="flex-1"
                   onClick={() => {
@@ -1610,9 +1628,10 @@ export function PDVPage() {
                   className="flex-1 bg-green-600 hover:bg-green-700"
                   disabled={cart.length === 0}
                   onClick={finalizar}
+                  title="Abre a tela de pagamento (F10)"
                 >
                   <Check className="h-4 w-4 mr-1" />
-                  Finalizar
+                  Pagamento (F10)
                 </Button>
               </div>
             </div>
@@ -1861,109 +1880,189 @@ export function PDVPage() {
         titulo="Bipar produtos"
       />
 
-      <Dialog open={modalConfirmarVenda} onOpenChange={setModalConfirmarVenda}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Confirmar Venda</DialogTitle>
-          </DialogHeader>
-          <div className="py-4 space-y-2">
-            <div className="flex justify-between">
-              <span>Itens:</span>
-              <span>{cart.length}</span>
+      {/* ============ TELA DE PAGAMENTO (F10) ============
+          Ocupa a frente de caixa inteira: à esquerda o que está sendo pago
+          (itens, desconto, acréscimo, total), à direita como paga e que
+          documento sai. O "Confirmar venda" daqui grava — não há um segundo
+          modal repetindo a mesma conta. */}
+      <Dialog open={telaPagamento} onOpenChange={(o) => { if (!finalizando) setTelaPagamento(o); }}>
+        <DialogContent className="left-0 top-0 flex h-[100dvh] w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 rounded-none p-0 sm:rounded-none data-[state=closed]:slide-out-to-left-0 data-[state=closed]:slide-out-to-top-0 data-[state=open]:slide-in-from-left-0 data-[state=open]:slide-in-from-top-0">
+          <div className="flex items-center justify-between gap-3 border-b px-6 py-3">
+            <div className="flex items-center gap-3">
+              <Button variant="ghost" size="sm" onClick={() => setTelaPagamento(false)} disabled={finalizando}>
+                <ArrowLeft className="h-4 w-4 mr-1" /> Voltar ao cupom (Esc)
+              </Button>
+              <DialogTitle className="text-xl">Pagamento</DialogTitle>
             </div>
-            <div className="flex justify-between">
-              <span>Subtotal:</span>
-              <span>{brl(subtotal)}</span>
-            </div>
-            {totalDesconto > 0 && (
-              <div className="flex justify-between text-red-600">
-                <span>Desconto:</span>
-                <span>-{brl(totalDesconto)}</span>
-              </div>
-            )}
-            <div className="flex justify-between font-bold text-lg border-t pt-2">
-              <span>Total:</span>
-              <span className="text-green-600">{brl(total)}</span>
-            </div>
-            {/* Só conferência. Forma e divisão se fazem no painel da venda —
-                um lugar só; aqui o operador vê o que vai ser gravado. */}
-            <div className="mt-2 space-y-1 rounded-md border p-3 text-sm">
-              <p className="font-medium">Pagamento</p>
-              {pagamentos.map((p, i) => (
-                <div key={i} className="flex justify-between">
-                  <span>
-                    {NOME_FORMA[p.forma]}
-                    {p.parcelas && p.parcelas > 1 ? ` · ${p.parcelas}x` : ""}
-                    {p.troco ? <span className="text-muted-foreground"> · recebeu {brl(p.valor_recebido ?? 0)}</span> : null}
-                  </span>
-                  <span className="tabular-nums">{brl(p.valor)}</span>
-                </div>
-              ))}
-              {troco > 0 && (
-                <div className="flex justify-between border-t pt-1 font-semibold text-orange-600">
-                  <span>Troco</span>
-                  <span className="tabular-nums">{brl(troco)}</span>
-                </div>
-              )}
-            </div>
-            {!clienteId && (
-              <div className="mt-2 space-y-2 rounded-md border p-3">
-                <p className="text-sm font-medium">CPF na nota? <span className="font-normal text-muted-foreground">(opcional)</span></p>
-                <Input
-                  inputMode="numeric"
-                  placeholder="000.000.000-00"
-                  value={cpfNota}
-                  onChange={(e) => setCpfNota(mascaraDocumento(e.target.value))}
-                  className={cpfNota.trim() && !documentoValido(cpfNota) ? "border-red-500" : ""}
-                />
-                {cpfNota.trim() && !documentoValido(cpfNota) && (
-                  <p className="text-xs text-red-600">CPF/CNPJ inválido — confira os dígitos.</p>
-                )}
-                {cpfNota.trim() && documentoValido(cpfNota) && (
-                  <Input
-                    placeholder="Nome do cliente (opcional)"
-                    value={nomeNota}
-                    onChange={(e) => setNomeNota(e.target.value)}
-                  />
-                )}
-                <p className="text-xs text-muted-foreground">
-                  O cupom sai no CPF informado, sem precisar cadastrar o cliente.
-                </p>
-              </div>
-            )}
-            <label className="mt-2 flex cursor-pointer items-start gap-2 rounded-md border p-3 text-sm">
-              <input
-                type="checkbox"
-                className="mt-0.5"
-                checked={emitirCupom}
-                onChange={(e) => setEmitirCupom(e.target.checked)}
-              />
-              <span>
-                <span className="font-medium">Emitir NFC-e (cupom fiscal)</span>
-                <span className="block text-xs text-muted-foreground">
-                  Transmite o cupom à SEFAZ logo após a venda. Exige CSC cadastrado em
-                  Configurações SEFAZ; se falhar, a venda continua registrada e o cupom pode ser
-                  emitido depois em Notas Fiscais.
-                </span>
-              </span>
-            </label>
-            <div className="flex justify-between text-sm text-muted-foreground">
-              <span>Forma:</span>
-              <span className="capitalize">{forma.replace("_", " ")}</span>
+            <div className="text-right text-sm text-muted-foreground">
+              {cart.length} item(s) · {clienteDaVenda ? <b className="text-foreground">{clienteDaVenda.nome_razao}</b> : "Consumidor final"}
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setModalConfirmarVenda(false)}>
-              Voltar
-            </Button>
-            <Button onClick={handleFinalizarVenda}
-              disabled={finalizando || faltaReceber > 0}
-              title={faltaReceber > 0 ? `Ainda falta receber ${brl(faltaReceber)}` : undefined}
-              className="bg-green-600 hover:bg-green-700">
-              {finalizando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4 mr-1" />}
-              {faltaReceber > 0 ? `Falta ${brl(faltaReceber)}` : "Confirmar Venda"}
-            </Button>
-          </DialogFooter>
+
+          <div className="grid min-h-0 flex-1 gap-0 overflow-hidden md:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+            {/* ---- o que está sendo pago ---- */}
+            <div className="flex min-h-0 flex-col border-r bg-muted/20">
+              <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+                <table className="w-full text-sm">
+                  <tbody>
+                    {cart.map((i) => (
+                      <tr key={i.produto_id} className="border-b last:border-0">
+                        <td className="py-1.5 pr-2">
+                          <span className="font-medium">{i.nome}</span>
+                          {Number(i.desconto) > 0 && <span className="ml-2 text-xs text-red-600">-{brl(Number(i.desconto))}</span>}
+                        </td>
+                        <td className="py-1.5 text-right tabular-nums text-muted-foreground whitespace-nowrap">
+                          {i.quantidade} × {brl(i.preco_unitario)}
+                        </td>
+                        <td className="py-1.5 pl-3 text-right tabular-nums whitespace-nowrap">
+                          {brl(i.preco_unitario * i.quantidade - (Number(i.desconto) || 0))}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="space-y-2 border-t bg-background px-6 py-4">
+                <div className="flex justify-between text-sm">
+                  <span>Subtotal</span><span className="tabular-nums">{brl(subtotal)}</span>
+                </div>
+                {descontoItens > 0 && (
+                  <div className="flex justify-between text-sm text-red-600">
+                    <span>Desconto nos itens</span><span className="tabular-nums">-{brl(descontoItens)}</span>
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs">Desconto geral</Label>
+                    <div className="mt-1 flex gap-1">
+                      <Input type="number" step="0.01" placeholder="0,00" value={desconto}
+                        disabled={pagamentos.length > 0}
+                        onChange={(e) => setDesconto(e.target.value)} className="h-9" />
+                      <Button variant={descontoPercentual ? "default" : "outline"} size="sm" className="h-9 px-3"
+                        disabled={pagamentos.length > 0}
+                        onClick={() => setDescontoPercentual(!descontoPercentual)}>%</Button>
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Acréscimo</Label>
+                    <Input type="number" step="0.01" placeholder="0,00" value={acrescimo}
+                      disabled={pagamentos.length > 0}
+                      onChange={(e) => setAcrescimo(e.target.value)} className="mt-1 h-9" />
+                  </div>
+                </div>
+                {pagamentos.length > 0 && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Desconto e acréscimo travam depois do primeiro pagamento lançado — mudar o total
+                    agora deixaria o que já foi recebido sem bater. Remova os pagamentos para alterar.
+                  </p>
+                )}
+                <div className="flex items-end justify-between border-t pt-3">
+                  <span className="text-lg font-semibold">TOTAL</span>
+                  <span className="text-4xl font-bold tabular-nums text-green-600">{brl(total)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* ---- como paga e que documento sai ---- */}
+            <div className="min-h-0 space-y-5 overflow-y-auto px-6 py-4">
+              <PagamentosVenda
+                total={total}
+                pagamentos={pagamentos}
+                aoMudar={(p) => { setPagamentos(p); pedirORestante(p); }}
+                forma={forma as any}
+                aoMudarForma={(f) => { setForma(f as any); focarValorPagamento(); }}
+                valor={valorRecebido}
+                aoMudarValor={setValorRecebido}
+                parcelas={parcelasPagamento}
+                aoMudarParcelas={setParcelasPagamento}
+                aoLancar={lancarDigitado}
+                campoValorRef={campoValorPagamento}
+              />
+
+              <div className="space-y-2">
+                <Label className="text-xs">Documento fiscal</Label>
+                {!online && (
+                  <p className="flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs dark:bg-amber-950/20">
+                    <WifiOff className="h-3.5 w-3.5 shrink-0" />
+                    Sem internet: a venda é registrada e a nota fica para depois, em Notas Fiscais.
+                  </p>
+                )}
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {OPCOES_DOC.map((o) => {
+                    const bloqueio = !online && o.valor !== "nenhum"
+                      ? "sem internet"
+                      : o.valor === "nfe" ? faltaParaNFe(clienteDaVenda) : null;
+                    const escolhido = (online ? docFiscal : "nenhum") === o.valor;
+                    return (
+                      <button key={o.valor} type="button"
+                        disabled={!!bloqueio && o.valor !== "nfe"}
+                        onClick={() => setDocFiscal(o.valor)}
+                        className={`rounded-md border p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                          escolhido ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:bg-accent"
+                        }`}>
+                        <span className="flex items-center gap-2 text-sm font-medium">
+                          <o.Icone className="h-4 w-4" /> {o.titulo}
+                        </span>
+                        <span className="mt-1 block text-[11px] text-muted-foreground">{o.descricao}</span>
+                        {o.valor === "nfe" && bloqueio && (
+                          <span className="mt-1 block text-[11px] text-red-600">{bloqueio}</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {online && docFiscal === "nfce" && !clienteId && (
+                  <div className="space-y-2 rounded-md border p-3">
+                    <p className="text-sm font-medium">CPF na nota? <span className="font-normal text-muted-foreground">(opcional)</span></p>
+                    <Input
+                      inputMode="numeric"
+                      placeholder="000.000.000-00"
+                      value={cpfNota}
+                      onChange={(e) => setCpfNota(mascaraDocumento(e.target.value))}
+                      className={cpfNota.trim() && !documentoValido(cpfNota) ? "border-red-500" : ""}
+                    />
+                    {cpfNota.trim() && !documentoValido(cpfNota) && (
+                      <p className="text-xs text-red-600">CPF/CNPJ inválido — confira os dígitos.</p>
+                    )}
+                    {cpfNota.trim() && documentoValido(cpfNota) && (
+                      <Input placeholder="Nome do cliente (opcional)" value={nomeNota}
+                        onChange={(e) => setNomeNota(e.target.value)} />
+                    )}
+                    <p className="text-xs text-muted-foreground">O cupom sai no CPF informado, sem precisar cadastrar o cliente.</p>
+                  </div>
+                )}
+                {online && docFiscal === "nfe" && faltaParaNFe(clienteDaVenda) && (
+                  <p className="text-xs text-muted-foreground">
+                    Escolha o cliente no campo Cliente (F2) antes de abrir o pagamento, ou complete o
+                    cadastro dele em Clientes.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 border-t px-6 py-3">
+            <span className="text-sm text-muted-foreground">
+              {faltaReceber > 0 && pagamentos.length > 0
+                ? <>Falta receber <b className="text-amber-600">{brl(faltaReceber)}</b></>
+                : troco > 0 ? <>Troco <b className="text-orange-600">{brl(troco)}</b></> : null}
+            </span>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setTelaPagamento(false)} disabled={finalizando}>
+                Voltar
+              </Button>
+              <Button size="lg" onClick={confirmarPagamento} disabled={finalizando || cart.length === 0}
+                className="min-w-[240px] bg-green-600 hover:bg-green-700">
+                {finalizando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4 mr-1" />}
+                {(() => {
+                  const doc = online ? docFiscal : "nenhum";
+                  const sufixo = doc === "nfce" ? " e emitir NFC-e" : doc === "nfe" ? " e emitir NF-e" : "";
+                  return `Confirmar venda${sufixo} (F10)`;
+                })()}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 
