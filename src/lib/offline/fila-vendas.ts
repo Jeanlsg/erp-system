@@ -11,6 +11,8 @@
 // ============================================================
 
 import { useCallback, useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { invalidarDominios, DOMINIOS_DA_VENDA } from "@/lib/dominios-cache";
 import { supabase } from "@/lib/supabase";
 import {
   enfileirar, lerFila, removerDaFila, type VendaEnfileirada,
@@ -134,6 +136,7 @@ export async function reabilitarNaFila(item: VendaEnfileirada) {
 }
 
 export function useFilaVendas(online: boolean) {
+  const qc = useQueryClient();
   const [itens, setItens] = useState<VendaEnfileirada[]>([]);
   const [drenando, setDrenando] = useState(false);
 
@@ -152,11 +155,14 @@ export function useFilaVendas(online: boolean) {
     try {
       const r = await drenarFila();
       await recarregar();
+      // vendas que estavam guardadas acabaram de existir no banco: caixa,
+      // estoque e o resto que elas mexem têm de ser relidos (ver dominios-cache)
+      if (r.enviadas > 0) invalidarDominios(qc, ...DOMINIOS_DA_VENDA);
       return r;
     } finally {
       setDrenando(false);
     }
-  }, [recarregar]);
+  }, [recarregar, qc]);
 
   // Assim que a conexão volta, esvazia a fila sozinha: esperar o operador
   // lembrar de apertar um botão é como as vendas se perdem.

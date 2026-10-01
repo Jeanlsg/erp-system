@@ -20,6 +20,8 @@ import type {
   PapelPermissoes,
 } from "@/types/database";
 import { useAuthStore, mapaPapelPermissoes } from "@/lib/store/auth-store";
+import { invalidarDominios, DOMINIOS_DA_VENDA } from "@/lib/dominios-cache";
+import { lerTudo } from "@/lib/ler-tudo";
 
 export { isSupabaseConfigured, supabase };
 
@@ -181,7 +183,10 @@ export function useCreateCategoria() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["erp_categorias"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["erp_categorias"] });
+      invalidarDominios(qc, "estoque");
+    },
   });
 }
 
@@ -193,7 +198,10 @@ export function useUpdateCategoria() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["erp_categorias"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["erp_categorias"] });
+      invalidarDominios(qc, "estoque");
+    },
   });
 }
 
@@ -204,7 +212,10 @@ export function useDeleteCategoria() {
       const { error } = await supabase.from("erp_categorias").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["erp_categorias"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["erp_categorias"] });
+      invalidarDominios(qc, "estoque");
+    },
   });
 }
 
@@ -216,19 +227,19 @@ export function useProdutos(filters?: { lojaId?: string; search?: string }) {
     queryKey: ["erp_produtos", filters],
     queryFn: async () => {
       if (!isSupabaseConfigured()) return [];
-      let query = supabase
-        .from("erp_produtos")
-        .select("*")
-        .eq("ativo", true)
-        .order("nome");
-
-      if (filters?.search) {
-        query = query.or(`nome.ilike.%${filters.search}%,sku.ilike.%${filters.search}%`);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      return data ?? [];
+      // em páginas: o PostgREST corta em 1000 linhas sem avisar (ver ler-tudo.ts)
+      return lerTudo<Produto>(() => {
+        let query = supabase
+          .from("erp_produtos")
+          .select("*")
+          .eq("ativo", true)
+          .order("nome")
+          .order("id");
+        if (filters?.search) {
+          query = query.or(`nome.ilike.%${filters.search}%,sku.ilike.%${filters.search}%`);
+        }
+        return query;
+      });
     },
   });
 }
@@ -238,15 +249,15 @@ export function useProdutosComEstoque(lojaId?: string) {
     queryKey: ["erp_produtos-com-estoque", lojaId],
     queryFn: async () => {
       if (!isSupabaseConfigured()) return [];
-      const [produtosRes, estoqueRes] = await Promise.all([
-        supabase.from("erp_produtos").select("*, categoria:erp_categorias(*)").eq("ativo", true).order("nome"),
-        lojaId
-          ? supabase.from("erp_estoque").select("*").eq("loja_id", lojaId)
-          : supabase.from("erp_estoque").select("*"),
+      // em páginas: catálogo e estoque passam fácil de 1000 linhas (ver ler-tudo.ts)
+      const [produtosData, estoqueData] = await Promise.all([
+        lerTudo<any>(() => supabase.from("erp_produtos").select("*, categoria:erp_categorias(*)").eq("ativo", true).order("nome").order("id")),
+        lerTudo<any>(() => lojaId
+          ? supabase.from("erp_estoque").select("*").eq("loja_id", lojaId).order("id")
+          : supabase.from("erp_estoque").select("*").order("id")),
       ]);
-
-      if (produtosRes.error) throw produtosRes.error;
-      if (estoqueRes.error) throw estoqueRes.error;
+      const produtosRes = { data: produtosData };
+      const estoqueRes = { data: estoqueData };
 
       // dois índices do mesmo dado: por loja (quando há loja escolhida) e por
       // produto (quando não há, e o consumidor quer o saldo somado das lojas)
@@ -342,14 +353,15 @@ export function useProdutosCompleto(filters?: {
     queryKey: ["erp_produto_completo", filters],
     queryFn: async () => {
       if (!isSupabaseConfigured()) return [];
-      let query = supabase.from("v_erp_produto_completo").select("*");
-
-      if (filters?.lojaId) query = query.eq("loja_id", filters.lojaId);
-      if (filters?.statusEstoque) query = query.eq("status_estoque", filters.statusEstoque);
-      if (filters?.severidadeLote) query = query.eq("lote_mais_proximo_severidade", filters.severidadeLote);
-
-      const { data, error } = await query.order("nome");
-      if (error) throw error;
+      // ⚠️ Uma linha por produto POR LOJA: com as duas filiais, o corte de 1000
+      // linhas do PostgREST parava a lista em 500 produtos. Em páginas (ler-tudo.ts).
+      const data = await lerTudo<ProdutoCompleto>(() => {
+        let query = supabase.from("v_erp_produto_completo").select("*");
+        if (filters?.lojaId) query = query.eq("loja_id", filters.lojaId);
+        if (filters?.statusEstoque) query = query.eq("status_estoque", filters.statusEstoque);
+        if (filters?.severidadeLote) query = query.eq("lote_mais_proximo_severidade", filters.severidadeLote);
+        return query.order("nome").order("produto_id").order("loja_id");
+      });
 
       // Filtro de busca no client (no pode usar ilike em views sem permisses)
       let result = (data ?? []) as ProdutoCompleto[];
@@ -407,12 +419,12 @@ export function useEstoqueLoja(lojaId: string | undefined) {
     queryKey: ["erp_estoque", lojaId],
     queryFn: async () => {
       if (!isSupabaseConfigured() || !lojaId) return [];
-      const { data, error } = await supabase
+      // uma linha por produto: em páginas (ver ler-tudo.ts)
+      return lerTudo<Estoque>(() => supabase
         .from("erp_estoque")
         .select("*")
-        .eq("loja_id", lojaId);
-      if (error) throw error;
-      return data ?? [];
+        .eq("loja_id", lojaId)
+        .order("id"));
     },
     enabled: !!lojaId,
   });
@@ -612,15 +624,19 @@ export function useClientes(escopo?: { lojaId: string | null }) {
     enabled: !escopo || !!lojaId,
     queryFn: async () => {
       if (!isSupabaseConfigured()) return [];
-      let q = supabase
-        .from("erp_pessoas")
-        .select(escopo ? "*, filiais:erp_pessoa_lojas!inner(loja_id)" : "*")
-        .eq("ativo", true)
-        .eq("eh_cliente", true)
-        .order("nome_razao");
-      if (escopo && lojaId) q = q.eq("filiais.loja_id", lojaId);
-      const { data, error } = await q;
-      if (error) throw error;
+      // a base de clientes cresce a cada venda pelo celular: em páginas, senão o
+      // PDV deixa de achar quem passou do milésimo cadastro (ver ler-tudo.ts)
+      const data = await lerTudo<any>(() => {
+        let q = supabase
+          .from("erp_pessoas")
+          .select(escopo ? "*, filiais:erp_pessoa_lojas!inner(loja_id)" : "*")
+          .eq("ativo", true)
+          .eq("eh_cliente", true)
+          .order("nome_razao")
+          .order("id");
+        if (escopo && lojaId) q = q.eq("filiais.loja_id", lojaId);
+        return q;
+      });
       // o select dinâmico confunde o tipo gerado; o formato é o de erp_pessoas
       return (data ?? []) as unknown as Pessoa[];
     },
@@ -776,14 +792,18 @@ export function useDashboardStats(lojaId: string | undefined) {
       const totalVendas = (vendasHoje ?? []).reduce((s, v) => s + Number(v.total), 0);
       const tickets = vendasHoje?.length ?? 0;
 
-      const { data: produtos } = await supabase
+      // em páginas e com erro à vista: antes, acima de 1000 produtos o
+      // "estoque baixo" contava só os primeiros, e um erro virava zero calado
+      const produtos = await lerTudo<{ id: string; estoque_minimo: number }>(() => supabase
         .from("erp_produtos")
-        .select("id, estoque_minimo");
+        .select("id, estoque_minimo")
+        .order("id"));
 
-      const { data: estoque } = await supabase
+      const estoque = await lerTudo<{ produto_id: string; quantidade: number }>(() => supabase
         .from("erp_estoque")
         .select("produto_id, quantidade")
-        .eq("loja_id", lojaId);
+        .eq("loja_id", lojaId)
+        .order("id"));
 
       const estoqueMap: Record<string, number> = {};
       for (const e of estoque ?? []) {
@@ -833,9 +853,9 @@ export function useDashboardStats(lojaId: string | undefined) {
  * usada em todo lugar, para a grafia não voltar a divergir.
  */
 export function invalidarProdutos(qc: ReturnType<typeof useQueryClient>) {
-  for (const chave of ["erp_produtos", "erp_produto_completo", "erp_produtos-com-estoque"]) {
-    void qc.invalidateQueries({ queryKey: [chave] });
-  }
+  // o domínio do estoque contém as três chaves de produto e o que depende
+  // delas (estoque baixo, lotes vencendo, sugestão de compra, total por produto)
+  invalidarDominios(qc, "estoque");
 }
 
 export function useCreateProduto() {
@@ -875,6 +895,7 @@ export function useUpdateEstoque() {
       return data;
     },
     onSuccess: () => {
+      invalidarDominios(qc, "estoque");
       qc.invalidateQueries({ queryKey: ["erp_estoque"] });
       qc.invalidateQueries({ queryKey: ["erp_produtos-com-estoque"] });
       qc.invalidateQueries({ queryKey: ["erp_dashboard-stats"] });
@@ -918,6 +939,7 @@ export function useCreateConta() {
       return data;
     },
     onSuccess: () => {
+      invalidarDominios(qc, "contas");
       qc.invalidateQueries({ queryKey: ['erp_contas'] });
       qc.invalidateQueries({ queryKey: ['erp_contas-vencidas'] });
       qc.invalidateQueries({ queryKey: ['erp_dashboard-stats'] });
@@ -939,6 +961,7 @@ export function useUpdateConta() {
       return data;
     },
     onSuccess: () => {
+      invalidarDominios(qc, "contas");
       qc.invalidateQueries({ queryKey: ['erp_contas'] });
       qc.invalidateQueries({ queryKey: ['erp_contas-vencidas'] });
     },
@@ -953,6 +976,7 @@ export function useDeleteConta() {
       if (error) throw error;
     },
     onSuccess: () => {
+      invalidarDominios(qc, "contas");
       qc.invalidateQueries({ queryKey: ['erp_contas'] });
       qc.invalidateQueries({ queryKey: ['erp_contas-vencidas'] });
     },
@@ -1032,22 +1056,24 @@ export function useLotes(lojaId?: string) {
     queryFn: async () => {
       if (!isSupabaseConfigured()) return [];
       // Faz 3 queries em paralelo: lotes, produtos e estoque
-      const [lotesRes, produtosRes, estoqueRes] = await Promise.all([
-        supabase
+      // em páginas: lotes, catálogo e estoque passam de 1000 linhas (ver ler-tudo.ts)
+      const [lotesData, produtosData, estoqueData] = await Promise.all([
+        lerTudo<any>(() => supabase
           .from('erp_lotes')
           .select('*')
-          .order('data_validade', { ascending: true }),
-        supabase
+          .order('data_validade', { ascending: true })
+          .order('id')),
+        lerTudo<any>(() => supabase
           .from('erp_produtos')
-          .select('id, sku, nome, marca, unidade, estoque_minimo, preco_custo, preco_venda, controla_lote, ativo'),
-        lojaId
-          ? supabase.from('erp_estoque').select('*').eq('loja_id', lojaId)
-          : supabase.from('erp_estoque').select('*'),
+          .select('id, sku, nome, marca, unidade, estoque_minimo, preco_custo, preco_venda, controla_lote, ativo')
+          .order('id')),
+        lerTudo<any>(() => lojaId
+          ? supabase.from('erp_estoque').select('*').eq('loja_id', lojaId).order('id')
+          : supabase.from('erp_estoque').select('*').order('id')),
       ]);
-
-      if (lotesRes.error) throw lotesRes.error;
-      if (produtosRes.error) throw produtosRes.error;
-      if (estoqueRes.error) throw estoqueRes.error;
+      const lotesRes = { data: lotesData };
+      const produtosRes = { data: produtosData };
+      const estoqueRes = { data: estoqueData };
 
       // Mapas para lookup rpido
       const produtoMap: Record<string, any> = {};
@@ -1412,6 +1438,7 @@ export function useCreateCaixa() {
       return data;
     },
     onSuccess: () => {
+      invalidarDominios(qc, "caixa");
       qc.invalidateQueries({ queryKey: ['erp_caixa'] });
       qc.invalidateQueries({ queryKey: ['erp_caixa-aberto'] });
     },
@@ -1502,6 +1529,7 @@ export function useFecharCaixa() {
       return { success: true };
     },
     onSuccess: () => {
+      invalidarDominios(qc, "caixa");
       qc.invalidateQueries({ queryKey: ['erp_caixa'] });
       qc.invalidateQueries({ queryKey: ['erp_caixa-aberto'] });
       qc.invalidateQueries({ queryKey: ['erp_fechamentos-caixa'] });
@@ -1563,7 +1591,7 @@ export function useRelatorioFechamentos(f: { lojaId?: string; de: string; ate: s
     queryKey: ["erp_rel_fechamentos", f],
     queryFn: async () => {
       if (!isSupabaseConfigured()) return [];
-      let q = supabase
+      const q = supabase
         .from("erp_fechamentos_caixa")
         .select("*, caixa:erp_caixa(id, numero_caixa, loja_id, data_abertura, usuario_id, ponto:erp_pontos_venda(nome, numero))")
         .gte("data_fechamento", f.de)
@@ -1741,6 +1769,7 @@ export function useCreateVenda() {
       return vendaCriada;
     },
     onSuccess: () => {
+      invalidarDominios(qc, ...DOMINIOS_DA_VENDA);
       qc.invalidateQueries({ queryKey: ['erp_vendas'] });
       qc.invalidateQueries({ queryKey: ['erp_dashboard-stats'] });
       qc.invalidateQueries({ queryKey: ['erp_vendas-por-dia'] });
@@ -1959,6 +1988,7 @@ export function useCreateSangria() {
       return data;
     },
     onSuccess: () => {
+      invalidarDominios(qc, "caixa");
       qc.invalidateQueries({ queryKey: ['erp_sangrias'] });
       qc.invalidateQueries({ queryKey: ['erp_caixa'] });
       qc.invalidateQueries({ queryKey: ['erp_caixa-aberto'] });
@@ -2265,6 +2295,7 @@ export function useImportarNFe() {
       return { nfeEntrada, compra, contas_geradas: parcelas ?? 0 };
     },
     onSuccess: () => {
+      invalidarDominios(qc, "estoque", "contas", "pessoas");
       qc.invalidateQueries({ queryKey: ['erp_nfe_entrada'] });
       qc.invalidateQueries({ queryKey: ['erp_produtos'] });
       qc.invalidateQueries({ queryKey: ['erp_estoque'] });
@@ -2349,7 +2380,10 @@ export function useCreateRemessa() {
 
       return novaRemessa;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_remessas'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_remessas'] });
+      invalidarDominios(qc, "estoque", "contas");
+    },
   });
 }
 
@@ -2366,7 +2400,10 @@ export function useUpdateRemessa() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_remessas'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_remessas'] });
+      invalidarDominios(qc, "estoque", "contas");
+    },
   });
 }
 
@@ -2377,7 +2414,10 @@ export function useDeleteRemessa() {
       const { error } = await supabase.from('erp_remessas').delete().eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_remessas'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_remessas'] });
+      invalidarDominios(qc, "estoque", "contas");
+    },
   });
 }
 
@@ -2502,6 +2542,7 @@ export function useReceberRemessa() {
       if (marcaErr) throw marcaErr;
     },
     onSuccess: () => {
+      invalidarDominios(qc, "estoque", "contas");
       qc.invalidateQueries({ queryKey: ['erp_remessas'] });
       qc.invalidateQueries({ queryKey: ['erp_estoque'] });
     },
@@ -2534,6 +2575,7 @@ export function useCreateEntradaExtra() {
       return data;
     },
     onSuccess: () => {
+      invalidarDominios(qc, "caixa");
       qc.invalidateQueries({ queryKey: ['erp_entradas-extras'] });
       // O caixa também muda: sem isto o "Valor Esperado em Gaveta" ficava
       // sem a entrada até recarregar a página (useCreateSangria já fazia).
@@ -2901,6 +2943,7 @@ export function useCreatePessoa() {
       return data;
     },
     onSuccess: () => {
+      invalidarDominios(qc, "pessoas");
       qc.invalidateQueries({ queryKey: ['erp_clientes'] });
       qc.invalidateQueries({ queryKey: ['erp_clientes_compras'] });
       qc.invalidateQueries({ queryKey: ['erp_fornecedores'] });
@@ -2917,6 +2960,7 @@ export function useUpdatePessoa() {
       return data;
     },
     onSuccess: () => {
+      invalidarDominios(qc, "pessoas");
       qc.invalidateQueries({ queryKey: ['erp_clientes'] });
       qc.invalidateQueries({ queryKey: ['erp_fornecedores'] });
     },
@@ -2945,6 +2989,7 @@ export function useInativarPessoa() {
       if (error) throw error;
     },
     onSuccess: () => {
+      invalidarDominios(qc, "pessoas");
       qc.invalidateQueries({ queryKey: ['erp_clientes'] });
       qc.invalidateQueries({ queryKey: ['erp_clientes_compras'] });
       qc.invalidateQueries({ queryKey: ['erp_fornecedores'] });
@@ -2970,6 +3015,7 @@ export function useRemoverPapelPessoa() {
       if (error) throw error;
     },
     onSuccess: () => {
+      invalidarDominios(qc, "pessoas");
       qc.invalidateQueries({ queryKey: ['erp_clientes'] });
       qc.invalidateQueries({ queryKey: ['erp_clientes_compras'] });
       qc.invalidateQueries({ queryKey: ['erp_fornecedores'] });
@@ -3067,7 +3113,10 @@ export function useUpdatePedidoStatus() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_pedidos'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_pedidos'] });
+      invalidarDominios(qc, "pedidos", "pessoas");
+    },
   });
 }
 
@@ -3179,20 +3228,6 @@ export function useKits(lojaId?: string) {
 // ========================================
 // CAIXA
 // ========================================
-export function useCaixa(lojaId?: string) {
-  return useQuery<any[]>({
-    queryKey: ['erp_caixa', lojaId],
-    queryFn: async () => {
-      if (!isSupabaseConfigured()) return [];
-      let query = supabase.from('erp_caixa').select('*').order('data_abertura', { ascending: false });
-      if (lojaId) query = query.eq('loja_id', lojaId);
-      const { data, error } = await query;
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-}
-
 export function useCaixaMovimentacoes(caixaId?: string) {
   return useQuery<any[]>({
     queryKey: ['erp_caixa_movimentacoes', caixaId],
@@ -3415,7 +3450,10 @@ export function useCreateCartaoFidelidade() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_cartao_fidelidade'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_cartao_fidelidade'] });
+      invalidarDominios(qc, "pessoas", "fidelidade");
+    },
   });
 }
 
@@ -4053,7 +4091,14 @@ export function useUpsertConfiguracao() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_configuracoes_gerais'] }),
+    // Três leituras da mesma tabela: a tela de Configurações, a lista geral e a
+    // config do caixa (ocultar valores, valores por forma). Só a segunda era
+    // relida — mudar a conferência às cegas não chegava ao PDV aberto.
+    onSuccess: () => {
+      for (const chave of ['erp_configuracoes_gerais', 'erp_configuracoes_sistema', 'erp_caixa-config']) {
+        void qc.invalidateQueries({ queryKey: [chave] });
+      }
+    },
   });
 }
 
@@ -4249,6 +4294,7 @@ export function useLancarComissoesEmContas() {
       return data as any;
     },
     onSuccess: () => {
+      invalidarDominios(qc, "contas", "venda");
       qc.invalidateQueries({ queryKey: ["erp_comissoes"] });
       qc.invalidateQueries({ queryKey: ["erp_contas"] });
     },
@@ -4295,6 +4341,7 @@ export function useAtenderSolicitacaoLgpd() {
       return data as any;
     },
     onSuccess: () => {
+      invalidarDominios(qc, "pessoas", "contas");
       // a anonimização mexe na pessoa: as listas de clientes precisam relê-la
       qc.invalidateQueries({ queryKey: ["erp_lgpd_solicitacoes"] });
       qc.invalidateQueries({ queryKey: ["erp_clientes"] });
@@ -4655,7 +4702,10 @@ export function useCreateLoja() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_lojas'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_lojas'] });
+      invalidarDominios(qc, "estoque");
+    },
   });
 }
 
@@ -4667,7 +4717,10 @@ export function useUpdateLoja() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_lojas'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_lojas'] });
+      invalidarDominios(qc, "estoque");
+    },
   });
 }
 
@@ -4765,6 +4818,7 @@ export function useReceberCompra() {
       return { itens: itens.length, contas_geradas: Number(parcelas ?? 0) };
     },
     onSuccess: () => {
+      invalidarDominios(qc, "estoque", "contas", "pessoas");
       qc.invalidateQueries({ queryKey: ['erp_compras'] });
       invalidarProdutos(qc);
       qc.invalidateQueries({ queryKey: ['erp_estoque'] });
@@ -4862,7 +4916,10 @@ export function useCreatePedido() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_pedidos'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_pedidos'] });
+      invalidarDominios(qc, "pedidos", "pessoas");
+    },
   });
 }
 
@@ -5053,6 +5110,7 @@ export function useRegistrarDevolucao() {
       return data;
     },
     onSuccess: () => {
+      invalidarDominios(qc, ...DOMINIOS_DA_VENDA);
       // devolução mexe em estoque, kardex, contas e pontos — invalida o conjunto
       qc.invalidateQueries({ queryKey: ['erp_devolucoes'] });
       qc.invalidateQueries({ queryKey: ['erp_itens_devolviveis'] });
@@ -5103,7 +5161,10 @@ export function useCreateOrcamento() {
       }
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_orcamentos'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_orcamentos'] });
+      invalidarDominios(qc, "pedidos", "pessoas");
+    },
   });
 }
 
@@ -5114,7 +5175,10 @@ export function useUpdateOrcamentoStatus() {
       const { error } = await supabase.from('erp_orcamentos').update({ status }).eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_orcamentos'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_orcamentos'] });
+      invalidarDominios(qc, "pedidos", "pessoas");
+    },
   });
 }
 
@@ -5147,7 +5211,10 @@ export function useCreateOrdemServico() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_ordens_servico'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_ordens_servico'] });
+      invalidarDominios(qc, "pessoas");
+    },
   });
 }
 
@@ -5158,7 +5225,10 @@ export function useUpdateOrdemServico() {
       const { error } = await supabase.from('erp_ordens_servico').update(updates).eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_ordens_servico'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_ordens_servico'] });
+      invalidarDominios(qc, "pessoas");
+    },
   });
 }
 
@@ -5195,7 +5265,10 @@ export function useCreateConsignacao() {
       }
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_consignacoes'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_consignacoes'] });
+      invalidarDominios(qc, "pessoas");
+    },
   });
 }
 
@@ -5208,7 +5281,10 @@ export function useUpdateConsignacaoStatus() {
       const { error } = await supabase.from('erp_consignacoes').update(updates).eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_consignacoes'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_consignacoes'] });
+      invalidarDominios(qc, "pessoas");
+    },
   });
 }
 
@@ -5239,7 +5315,10 @@ export function useCreateLocacao() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_locacoes'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_locacoes'] });
+      invalidarDominios(qc, "pessoas");
+    },
   });
 }
 
@@ -5252,7 +5331,10 @@ export function useUpdateLocacaoStatus() {
       const { error } = await supabase.from('erp_locacoes').update(updates).eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_locacoes'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_locacoes'] });
+      invalidarDominios(qc, "pessoas");
+    },
   });
 }
 
@@ -5312,6 +5394,7 @@ export function useAjustarEstoque() {
       if (error) throw new Error(`Falha ao ajustar estoque: ${error.message}`);
     },
     onSuccess: () => {
+      invalidarDominios(qc, "estoque");
       qc.invalidateQueries({ queryKey: ['erp_estoque'] });
       qc.invalidateQueries({ queryKey: ['erp_estoque_movimentacoes'] });
     },
@@ -5610,6 +5693,7 @@ export function useBaixarConta() {
       if (error) throw new Error(`Falha ao baixar conta: ${error.message}`);
     },
     onSuccess: () => {
+      invalidarDominios(qc, "contas");
       qc.invalidateQueries({ queryKey: ['erp_contas'] });
       qc.invalidateQueries({ queryKey: ['erp_dre_mensal'] });
     },
@@ -5636,6 +5720,7 @@ export function useConverterOrcamento() {
       return data as string;  // id da venda criada
     },
     onSuccess: () => {
+      invalidarDominios(qc, ...DOMINIOS_DA_VENDA);
       // A conversão baixa estoque e gera a conta a receber, então invalida tudo isso
       qc.invalidateQueries({ queryKey: ['erp_orcamentos'] });
       qc.invalidateQueries({ queryKey: ['erp_vendas'] });
@@ -6038,6 +6123,7 @@ export function useAbrirCrediario() {
       return data;
     },
     onSuccess: () => {
+      invalidarDominios(qc, "contas");
       // O contrato substitui a conta a receber da venda, então o financeiro muda junto.
       qc.invalidateQueries({ queryKey: ['erp_crediario_contratos'] });
       qc.invalidateQueries({ queryKey: ['erp_crediario_clientes'] });
@@ -6078,7 +6164,10 @@ export function useEmitirCartaoFidelidade() {
       if (error) throw new Error(error.message);
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_cartao_fidelidade'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_cartao_fidelidade'] });
+      invalidarDominios(qc, "pessoas", "fidelidade");
+    },
   });
 }
 
@@ -6094,7 +6183,10 @@ export function useResgatarPontos() {
       if (error) throw new Error(error.message);
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['erp_cartao_fidelidade'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['erp_cartao_fidelidade'] });
+      invalidarDominios(qc, "fidelidade", "pessoas");
+    },
   });
 }
 

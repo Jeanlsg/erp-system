@@ -79,6 +79,7 @@ Armadilhas deste teste (todas já aconteceram):
 | PGRST201 | lista vazia, sem exceção na tela | embed ambíguo: duas FKs para a mesma tabela → `alias:tabela!nome_da_fk(...)` |
 | PGRST205 | tabela "não existe" | cache do schema → NOTIFY / restart do rest |
 | PGRST116 | `.maybeSingle()` falha | mais de uma linha onde se esperava uma → UNIQUE no banco |
+| corte de 1000 | lista/soma menor que o real, sem erro | `PGRST_DB_MAX_ROWS=1000` → `lerTudo()` no front, ou agregue no banco (RPC/view) |
 
 ## Backup, restauração e ensaio
 

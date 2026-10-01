@@ -10,7 +10,7 @@
 // com ou sem e-commerce, é o mesmo fluxo de trabalho da loja.
 // ============================================================
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useClientesDaFilial } from "@/lib/hooks/use-clientes-da-filial";
 import { Bike, Loader2, Plus, MapPin, Trash2, Check } from "lucide-react";
 import { toast } from "sonner";
@@ -98,12 +98,28 @@ export function NovoPedidoBalcaoDialog({
     setSalvarNoCadastro(false);
   };
 
-  // ao trocar de cliente, o endereço padrão dele já entra no formulário
+  // Ao trocar de cliente, o endereço padrão DELE entra no formulário.
+  //
+  // ⚠️ O endereço escolhido é do cliente anterior até prova em contrário. Antes,
+  // trocar de A para B mantinha marcado o endereço de A; o padrão de B não
+  // entrava, e salvar o pedido regravava o endereço de A (pelo id) como sendo
+  // de B — o cadastro de outro cliente mudava em silêncio.
+  const clienteAnterior = useRef("");
   useEffect(() => {
-    if (!form.cliente_id) { setEnderecoEscolhido(null); return; }
+    if (!form.cliente_id) { setEnderecoEscolhido(null); clienteAnterior.current = ""; return; }
+    const trocou = clienteAnterior.current !== form.cliente_id;
+    if (trocou) {
+      // de um cliente para outro: o texto do endereço também era do anterior
+      if (clienteAnterior.current) {
+        setForm((f) => ({ ...f, cep: "", logradouro: "", numero: "", complemento: "", bairro: "", cidade: "", uf: "", referencia: "" }));
+        setSalvarNoCadastro(true);
+      }
+      clienteAnterior.current = form.cliente_id;
+      setEnderecoEscolhido(null);
+    }
     const padrao = (enderecos as any[]).find((e) => e.padrao) ?? (enderecos as any[])[0];
-    if (padrao && !enderecoEscolhido) usarEndereco(padrao);
-  }, [enderecos, form.cliente_id]);
+    if (padrao && (trocou || !enderecoEscolhido)) usarEndereco(padrao);
+  }, [enderecos, form.cliente_id, enderecoEscolhido]);
 
   const cliente = useMemo(
     () => (clientes as any[]).find((c) => c.id === form.cliente_id),

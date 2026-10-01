@@ -1,4 +1,6 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { invalidarDominios, DOMINIOS_DA_VENDA } from "@/lib/dominios-cache";
 import { useClientesDaFilial } from "@/lib/hooks/use-clientes-da-filial";
 import { FecharCaixaIndiretoDialog } from "@/components/fechar-caixa-indireto";
 import { useNavigate } from "react-router-dom";
@@ -106,7 +108,10 @@ export function PDVPage() {
   // Sair da frente de caixa NÃO fecha o caixa: volta para a tela de seleção,
   // com o turno em aberto, como no sistema anterior da loja (F12).
   const [saiuDaFrente, setSaiuDaFrente] = useState(false);
-  const { data: caixasAbertosMeus = [] } = useCaixasAbertosDoUsuario(user?.id);
+  const qc = useQueryClient();
+  const {
+    data: caixasAbertosMeus = [], refetch: recarregarCaixa, isFetching: atualizandoCaixa,
+  } = useCaixasAbertosDoUsuario(user?.id);
   const caixaEscolhidoId = usePdvModo((st) => st.caixaAtivoId);
   const setCaixaEscolhidoId = usePdvModo((st) => st.setCaixaAtivoId);
   const variosCaixas = podeVariosCaixas(user as any);
@@ -321,6 +326,12 @@ export function PDVPage() {
   // Estados de modais
   const [modalAbertura, setModalAbertura] = useState(false);
   const [modalFechamento, setModalFechamento] = useState(false);
+  // Relê o resumo do caixa sempre que o fechamento abre — pelo botão, pelo
+  // Ctrl+X ou por onde vier. O Radix não chama onOpenChange quando quem abre
+  // é o próprio código, então o gancho tem de ser o estado, não o diálogo.
+  useEffect(() => {
+    if (modalFechamento) void recarregarCaixa();
+  }, [modalFechamento, recarregarCaixa]);
   const [modalConfigCaixa, setModalConfigCaixa] = useState(false);
   const [modalCaixasAbertos, setModalCaixasAbertos] = useState(false);
   // Tela de pagamento: ocupa a frente de caixa inteira. Forma, valor, desconto
@@ -792,6 +803,12 @@ export function PDVPage() {
       limparCarrinho();
       setTelaPagamento(false);
       void fila.recarregar();
+      // ⚠️ Sem isto o resumo do caixa aberto ficava o da ABERTURA: o fechamento
+      // mostrava como esperado na gaveta só o saldo inicial, e o operador
+      // digitava esse número. O banco sempre calculou certo (vw_caixa_resumo);
+      // a tela é que não sabia que tinha de reler. Vale também para o estoque
+      // do catálogo, contas do crediário, painel e cadastro do cliente.
+      invalidarDominios(qc, ...DOMINIOS_DA_VENDA);
 
       if (!envio.enviada) {
         // Sem rede a venda está guardada localmente e sobe sozinha depois.
@@ -2066,7 +2083,9 @@ export function PDVPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal: Fechamento de Caixa */}
+      {/* Modal: Fechamento de Caixa
+          O esperado é relido ao abrir: o resumo em cache pode ser de antes da
+          última venda — inclusive restaurado do localStorage depois de um F5. */}
       <Dialog open={modalFechamento} onOpenChange={setModalFechamento}>
         <DialogContent>
           <DialogHeader>
@@ -2193,10 +2212,12 @@ export function PDVPage() {
             <Button
               variant="destructive"
               onClick={handleFecharCaixa}
-              disabled={fecharCaixa.isPending
+              disabled={fecharCaixa.isPending || atualizandoCaixa
                 || (exigirValoresPorForma ? faltaDeclarar : valorContado === "")}
             >
-              {fecharCaixa.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Fechar Caixa"}
+              {fecharCaixa.isPending || atualizandoCaixa
+                ? <><Loader2 className="h-4 w-4 animate-spin mr-1" />{atualizandoCaixa ? "Atualizando valores…" : ""}</>
+                : "Fechar Caixa"}
             </Button>
           </DialogFooter>
         </DialogContent>

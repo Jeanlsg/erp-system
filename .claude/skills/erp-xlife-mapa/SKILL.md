@@ -38,6 +38,12 @@ Tudo self-hosted numa VPS com EasyPanel.
 - Tudo em português: código de domínio, comentários, commits, mensagens de tela.
 - Comentário explica **por quê**, com `⚠️` no que já causou bug. Leia os comentários antes de mudar um trecho: quase todos registram um defeito real.
 - Migration nova = próximo número (`NNN_nome.sql`), `BEGIN/COMMIT`, idempotente.
+- **Gravou? Diga o domínio que mudou:** `invalidarDominios(qc, "estoque")` / `...DOMINIOS_DA_VENDA`
+  (`src/lib/dominios-cache.ts`), nunca uma lista de chaves solta.
+- **Lista que pode passar de 1000 linhas:** `lerTudo(() => consulta.order(…).order("id"))`
+  (`src/lib/ler-tudo.ts`). O PostgREST corta em 1000 sem erro.
+- Cache: `staleTime` padrão 30 s e releitura ao voltar à aba (`src/main.tsx`). O cache inteiro é
+  persistido no `localStorage` por 24 h.
 - Cliente Supabase do front usa `db: { schema: 'erp' }`; por `curl`, mande `Accept-Profile: erp`.
 - Nada de dado real em código, doc ou print: vai no `.env` (ignorado pelo git).
 
@@ -102,3 +108,8 @@ Carregue com `source .claude/skills/erp-deploy/scripts/env.sh`.
 
 **Condicional**
 9. NFS-e pelo Emissor Nacional (obrigatória desde 01/11/2026) se a loja prestar serviço.
+
+**Privacidade**
+10. O persister do React Query grava TODAS as consultas no `localStorage` por 24 h — CPF de
+    cliente, contas, usuários — no computador do balcão. Proposta: persistir só o que precisa
+    abrir sem internet (catálogo já tem espelho próprio em IndexedDB).

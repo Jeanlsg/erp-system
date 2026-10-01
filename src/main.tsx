@@ -15,13 +15,19 @@ declare module "react-router-dom" {
   }
 }
 
+// ⚠️ Dado de balcão envelhece em segundos, e não só pelo que ESTA aba grava:
+// a venda feita no outro caixa, a sangria do gerente, o estoque da outra
+// filial. Com 5 minutos de "fresco" e sem reler ao voltar à aba, o caixa
+// fechava com o esperado da abertura — e o cache persistido no localStorage
+// fazia isso sobreviver até a um F5. Quem precisa de mais tempo (catálogo
+// espelhado offline, tabelas de referência) declara o próprio staleTime.
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 5,
+      staleTime: 1000 * 30,
       gcTime: 1000 * 60 * 60 * 24,
       retry: 1,
-      refetchOnWindowFocus: false,
+      refetchOnWindowFocus: true,
     },
   },
 });

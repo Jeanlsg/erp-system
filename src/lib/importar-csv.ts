@@ -63,7 +63,7 @@ export const soDigitos = (v: string) => String(v ?? "").replace(/\D/g, "");
  * brasileiro exporta com `;`. Remove BOM e aceita CRLF.
  */
 export function parseCSV(texto: string): string[][] {
-  const limpo = texto.replace(/^﻿/, "");
+  const limpo = texto.replace(/^\uFEFF/, "");
   const primeira = limpo.split(/\r?\n/, 1)[0] ?? "";
   const sep = (primeira.match(/;/g)?.length ?? 0) >= (primeira.match(/,/g)?.length ?? 0) ? ";" : ",";
   const linhas: string[][] = [];

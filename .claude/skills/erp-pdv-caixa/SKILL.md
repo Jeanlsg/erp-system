@@ -26,6 +26,9 @@ defeito real). Regras puras ficam em `src/lib/*` e têm teste; mantenha assim.
 5. **Depois:** triggers em `erp_vendas` — conta a receber, comissão, pontos de fidelidade,
    auditoria, fila do CRM (`trg_crm_sync_venda`). Nota fiscal pela edge `erp-emitir-nfe`
    (se falhar, a venda fica e a nota sai depois em Notas Fiscais).
+6. **A tela relê tudo que a venda mexeu:** `invalidarDominios(qc, ...DOMINIOS_DA_VENDA)` logo
+   depois de gravar, e de novo quando a fila offline sobe. ⚠️ Sem isso, o fechamento mostrou como
+   esperado na gaveta só o saldo inicial depois de R$ 400 vendidos em dinheiro.
 
 ## Offline
 
@@ -43,6 +46,9 @@ defeito real). Regras puras ficam em `src/lib/*` e têm teste; mantenha assim.
 - Abrir: confirma a senha de quem assume (login do Supabase; a senha não é guardada).
 - Sangria (Ctrl+S) e entrada extra (Ctrl+E): só a forma **dinheiro** mexe no esperado da gaveta.
   Ctrl+A aplica entrada em pedido (`aplicar_entrada_pedido`).
+- **Esperado na gaveta** vem do banco (`vw_caixa_resumo.valor_esperado_gaveta` = inicial +
+  vendas em dinheiro − sangrias em dinheiro + entradas em dinheiro). A tela nunca recalcula.
+  O resumo é relido sempre que o fechamento abre, e o botão espera a leitura terminar.
 - Fechar (Ctrl+X): `useFecharCaixa` marca o caixa fechado; o trigger
   `fn_criar_fechamento_automatico` cria a linha em `erp_fechamentos_caixa` zerada; a tela completa
   por upsert. **Upsert = UPDATE** → precisa da policy de UPDATE para quem abriu o caixa (migration 075).

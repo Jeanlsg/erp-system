@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { documentoValido, mascaraDocumento } from "@/lib/documento";
+import { invalidarDominios } from "@/lib/dominios-cache";
 
 type ClienteErp = { id: string; nome_razao: string; cpf_cnpj: string | null; celular: string | null; telefone: string | null; email: string | null };
 type LeadCrm = { lead_id: string; nome: string | null; email: string | null; cpf: string | null; telefone: string | null; workspace: string | null; etapa: string | null; status: string | null };
@@ -106,6 +107,7 @@ export function ClienteRapidoPdvDialog({ open, onOpenChange, onCliente, online }
       }
       void qc.invalidateQueries({ queryKey: ["erp_clientes"] });
       void qc.invalidateQueries({ queryKey: ["erp_clientes_compras"] });
+      invalidarDominios(qc, "pessoas");
       toast.success(`${data.nome_razao} cadastrado(a)${lead ? " a partir do CRM" : ""}.`);
       onCliente(data.id, data.nome_razao);
       onOpenChange(false);

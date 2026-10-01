@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Cog, Flag, Search, Loader2, ShieldOff, ShieldCheck, Power, AlertTriangle, Eye, History, Lock, CheckSquare, Square, Layers, Save, Trash2, Crown, CornerDownRight } from "lucide-react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import {
   useFeatureFlags, useToggleFeatureFlag, useAdminPrincipal,
@@ -859,6 +859,7 @@ function FeatureFlagsPanel() {
 const CHAVES_OCULTAS = new Set(["chave_cripto_certificado"]);
 
 function ConfigTecnicasPanel() {
+  const qc = useQueryClient();
   // a aba de páginas só existe para o administrador principal; mandar os
   // outros usuários para uma aba que eles não têm é pior que não dizer nada
   const { data: ehPrincipal = false } = useAdminPrincipal();
@@ -876,7 +877,14 @@ function ConfigTecnicasPanel() {
       const { error } = await supabase.from("erp_configuracoes_sistema").upsert(item);
       if (error) throw error;
     },
-    onSuccess: () => refetch(),
+    // a mesma tabela alimenta a config do caixa (conferência às cegas, valores
+    // por forma) e a lista geral: sem reler, o PDV aberto seguia a regra antiga
+    onSuccess: () => {
+      void refetch();
+      for (const chave of ["erp_configuracoes_gerais", "erp_caixa-config"]) {
+        void qc.invalidateQueries({ queryKey: [chave] });
+      }
+    },
   });
 
   if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="Configurações Técnicas" />;

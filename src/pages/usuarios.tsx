@@ -4,6 +4,8 @@
 // ============================================================
 
 import { useState, useMemo, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { invalidarDominios } from "@/lib/dominios-cache";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import {
   Card, CardContent, CardHeader, CardTitle,
@@ -312,6 +314,7 @@ function ImportarDoCrmDialog({ open, onOpenChange, onImportado }: {
 }
 
 export function UsuariosPage() {
+  const qc = useQueryClient();
   const { user: currentUser } = useAuth();
   const { data: usuarios = [], isLoading, refetch } = useUsuarios();
   const { data: lojas = [] } = useLojas();
@@ -493,6 +496,7 @@ export function UsuariosPage() {
       comissao_percentual: 0, gerente: false,
       data_demissao: formUsuario.funcionarioAtivo ? null : hoje,
     });
+    invalidarDominios(qc, "pessoas");
   };
 
   const salvarUsuario = async () => {

@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
 import { brl, date as fmtData } from "@/lib/format";
+import { invalidarDominios } from "@/lib/dominios-cache";
 import {
   parseCSV, parseDataBR, parseNumeroBR, soDigitos, semAcento,
   interpretarPlanilha, baixarModeloCSV, type LinhaImportacao,
@@ -245,6 +246,7 @@ export function ImportarContasDialog({ open, onOpenChange, tipo, lojas, lojaIdIn
       toast.success(`Importação concluída: ${inseridos} conta(s), ${brl(somaInserida)}.`);
       void qc.invalidateQueries({ queryKey: ["erp_contas"] });
       void qc.invalidateQueries({ queryKey: ["erp_dashboard"] });
+      invalidarDominios(qc, "contas");
       setItens([]);
       setNomeArquivo("");
     } catch (e: any) {

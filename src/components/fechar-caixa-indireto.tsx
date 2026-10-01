@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
 import { brl } from "@/lib/format";
+import { invalidarDominios } from "@/lib/dominios-cache";
 
 interface Props {
   /** o caixa a fechar; null fecha o diálogo */
@@ -59,6 +60,7 @@ export function FecharCaixaIndiretoDialog({ caixa, aoFechar, aoConcluir }: Props
           : `Caixa fechado com diferença de ${brl(Number(r?.diferenca ?? 0))}.`);
       void qc.invalidateQueries({ queryKey: ["erp_caixa"] });
       void qc.invalidateQueries({ queryKey: ["erp_caixa-aberto"] });
+      invalidarDominios(qc, "caixa");
       aoConcluir?.();
       aoFechar();
     } catch (e: any) {

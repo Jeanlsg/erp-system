@@ -16,6 +16,7 @@ import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { brl, date } from "@/lib/format";
 import { toast } from "sonner";
 import { type Role, ROLES, roleLabels, papelPrincipal } from "@/lib/store/auth-store";
+import { invalidarDominios } from "@/lib/dominios-cache";
 
 export function FuncionariosPage() {
   const { lojaId } = useAutoSelectLoja();
@@ -236,6 +237,7 @@ export function FuncionariosPage() {
       });
       await definirFaixas.mutateAsync({ funcionarioId: editando.id, faixas: faixasNumericas });
       void qc.invalidateQueries({ queryKey: ["erp_usuarios_vinculo"] });
+      invalidarDominios(qc, "pessoas");
       void qc.invalidateQueries({ queryKey: ["erp_usuarios"] });
       toast.success(usuarioId && !editando.usuario_id ? "Funcionário atualizado e acesso criado." : "Funcionário atualizado.");
       setModalAberto(false);
@@ -354,6 +356,8 @@ export function FuncionariosPage() {
     } else {
       toast.success(`${form.nome} cadastrado(a).`);
     }
+    // a pessoa nasce aqui com ou sem acesso: Clientes, vendedores e afins relêem
+    invalidarDominios(qc, "pessoas");
     setModalAberto(false);
     setForm(FORM_VAZIO);
   };

@@ -23,6 +23,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
+import { invalidarDominios } from "@/lib/dominios-cache";
 import {
   parseCSV, parseDataBR, parseNumeroBR, soDigitos, semAcento,
   interpretarPlanilha, baixarModeloCSV, type LinhaImportacao,
@@ -242,6 +243,7 @@ export function ImportarPessoasDialog({ open, onOpenChange, papel }: Props) {
       void qc.invalidateQueries({ queryKey: ["erp_clientes_compras"] });
       void qc.invalidateQueries({ queryKey: ["erp_fornecedores"] });
       void qc.invalidateQueries({ queryKey: ["erp_pessoas"] });
+      invalidarDominios(qc, "pessoas");
       setItens([]);
       setNomeArquivo("");
     } catch (e: any) {
