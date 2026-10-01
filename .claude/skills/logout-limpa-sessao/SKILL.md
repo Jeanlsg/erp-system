@@ -1,9 +1,25 @@
 ---
 name: logout-limpa-sessao
-description: Regra para QUALQUER sistema com login (web, PWA, mobile; React Query, SWR, Apollo, Redux, zustand, Pinia; Supabase, Firebase, Auth0, NextAuth, JWT próprio) — cada logout zera tudo o que o navegador guardou como aquele usuário (cache de consultas em memória e persistido, stores, sessionStorage, IndexedDB, Cache Storage do service worker), sem apagar dado ainda não enviado nem preferência do aparelho; o login de outra pessoa faz a mesma limpeza. Traz o contrato da função sair(), a vigia de sessão, chaves de cache por usuário, o lado do servidor, o teste de regressão e um script de auditoria. Use ao implementar ou revisar login/logout/troca de usuário, ao investigar "depois de sair e entrar com outro usuário, ainda aparecem telas/dados do anterior", ao ligar persistência de cache, ou ao auditar um sistema.
+description: Sair e entrar no ERP X-Life zeram tudo o que o navegador guardou como aquele usuário — cache do React Query em memória e persistido no localStorage, filial escolhida, sessionStorage, espelho offline do IndexedDB — sem apagar a fila de vendas não enviadas, a chave do aparelho nem preferências do aparelho. Traz onde isso vive no código (logout, esquecerDadosDoUsuario, vigiarSessao, query-client), o contrato da função de sair, chaves de cache com o id do usuário, o teste de regressão, o roteiro manual (dono → sair → operador no mesmo navegador) e um script de auditoria. Use ao mexer em login, logout, troca de usuário, persistência de cache ou store persistido, ou ao investigar "depois de sair e entrar com outro usuário, ainda aparecem telas/dados do anterior".
 ---
 
-# Logout limpa a sessão — todo sistema, sempre
+# Logout limpa a sessão
+
+## No ERP (onde está)
+
+| O quê | Onde |
+|---|---|
+| Sair | `logout()` em `src/lib/store/auth-store.ts` — `signOut({ scope: "local" })` e depois `esquecerDadosDoUsuario()` |
+| A limpeza | `esquecerDadosDoUsuario()` (mesmo arquivo): `limparCacheDoUsuario()` de `src/lib/query-client.ts`, filial (`useLojaAtualStore`), `sessionStorage`, `apagarCacheOffline()` de `src/lib/offline/db.ts` |
+| Entrar | `login()` chama a mesma limpeza; a mesma pessoa voltando recupera a filial |
+| Sessão que cai sozinha | `vigiarSessao()` (chamado no `main.tsx`) |
+| Venda offline pendente | `podeSair()` pergunta antes; a fila (`fila_vendas`) nunca é apagada |
+| Chave com o id | `useAdminPrincipal` → `["erp_admin_principal", usuarioId]` |
+| Teste | `src/lib/store/logout-limpa-sessao.test.ts` |
+| Fica no navegador (de propósito) | `erp-settings` (config do terminal), menu recolhido, documento fiscal padrão do PDV, `erp-senha-caixa-<id>`, IndexedDB `fila_vendas` e `chaves` |
+
+Guardou algo novo no navegador que depende de quem está logado? Entra em
+`esquecerDadosDoUsuario()`, ou leva o id do usuário na chave.
 
 **Regra:** tudo o que foi lido com a credencial de alguém é dado dessa pessoa. Ao sair — e ao
 entrar outra pessoa — o navegador esquece **tudo** isso. A limpeza é por **exceção**
@@ -180,10 +196,10 @@ E2E/manual (DevTools › Application), no **mesmo navegador**:
 4. Voltar do navegador depois do logout: não mostra tela logada.
 5. Duas abas: sair numa → a outra vai para o login.
 
-## Auditar um sistema
+## Auditar
 
 ```bash
-bash ~/.claude/skills/logout-limpa-sessao/scripts/auditar-logout.sh /caminho/do/repo
+bash .claude/skills/logout-limpa-sessao/scripts/auditar-logout.sh .
 ```
 
 Lista (heurística — confirme lendo o código):
