@@ -1,9 +1,9 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { persistQueryClient } from "@tanstack/react-query-persist-client";
-import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { queryClient, ativarPersistencia } from "@/lib/query-client";
+import { vigiarSessao } from "@/lib/store/auth-store";
 import { Toaster } from "sonner";
 import App from "./App";
 import "./index.css";
@@ -15,49 +15,11 @@ declare module "react-router-dom" {
   }
 }
 
-// ⚠️ Dado de balcão envelhece em segundos, e não só pelo que ESTA aba grava:
-// a venda feita no outro caixa, a sangria do gerente, o estoque da outra
-// filial. Com 5 minutos de "fresco" e sem reler ao voltar à aba, o caixa
-// fechava com o esperado da abertura — e o cache persistido no localStorage
-// fazia isso sobreviver até a um F5. Quem precisa de mais tempo (catálogo
-// espelhado offline, tabelas de referência) declara o próprio staleTime.
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 1000 * 30,
-      gcTime: 1000 * 60 * 60 * 24,
-      retry: 1,
-      refetchOnWindowFocus: true,
-    },
-  },
-});
-
-try {
-  const persister = createSyncStoragePersister({
-    storage: window.localStorage,
-    key: "erp-query-cache",
-    serialize: (data) => {
-      try {
-        return JSON.stringify(data);
-      } catch {
-        return JSON.stringify({});
-      }
-    },
-  });
-
-  persistQueryClient({
-    queryClient,
-    persister,
-    maxAge: 1000 * 60 * 60 * 24,
-  });
-} catch (err) {
-  console.warn("Persistência de cache desabilitada:", err);
-  try {
-    window.localStorage.removeItem("erp-query-cache");
-  } catch {
-    // ignore
-  }
-}
+// Cache de consultas: criado em src/lib/query-client.ts para o login e o
+// logout conseguirem limpá-lo (troca de usuário no mesmo navegador).
+ativarPersistencia();
+// a tela sai junto se a sessão do Supabase acabar ou virar de outra pessoa
+vigiarSessao();
 
 // PWA: registra o service worker que mantém o app abrindo sem internet.
 // Só em produção — em dev o SW cacheando o vite atrapalha mais que ajuda.

@@ -126,6 +126,24 @@ export async function lerCache<T>(chave: string): Promise<{ dados: T; atualizado
   return r ? { dados: r.dados as T, atualizado_em: r.atualizado_em } : null;
 }
 
+/**
+ * Apaga o espelho offline (catálogo, config do caixa) — lido com a sessão de
+ * quem estava logado. NÃO toca na fila de vendas (venda não enviada é fato,
+ * não cache) nem na chave de cifra do aparelho.
+ */
+export async function apagarCacheOffline() {
+  await executar(LOJA_CACHE, "readwrite", (s) => s.clear());
+}
+
+/** Vendas guardadas neste aparelho que ainda não chegaram ao servidor. */
+export async function contarVendasNaoEnviadas(): Promise<number> {
+  try {
+    return (await lerFila()).length;
+  } catch {
+    return 0;
+  }
+}
+
 /** O suporte pode faltar em navegador antigo ou em aba anônima com storage bloqueado. */
 export async function offlineDisponivel(): Promise<boolean> {
   try {

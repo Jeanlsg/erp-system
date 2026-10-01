@@ -42,8 +42,12 @@ Tudo self-hosted numa VPS com EasyPanel.
   (`src/lib/dominios-cache.ts`), nunca uma lista de chaves solta.
 - **Lista que pode passar de 1000 linhas:** `lerTudo(() => consulta.order(…).order("id"))`
   (`src/lib/ler-tudo.ts`). O PostgREST corta em 1000 sem erro.
-- Cache: `staleTime` padrão 30 s e releitura ao voltar à aba (`src/main.tsx`). O cache inteiro é
-  persistido no `localStorage` por 24 h.
+- Cache: `staleTime` padrão 30 s e releitura ao voltar à aba (`src/lib/query-client.ts`). O cache
+  inteiro é persistido no `localStorage` por 24 h.
+- **Sair e entrar zeram o navegador:** `logout()` faz `signOut` + `esquecerDadosDoUsuario()`
+  (cache em memória e persistido, filial, sessionStorage, espelho offline) e o `login()` também
+  limpa. Ficam só a fila de vendas não enviadas, a chave do aparelho e preferências do aparelho.
+  Consulta sobre quem está logado leva o id na chave. Skill `logout-limpa-sessao`.
 - Cliente Supabase do front usa `db: { schema: 'erp' }`; por `curl`, mande `Accept-Profile: erp`.
 - Nada de dado real em código, doc ou print: vai no `.env` (ignorado pelo git).
 
@@ -77,6 +81,7 @@ Carregue com `source .claude/skills/erp-deploy/scripts/env.sh`.
 | Qualquer teste: unitário, lint, RLS, E2E, homologação, auditoria | `erp-testes` |
 | Venda → lead no CRM, busca de lead, ganho | `erp-integracao-crm` |
 | Papéis, permissões, usuários × funcionários, páginas ligadas/desligadas | `erp-permissoes-paginas` (+ `rbac-telas-por-cargo`) |
+| Login, logout, troca de usuário, o que fica guardado no navegador | `logout-limpa-sessao` |
 | Tutoriais com print, guia em PDF, dados de demonstração | `erp-tutoriais-guia` |
 | Layout que quebra em telas pequenas | `responsive-design` |
 | Envio de nota pelo WhatsApp (Uazapi) | `uazapi` |
@@ -111,5 +116,6 @@ Carregue com `source .claude/skills/erp-deploy/scripts/env.sh`.
 
 **Privacidade**
 10. O persister do React Query grava TODAS as consultas no `localStorage` por 24 h — CPF de
-    cliente, contas, usuários — no computador do balcão. Proposta: persistir só o que precisa
+    cliente, contas, usuários — no computador do balcão. O logout agora apaga isso, mas enquanto
+    a sessão dura (ou se a aba é fechada sem sair) fica lá. Proposta: persistir só o que precisa
     abrir sem internet (catálogo já tem espelho próprio em IndexedDB).

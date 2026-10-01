@@ -27,7 +27,7 @@ import {
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useAuth, roleLabels, logout, ehOperadorDeBalcao } from "@/lib/store/auth-store";
+import { useAuth, roleLabels, logout, podeSair, ehOperadorDeBalcao } from "@/lib/store/auth-store";
 import { ajudaDaRota } from "@/lib/ajuda-paginas";
 import { useLojaAtualStore } from "@/lib/store/loja-atual";
 import { useLojas, isSupabaseConfigured } from "@/lib/supabase-queries";
@@ -107,8 +107,11 @@ export function RootLayout() {
     }
   }, [hydrated, isAuthenticated, lojasCarregadas, todasLojas.length, navigate]);
 
-  function handleLogout() {
-    logout();
+  async function handleLogout() {
+    if (!(await podeSair())) return;
+    // espera a sessão e o cache sumirem antes de ir para o login: navegar antes
+    // deixava a próxima tela ler com o token e o cache de quem saiu
+    await logout();
     toast.success("Logout realizado!");
     navigate("/login", { replace: true });
   }

@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { useAuth, logout, roleLabels, ehOperadorDeBalcao, type Role } from "@/lib/store/auth-store";
+import { useAuth, logout, podeSair, roleLabels, ehOperadorDeBalcao, type Role } from "@/lib/store/auth-store";
 import { usePdvModo } from "@/lib/store/pdv-modo";
 import { AppSidebar } from "@/components/app-sidebar";
 import { useLojaAtualStore } from "@/lib/store/loja-atual";
@@ -122,7 +122,7 @@ export function PdvLayout() {
               {papeis.map((p) => roleLabels[p] ?? p).join(", ")}
             </p>
           </div>
-          <Button variant="outline" size="sm" onClick={() => { logout(); navigate("/login", { replace: true }); }}>
+          <Button variant="outline" size="sm" onClick={async () => { if (!(await podeSair())) return; await logout(); navigate("/login", { replace: true }); }}>
             <LogOut className="mr-1 h-4 w-4" /> Sair
           </Button>
         </div>

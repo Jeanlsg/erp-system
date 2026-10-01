@@ -78,6 +78,8 @@ final fica em `docs/auditoria/99-relatorio-final.md`. Páginas desligadas por fl
 | `upsert` sem policy de UPDATE | "new row violates row-level security (USING)" | skill `erp-banco-rls` |
 | Embed ambíguo | lista vazia sem erro (PGRST201) | `alias:tabela!fk(...)` |
 | `useEffect` sem a dependência certa | estado do registro anterior vaza para o próximo (endereço do cliente A no pedido do B) | `npx eslint src` com `exhaustive-deps` |
+| Logout que não limpa o navegador | sair do dono e entrar como operador no mesmo navegador mostra o menu e as telas de dono | `logout()`/`esquecerDadosDoUsuario()` em `auth-store.ts`; teste `logout-limpa-sessao.test.ts`; skill `logout-limpa-sessao` e o `auditar-logout.sh` dela |
+| Consulta "sobre quem está logado" sem o id na chave | resposta de um usuário servida a outro | chave `["…", userId]` + `enabled: !!userId` (ex.: `useAdminPrincipal`) |
 
 ## Antes de publicar
 
@@ -86,3 +88,7 @@ npx eslint src && npx tsc --noEmit && npx vitest run && npx vite build \
   && bash .claude/skills/erp-testes/scripts/conferir-chamadas.sh \
   && python3 .claude/skills/erp-testes/scripts/conferir-cache.py
 ```
+
+Mexeu em login, logout, persistência ou store persistido? Rode também
+`bash .claude/skills/logout-limpa-sessao/scripts/auditar-logout.sh .` e o roteiro manual da
+skill `logout-limpa-sessao` (dono → sair → operador, no mesmo navegador).

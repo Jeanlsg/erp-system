@@ -37,6 +37,9 @@ defeito real). Regras puras ficam em `src/lib/*` e têm teste; mantenha assim.
 - `src/lib/offline/`: IndexedDB (`db.ts`), cifra (`cifra.ts`), catálogo espelhado
   (`catalogo.ts`), estado da rede (`conexao.ts`), fila (`fila-vendas.ts`).
 - A venda entra na fila **antes** do envio e só sai quando o servidor confirma.
+- **Sair** apaga o espelho offline (`apagarCacheOffline`, store `cache`), nunca a fila
+  (`fila_vendas`) nem a chave do aparelho (`chaves`). Com venda não enviada, os botões de sair
+  perguntam antes (`podeSair()`): a fila sobe depois com a sessão de quem entrar.
 - Sem internet, só "sem nota" fica disponível na tela de pagamento; a NFC-e sai depois em
   contingência (`tpEmis=9`). Ver limitação legal na skill `erp-fiscal`.
 

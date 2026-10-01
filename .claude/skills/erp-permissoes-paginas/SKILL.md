@@ -29,6 +29,9 @@ Dar permissão de navegação não libera o banco.
   permissões padrão"; `ROLE_PERMISSIONS` no código é a reserva. Mudança vale no próximo login.
 - ⚠️ Mudou o formato de `permissoes`? Teste o login do admin: um objeto que o `can()` não
   entende esconde o menu inteiro (aconteceu com `{"all": true}`).
+- ⚠️ Teste permissão **trocando de usuário no mesmo navegador** (dono → sair → operador). O
+  operador já herdou as telas de dono pelo cache; hoje o logout e o login limpam tudo e
+  `useAdminPrincipal` tem o id na chave (skill `logout-limpa-sessao`).
 
 ## Usuário × funcionário
 

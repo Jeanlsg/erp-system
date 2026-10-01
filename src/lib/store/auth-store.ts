@@ -1,5 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { limparCacheDoUsuario } from "@/lib/query-client";
+import { useLojaAtualStore } from "./loja-atual";
 
 export type Role = "admin" | "gerente" | "caixa" | "estoquista";
 
@@ -161,7 +163,7 @@ export const useAuthStore = create<AuthState>()(
       papelPermissoes: null,
       setPapelPermissoes: (m) => set({ papelPermissoes: m }),
       setUser: (user) => set({ user, isAuthenticated: !!user }),
-      logout: () => set({ user: null, isAuthenticated: false }),
+      logout: () => set({ user: null, isAuthenticated: false, papelPermissoes: null }),
       can: (permission) => {
         const { user } = get();
         if (!user) return false;
@@ -232,6 +234,16 @@ export async function login(
       return { ok: false, error: "Usuário desativado" };
     }
 
+    // ⚠️ Nada lido como o usuário anterior pode sobreviver a este login: a RLS
+    // decide o que cada um vê, então o cache inteiro era do outro. Vale mesmo
+    // sem logout — a aba pode ter sido fechada com o dono logado.
+    const filialAnterior = useLojaAtualStore.getState().currentLojaId;
+    await esquecerDadosDoUsuario();
+    // a mesma pessoa voltando continua na filial em que estava
+    if (useAuthStore.getState().user?.id === perfil.id) {
+      useLojaAtualStore.getState().setCurrentLojaId(filialAnterior);
+    }
+
     const user: User = {
       id: perfil.id,
       email: perfil.email,
@@ -256,8 +268,84 @@ export async function login(
   }
 }
 
-export function logout() {
+/**
+ * Mantém a tela e a sessão do Supabase falando da mesma pessoa.
+ *
+ * Duas situações em que elas se separavam sem ninguém perceber: o Supabase
+ * encerra a sessão sozinho (refresh do token recusado) e a tela segue
+ * "logada", lendo sem token — listas vazias, sem erro; ou outra pessoa entra
+ * no mesmo navegador e o token passa a ser dela enquanto a tela ainda mostra
+ * o usuário anterior. Nos dois casos a tela sai e pede login.
+ *
+ * Não trata "sem sessão ao abrir": o PDV precisa abrir sem internet.
+ */
+export function vigiarSessao() {
+  void import("@/lib/supabase").then(({ getSupabase }) => {
+    const client = getSupabase();
+    if (!client) return;
+    client.auth.onAuthStateChange((evento, sessao) => {
+      const atual = useAuthStore.getState().user;
+      if (!atual) return;
+      const encerrou = evento === "SIGNED_OUT";
+      const outraPessoa = !!sessao?.user && sessao.user.id !== atual.id;
+      if (encerrou || outraPessoa) {
+        void esquecerDadosDoUsuario();
+        useAuthStore.getState().logout();
+      }
+    });
+  });
+}
+
+/**
+ * Sair de verdade: encerra a sessão do Supabase, esquece o cache lido como
+ * este usuário e a filial escolhida, e só então limpa o usuário da tela.
+ *
+ * ⚠️ Antes isto só limpava o usuário da tela. O token continuava no navegador
+ * e o cache também — entrar como operador depois do dono mostrava as telas do
+ * dono ("sou admin principal?" vinha do cache) até a próxima releitura.
+ */
+export async function logout() {
+  try {
+    const { supabase } = await import("@/lib/supabase");
+    // escopo local: sai neste navegador mesmo sem internet (o global precisa da rede)
+    await supabase.auth.signOut({ scope: "local" });
+  } catch (err) {
+    console.warn("signOut falhou; limpando a sessão local mesmo assim:", err);
+  }
+  await esquecerDadosDoUsuario();
   useAuthStore.getState().logout();
+}
+
+/**
+ * Tudo o que foi lido como um usuário e fica no navegador: cache de consultas
+ * (memória + localStorage), espelho offline (IndexedDB), filial escolhida e
+ * sessionStorage. Preferência de aparelho (tema, menu recolhido) e a fila de
+ * vendas não enviadas ficam. Ver a skill logout-limpa-sessao.
+ */
+export async function esquecerDadosDoUsuario() {
+  limparCacheDoUsuario();
+  useLojaAtualStore.getState().setCurrentLojaId(null);
+  try { window.sessionStorage.clear(); } catch { /* armazenamento bloqueado */ }
+  try {
+    const { apagarCacheOffline } = await import("@/lib/offline/db");
+    await apagarCacheOffline();
+  } catch { /* sem IndexedDB: nada a apagar */ }
+}
+
+/**
+ * Pergunta antes de sair se há venda guardada neste aparelho que ainda não
+ * subiu: ela continua guardada, mas vai subir com a sessão de quem entrar
+ * depois. Devolve true se pode sair.
+ */
+export async function podeSair(): Promise<boolean> {
+  const { contarVendasNaoEnviadas } = await import("@/lib/offline/db");
+  const n = await contarVendasNaoEnviadas();
+  if (n === 0) return true;
+  return window.confirm(
+    `Há ${n} venda(s) feita(s) sem internet neste aparelho que ainda não subiram.\n\n` +
+    "Elas continuam guardadas e sobem quando houver conexão, com a sessão de quem estiver logado. " +
+    "O ideal é enviá-las antes de sair (aviso no topo do PDV).\n\nSair mesmo assim?",
+  );
 }
 
 // Hook auxiliar

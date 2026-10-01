@@ -4459,8 +4459,12 @@ export function useUpdateOcorrencia() {
  * poder antigo guardado no navegador.
  */
 export function useAdminPrincipal() {
+  // ⚠️ A resposta é de UMA pessoa: sem o id na chave, quem entrasse depois do
+  // dono no mesmo navegador herdava o "sim" dele do cache.
+  const usuarioId = useAuthStore((s) => s.user?.id ?? null);
   return useQuery<boolean>({
-    queryKey: ["erp_admin_principal"],
+    queryKey: ["erp_admin_principal", usuarioId],
+    enabled: !!usuarioId,
     staleTime: 60_000,
     queryFn: async () => {
       if (!isSupabaseConfigured()) return false;
