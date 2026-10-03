@@ -17,6 +17,7 @@
 // ============================================================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { ratearValoresDaVenda, totalDaNota, faltaParaEntregaNfce } from "./rateio.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -182,6 +183,10 @@ Deno.serve(async (req) => {
     let pagamentos: any[] = [];
     let observacoes = "";
     let totalNota = 0;
+    // Entrega da venda (taxa_entrega > 0): NFC-e com endereço vira "entrega a
+    // domicílio" (indPres=4) com frete; NF-e leva o frete com a modalidade.
+    let presenca: number | undefined;
+    let frete: { modalidade: number } | undefined;
     // Preenchido quando a venda veio da fila offline: a emissão é posterior
     // ao fato e a SEFAZ exige o momento em que a contingência começou.
     let contingenciaDesde: string | null = null;
@@ -345,6 +350,57 @@ Deno.serve(async (req) => {
       totalNota = Number(venda.total);
       pagamentos = [{ forma: FORMA_PAG_MAP[venda.forma_pagamento] ?? "99", valor: Number(venda.total) }];
       observacoes = `Venda #${venda.numero_pedido ?? ""}`.trim();
+
+      // ---- entrega, desconto e acréscimo da venda, rateados nos itens ----
+      const taxaEntrega = Number(venda.taxa_entrega ?? 0);
+      let freteComoFrete = true;
+      if (taxaEntrega > 0) {
+        const { data: pedido } = await admin
+          .from("erp_pedidos").select("endereco_entrega, transportadora_id")
+          .eq("venda_id", venda.id).neq("status", "cancelado").limit(1).maybeSingle();
+        const end = pedido?.endereco_entrega ?? null;
+        // transportadora contratada pela loja = 0 (CIF); motoboy da loja = 3 (próprio)
+        const modalidade = pedido?.transportadora_id ? 0 : 3;
+        if (isNFCe) {
+          // NFC-e só aceita frete como entrega a domicílio, e aí exige
+          // destinatário com endereço (rejeições 753/787/788). Sem isso a taxa
+          // vai como outras despesas: o total da nota continua o que foi pago.
+          const falta = faltaParaEntregaNfce(destinatario?.cpf_cnpj, end);
+          if (falta) {
+            freteComoFrete = false;
+            observacoes += ` · Taxa de entrega R$ ${taxaEntrega.toFixed(2).replace(".", ",")} em outras despesas (${falta})`;
+          } else {
+            presenca = 4;
+            frete = { modalidade };
+            destinatario = {
+              ...destinatario,
+              endereco: {
+                logradouro: end.logradouro, numero: end.numero, bairro: end.bairro,
+                complemento: end.complemento ?? undefined,
+                municipio: end.cidade, uf: end.uf, cep: end.cep,
+                codigo_municipio: end.codigo_municipio,
+              },
+            };
+          }
+        } else {
+          frete = { modalidade };
+        }
+      }
+      itens = ratearValoresDaVenda(itens, {
+        total: Number(venda.total),
+        frete: taxaEntrega,
+        acrescimo: Number(venda.acrescimo ?? 0),
+        freteComoFrete,
+      });
+      // a SEFAZ soma o total pelos itens: tem de dar exatamente o que foi pago
+      if (Math.abs(totalDaNota(itens) - totalNota) > 0.009) {
+        const foraDaNota = (venda.itens ?? []).filter((i: any) => !i.produto_id).map((i: any) => i.nome);
+        return json(422, {
+          erro: foraDaNota.length
+            ? `a venda tem itens que não vão para a nota (${foraDaNota.join(", ")}) — kit/serviço ainda não é emitido; emita a nota manualmente`
+            : `total da nota (${totalDaNota(itens).toFixed(2)}) não fecha com o da venda (${totalNota.toFixed(2)}) — confira desconto e itens da venda`,
+        });
+      }
     }
 
     if (itens.length === 0) return json(422, { erro: "nenhum item de produto para emitir" });
@@ -388,8 +444,10 @@ Deno.serve(async (req) => {
       destinatario,
       // CSC só faz sentido na NFC-e — é o que assina o QR Code do cupom
       ...(isNFCe ? { csc: sefaz.csc_token, csc_id: sefaz.csc_id } : {}),
+      ...(frete ? { frete } : {}),
       nota: {
         modelo, serie: serieDoc, numero, natureza, observacoes,
+        ...(presenca ? { presenca } : {}),
         finalidade: isDevolucao ? 4 : 1,
         ...(chaveReferenciada ? { chave_referenciada: chaveReferenciada } : {}),
         // Venda que subiu da fila offline: a emissão é posterior ao fato, e a

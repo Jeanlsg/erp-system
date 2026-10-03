@@ -46,6 +46,21 @@ Credenciais do nfe-service em `public.integrations` (`provider = 'nfe_service'`)
   enquanto for v2, o CSC é obrigatório. O nfe-service decide pela tabela da própria lib.
 - Nota de homologação não tem valor fiscal; o envio ao cliente marca "SEM VALOR FISCAL" no assunto.
 
+## Totais da nota: desconto, acréscimo e entrega
+
+- A nota soma o total pelos itens (vNF = Σ vProd − vDesc + vFrete + vOutro). Desconto geral,
+  acréscimo e taxa de entrega da venda são **rateados por item** em
+  `supabase/functions/erp-emitir-nfe/rateio.ts` (testado). O desconto é derivado do total gravado
+  na venda, e a edge recusa se o total da nota não fechar com o da venda.
+- Item sem `produto_id` (kit, serviço) não vai para a nota: a emissão recusa explicando, em vez de
+  esconder o valor em "outras despesas".
+- **NFC-e com entrega:** só aceita frete como entrega a domicílio (`indPres=4`, regra X02-10,
+  rejeição 753), e aí exige destinatário com CPF/CNPJ e endereço com IBGE (787/788). A edge lê o
+  endereço do pedido (`erp_pedidos.endereco_entrega`); faltando algo, a taxa vai como `vOutro` e o
+  motivo entra nas observações. PE exige CPF em toda entrega em domicílio. `modFrete` 3 (entrega
+  da loja) ou 0 (transportadora). NF-e 55 leva o frete com a mesma modalidade.
+- Teste: `services/nfe-service/tests/dryrun-entrega.php` num contêiner descartável da imagem.
+
 ## Contingência offline (NFC-e)
 
 Venda feita sem internet sobe pela fila; ao ser emitida, sai com `tpEmis=9` e `dhCont` = hora

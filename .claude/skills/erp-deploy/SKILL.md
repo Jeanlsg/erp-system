@@ -38,14 +38,20 @@ O service worker serve a navegação em network-first: a versão nova chega no p
 
 ## Edge functions (`erp-*`)
 
-Publicação = copiar o `index.ts` para o volume e reiniciar o container de funções.
+Publicação = copiar os `.ts` da função (menos os `*.test.ts`) para o volume e reiniciar o
+container de funções. ⚠️ Função com mais de um arquivo (`erp-emitir-nfe` importa `./rateio.ts`):
+copiar só o `index.ts` derruba a função com "module not found".
 
 ```bash
 f=erp-emitir-nfe
-ssh "$ERP_SSH_HOST" "cp '$ERP_FUNCTIONS_DIR/$f/index.ts' '$ERP_FUNCTIONS_DIR/$f/index.ts.bak-$(date +%Y%m%d)'"
-scp -q "supabase/functions/$f/index.ts" "$ERP_SSH_HOST:$ERP_FUNCTIONS_DIR/$f/index.ts"
-ssh "$ERP_SSH_HOST" "md5sum '$ERP_FUNCTIONS_DIR/$f/index.ts'; docker restart $ERP_FUNCTIONS_CONTAINER"
-md5 -q "supabase/functions/$f/index.ts"      # tem de bater
+for a in supabase/functions/$f/*.ts; do
+  case "$a" in *.test.ts) continue;; esac
+  n=$(basename "$a")
+  ssh "$ERP_SSH_HOST" "[ -f '$ERP_FUNCTIONS_DIR/$f/$n' ] && cp '$ERP_FUNCTIONS_DIR/$f/$n' '$ERP_FUNCTIONS_DIR/$f/$n.bak-$(date +%Y%m%d)'; true"
+  scp -q "$a" "$ERP_SSH_HOST:$ERP_FUNCTIONS_DIR/$f/$n"
+done
+ssh "$ERP_SSH_HOST" "docker restart $ERP_FUNCTIONS_CONTAINER"
+bash .claude/skills/erp-deploy/scripts/verificar-deploy.sh   # compara todos os .ts
 ```
 
 - O volume de funções é **compartilhado com o CRM**. Nunca sincronize a pasta inteira; copie só a função que mudou.

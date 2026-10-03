@@ -47,7 +47,7 @@ export const DOMINIOS = {
   pessoas: [
     "erp_pessoas", "erp_clientes", "erp_fornecedores", "erp_clientes_compras", "erp_pessoa_lojas",
     "erp_crediario_clientes", "erp_aniversariantes", "erp_vendedores", "erp_funcionarios",
-    "erp_dfe_pendentes",
+    "erp_dfe_pendentes", "erp_pessoa_enderecos",
   ],
   fidelidade: ["erp_cartao_fidelidade", "erp_fidelidade_movimentacoes"],
   pedidos: ["erp_pedidos", "erp_pedidos_saldo", "erp_pedido_itens", "erp_orcamentos"],

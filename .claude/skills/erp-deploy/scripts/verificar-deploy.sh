@@ -18,9 +18,16 @@ ssh -o ConnectTimeout=15 "$ERP_SSH_HOST" "
 echo "   index.php local:  $(md5 -q services/nfe-service/src/index.php 2>/dev/null || md5sum services/nfe-service/src/index.php | cut -c1-32)"
 
 echo "== edge functions erp-* (repo × VPS)"
+# todos os .ts da função (menos testes): função com mais de um arquivo
+# precisa de todos lá, senão cai com "module not found"
 for d in supabase/functions/erp-*/; do
   f="$(basename "$d")"
-  l="$(md5 -q "$d/index.ts" 2>/dev/null || md5sum "$d/index.ts" | cut -c1-32)"
-  r="$(ssh -o ConnectTimeout=15 "$ERP_SSH_HOST" "md5sum '$ERP_FUNCTIONS_DIR/$f/index.ts' 2>/dev/null | cut -c1-32")"
-  [ "$l" = "$r" ] && echo "   igual      $f" || echo "   DIFERENTE  $f"
+  for a in "$d"*.ts; do
+    case "$a" in *.test.ts) continue;; esac
+    n="$(basename "$a")"
+    l="$(md5 -q "$a" 2>/dev/null || md5sum "$a" | cut -c1-32)"
+    r="$(ssh -o ConnectTimeout=15 "$ERP_SSH_HOST" "md5sum '$ERP_FUNCTIONS_DIR/$f/$n' 2>/dev/null | cut -c1-32")"
+    rot="$f"; [ "$n" = "index.ts" ] || rot="$f/$n"
+    if [ "$l" = "$r" ]; then echo "   igual      $rot"; elif [ -z "$r" ]; then echo "   FALTA      $rot"; else echo "   DIFERENTE  $rot"; fi
+  done
 done

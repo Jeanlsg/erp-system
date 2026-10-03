@@ -183,9 +183,12 @@ function buildXml(array $req): string {
     }
     $std->tpAmb    = $tpAmb;
     $std->finNFe   = $finalidade;
-    // NFC-e: sempre consumidor final e operação presencial
+    // NFC-e: sempre consumidor final; presencial (1) ou entrega a domicílio
+    // (4). A entrega é o ÚNICO caso em que a NFC-e aceita frete (regra X02-10,
+    // rejeição 753) e exige destinatário com endereço (787/788).
+    $entregaNfce   = $isNFCe && (int)($nota['presenca'] ?? 1) === 4;
     $std->indFinal = $isNFCe ? 1 : (int)($nota['consumidor_final'] ?? 1);
-    $std->indPres  = $isNFCe ? 1 : (int)($nota['presenca'] ?? 1);
+    $std->indPres  = $isNFCe ? ($entregaNfce ? 4 : 1) : (int)($nota['presenca'] ?? 1);
     $std->procEmi  = 0;
     $std->verProc  = 'xlife-erp 1.0';
     $make->tagide($std);
@@ -248,12 +251,18 @@ function buildXml(array $req): string {
         $make->tagdest($std);
     }
 
-    // Endereço do destinatário não vai na NFC-e (só em entrega a domicílio)
-    if (!$isNFCe && !empty($dest['endereco']['logradouro'])) {
+    if ($entregaNfce && ($semDestinatario || empty($dest['endereco']['logradouro'])
+        || (int)($dest['endereco']['codigo_municipio'] ?? 0) === 0)) {
+        out(422, ['erro' => 'NFC-e de entrega a domicílio exige destinatário com CPF/CNPJ e endereço com código IBGE do município']);
+    }
+
+    // Endereço do destinatário não vai na NFC-e, salvo na entrega a domicílio
+    if ((!$isNFCe || $entregaNfce) && !empty($dest['endereco']['logradouro'])) {
         $d = $dest['endereco'];
         $std = new stdClass();
         $std->xLgr    = $d['logradouro'];
         $std->nro     = $d['numero'] ?? 'S/N';
+        $std->xCpl    = !empty($d['complemento']) ? mb_substr((string)$d['complemento'], 0, 60) : null;
         $std->xBairro = $d['bairro'] ?? '';
         $std->cMun    = (int)($d['codigo_municipio'] ?? 0);
         $std->xMun    = $d['municipio'] ?? '';
@@ -290,6 +299,16 @@ function buildXml(array $req): string {
         $std->uTrib     = $std->uCom;
         $std->qTrib     = $std->qCom;
         $std->vUnTrib   = $std->vUnCom;
+        // Desconto geral, acréscimo e taxa de entrega da venda chegam já
+        // rateados por item (edge erp-emitir-nfe, rateio.ts): a lib soma os
+        // totais a partir daqui, e vNF tem de dar o que o cliente pagou.
+        foreach (['valor_desconto' => 'vDesc', 'valor_frete' => 'vFrete', 'valor_outro' => 'vOutro'] as $campo => $tag) {
+            $v = round((float)($item[$campo] ?? 0), 2);
+            if ($v > 0) $std->$tag = number_format($v, 2, '.', '');
+        }
+        if (!empty($std->vFrete) && $isNFCe && !$entregaNfce) {
+            out(422, ['erro' => "item {$nItem}: NFC-e só aceita frete em entrega a domicílio (nota.presenca = 4)"]);
+        }
         $std->indTot    = 1;
         $make->tagprod($std);
 
@@ -338,7 +357,8 @@ function buildXml(array $req): string {
 
     // --- transporte ---
     $std = new stdClass();
-    $std->modFrete = (int)($req['frete']['modalidade'] ?? 9);   // 9 = sem frete
+    // 9 = sem frete. NFC-e fora da entrega a domicílio é sempre 9 (rejeição 753).
+    $std->modFrete = ($isNFCe && !$entregaNfce) ? 9 : (int)($req['frete']['modalidade'] ?? 9);
     $make->tagtransp($std);
 
     // --- pagamento ---

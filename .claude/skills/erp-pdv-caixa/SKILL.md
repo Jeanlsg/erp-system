@@ -20,6 +20,13 @@ defeito real). Regras puras ficam em `src/lib/*` e têm teste; mantenha assim.
    (`src/components/pagamentos-venda.tsx`: `aplicarDigitado`, `prepararFinalizacao`,
    `faltaPagar`, `trocoDe` — testadas), documento fiscal (sem nota / NFC-e / NF-e), CPF na nota.
    Desconto e acréscimo travam depois do primeiro pagamento lançado.
+3b. **Entrega ("Precisa de entrega?", na tela de pagamento):** `src/components/entrega-venda-pdv.tsx`
+   + regras em `src/lib/entrega-venda.ts` (testadas). Transportadora, região (sugerida pelo CEP ou
+   bairro, traz a taxa), frete, entrega futura e endereço (busca no ViaCEP, que traz o IBGE; endereços
+   salvos do cliente). A taxa soma no total e fica fora do desconto; trava depois do primeiro
+   pagamento. Exige cliente. A venda grava `taxa_entrega` e vira pedido no Ciclo de pedidos já em
+   Separação (migration 098); cancelar/devolver a venda cancela o pedido. O fechamento mostra as
+   taxas do turno (`vw_caixa_resumo.taxas_entrega`, informativo — o dinheiro já está nas vendas).
 4. **Gravar:** `registrarVenda` (`src/lib/offline/fila-vendas.ts`) → RPC
    `erp.registrar_venda_pdv`: venda, itens, pagamentos e baixa de estoque numa transação.
    A chave `uuid_local` nasce no caixa: reenviar devolve a mesma venda, não cria outra.

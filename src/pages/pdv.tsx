@@ -21,7 +21,7 @@ import {
   Search, Keyboard,
   Bike, FileText, Receipt, ArrowLeft, WifiOff,
 } from "lucide-react";
-import { useProdutos, useCreateCaixa, useFecharCaixa, useKits, useCaixas, useCreateSangria, useCreateEntradaExtra, useEmitirNFeVenda, isSupabaseConfigured, useVendedores, useEstoqueLoja, usePontosVenda, useCriarPontosVenda, useRenomearPontoVenda, useRemoverPontoVenda, useConfigsCaixa, useSaldosPedidos, useAplicarEntradaPedido, useCaixasAbertosDoUsuario, useCaixasPermitidos } from "@/lib/supabase-queries";
+import { useProdutos, useCreateCaixa, useFecharCaixa, useKits, useCaixas, useCreateSangria, useCreateEntradaExtra, useEmitirNFeVenda, isSupabaseConfigured, useVendedores, useEstoqueLoja, usePontosVenda, useCriarPontosVenda, useRenomearPontoVenda, useRemoverPontoVenda, useConfigsCaixa, useSaldosPedidos, useAplicarEntradaPedido, useCaixasAbertosDoUsuario, useCaixasPermitidos, useRegioesEntrega } from "@/lib/supabase-queries";
 import { caixaAtivoNaLoja, caixasEmOutrasLojas, podeAbrirOutroCaixa } from "@/lib/loja-do-caixa";
 import { useLojaAtualStore } from "@/lib/store/loja-atual";
 import { quantidadeParaLancar, QTD_MAXIMA_POR_LANCAMENTO } from "@/lib/quantidade-lancamento";
@@ -48,6 +48,8 @@ import { useAtalhosPdv, type Atalho } from "@/lib/use-atalhos-pdv";
 import { documentoValido, mascaraDocumento } from "@/lib/documento";
 import { ComboboxBusca } from "@/components/ui/combobox-busca";
 import { ClienteRapidoPdvDialog } from "@/components/cliente-rapido-pdv";
+import { EntregaVendaPdv } from "@/components/entrega-venda-pdv";
+import { totalComEntrega, faltaNaEntrega, entregaParaPayload, type EntregaVenda } from "@/lib/entrega-venda";
 import {
   PagamentosVenda, faltaPagar, trocoDe, aplicarDigitado, prepararFinalizacao, type Pagamento,
 } from "@/components/pagamentos-venda";
@@ -351,6 +353,10 @@ export function PDVPage() {
   // "É CPF na nota?" — consumidor identificado sem precisar de cadastro
   const [cpfNota, setCpfNota] = useState("");
   const [nomeNota, setNomeNota] = useState("");
+  // "Precisa de entrega?" — null = não. Com entrega, a taxa entra no total e
+  // a venda vira pedido no Ciclo de pedidos (registrar_venda_pdv, migration 098).
+  const [entrega, setEntrega] = useState<EntregaVenda | null>(null);
+  const { data: regioesEntrega = [] } = useRegioesEntrega();
 
   const clienteDaVenda = clienteId ? (clientes as any[]).find((c) => c.id === clienteId) ?? null : null;
 
@@ -362,7 +368,9 @@ export function PDVPage() {
   const desc = parseFloat(desconto) || 0;
   const acresc = parseFloat(acrescimo) || 0;
   const totalDesconto = (descontoPercentual ? subtotal * (desc / 100) : desc) + descontoItens;
-  const total = Math.max(0, subtotal - totalDesconto + acresc);
+  const taxaEntrega = entrega ? entrega.taxa : 0;
+  // A taxa de entrega fica fora do desconto: desconto é sobre mercadoria.
+  const total = totalComEntrega(subtotal, totalDesconto, acresc, taxaEntrega);
   // Tudo do pagamento sai das linhas lançadas no painel. Antes havia um
   // caminho "simples" com um campo de valor recebido, e ele gravava a venda
   // inteira na forma escolhida mesmo quando o valor digitado era menor: 20
@@ -590,6 +598,7 @@ export function PDVPage() {
     setForma("dinheiro");
     setPagamentos([]);
     setParcelasPagamento("1");
+    setEntrega(null);
     // NF-e é da venda; o padrão do terminal (sem nota / NFC-e) continua
     setDocFiscal((d) => (d === "nfe" ? lerDocFiscalPadrao() : d));
   }, []);
@@ -748,6 +757,12 @@ export function PDVPage() {
       const falta = faltaParaNFe(clienteDaVenda);
       if (falta) { toast.error(falta, { duration: 8000 }); return; }
     }
+    // Entrega sem cliente ou sem endereço vira pedido que ninguém acha: recusa
+    // aqui, com a tela aberta. O banco confere de novo.
+    if (entrega) {
+      const falta = faltaNaEntrega(entrega, clienteId);
+      if (falta) { toast.error(falta, { duration: 8000 }); return; }
+    }
     // CPF digitado mas inválido: recusa AGORA, com o cliente na frente —
     // deixar passar viraria rejeição da SEFAZ na hora do cupom.
     if (!clienteId && cpfNota.trim() && !documentoValido(cpfNota)) {
@@ -774,7 +789,8 @@ export function PDVPage() {
         valor_recebido: Math.round(pags.reduce((t, p) => t + (Number(p.valor_recebido ?? p.valor) || 0), 0) * 100) / 100,
         total,
         custo_total: custoTotal,
-        lucro_total: total - custoTotal,
+        // a taxa de entrega é repasse do frete, não margem da mercadoria
+        lucro_total: total - taxaEntrega - custoTotal,
         // a forma "principal" é a de maior valor; o banco reconfere
         forma_pagamento: [...pags].sort((x, y) => y.valor - x.valor)[0].forma,
         // sempre por linha: é por elas que a gaveta sabe quanto entrou em
@@ -797,7 +813,11 @@ export function PDVPage() {
           subtotal: i.preco_unitario * i.quantidade - (Number(i.desconto) || 0),
         })),
         caixa_id: caixaAberto?.id,
+        ...(entrega
+          ? { entrega: entregaParaPayload(entrega, (regioesEntrega as any[]).find((r) => r.id === entrega.regiao_id)?.nome ?? null) }
+          : {}),
       });
+      const comEntrega = !!entrega;
 
       if (doc !== "nfe") gravarDocFiscalPadrao(doc);
       limparCarrinho();
@@ -821,7 +841,9 @@ export function PDVPage() {
         return;
       }
 
-      toast.success("Venda finalizada com sucesso.");
+      toast.success(comEntrega
+        ? "Venda finalizada. O pedido de entrega está em Separação no Ciclo de pedidos."
+        : "Venda finalizada com sucesso.");
       const vendaCriada = envio.resultado;
 
       // A nota é acessória à venda: se a SEFAZ recusar, a venda continua
@@ -1973,6 +1995,11 @@ export function PDVPage() {
                     agora deixaria o que já foi recebido sem bater. Remova os pagamentos para alterar.
                   </p>
                 )}
+                {entrega && (
+                  <div className="flex justify-between text-sm">
+                    <span>Taxa de entrega</span><span className="tabular-nums">+{brl(taxaEntrega)}</span>
+                  </div>
+                )}
                 <div className="flex items-end justify-between border-t pt-3">
                   <span className="text-lg font-semibold">TOTAL</span>
                   <span className="text-4xl font-bold tabular-nums text-green-600">{brl(total)}</span>
@@ -1982,6 +2009,17 @@ export function PDVPage() {
 
             {/* ---- como paga e que documento sai ---- */}
             <div className="min-h-0 space-y-5 overflow-y-auto px-6 py-4">
+              {/* Antes da forma de pagamento, como no sistema anterior: a
+                  entrega muda o total que vai ser pago. */}
+              <EntregaVendaPdv
+                entrega={entrega}
+                aoMudar={setEntrega}
+                clienteId={clienteId || null}
+                travado={pagamentos.length > 0}
+                valorMercadoria={Math.max(0, subtotal - totalDesconto + acresc)}
+                online={online}
+              />
+
               <PagamentosVenda
                 total={total}
                 pagamentos={pagamentos}
@@ -2048,6 +2086,17 @@ export function PDVPage() {
                     )}
                     <p className="text-xs text-muted-foreground">O cupom sai no CPF informado, sem precisar cadastrar o cliente.</p>
                   </div>
+                )}
+                {/* NFC-e só leva frete como entrega a domicílio, e aí precisa de
+                    CPF e endereço com IBGE (rejeições 753/787/788); PE exige CPF
+                    em toda entrega. Sem isso a taxa sai como "outras despesas". */}
+                {online && docFiscal === "nfce" && entrega && entrega.taxa > 0
+                  && (!String(clienteDaVenda?.cpf_cnpj ?? "").replace(/\D/g, "") || !entrega.endereco.codigo_municipio) && (
+                  <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs dark:bg-amber-950/20">
+                    {!String(clienteDaVenda?.cpf_cnpj ?? "").replace(/\D/g, "")
+                      ? "Cliente sem CPF: a NFC-e não pode sair como entrega a domicílio (PE exige CPF na entrega). A taxa vai como outras despesas — cadastre o CPF do cliente."
+                      : "Busque o CEP para o endereço ganhar o código do município: sem ele a NFC-e não sai como entrega a domicílio e a taxa vai como outras despesas."}
+                  </p>
                 )}
                 {online && docFiscal === "nfe" && faltaParaNFe(clienteDaVenda) && (
                   <p className="text-xs text-muted-foreground">
@@ -2124,6 +2173,12 @@ export function PDVPage() {
                   <span>Entradas em dinheiro:</span>
                   <span className="text-green-600">+{brl(Number(c?.entradas_dinheiro || 0))}</span>
                 </div>
+                {Number(c?.taxas_entrega || 0) > 0 && (
+                  <div className="flex justify-between text-sm text-muted-foreground">
+                    <span title="Já somadas nas vendas acima, na forma em que foram pagas">Taxas de entrega no turno (já nas vendas):</span>
+                    <span>{brl(Number(c?.taxas_entrega || 0))}</span>
+                  </div>
+                )}
                 <div className="flex justify-between font-bold text-lg border-t pt-2">
                   <span>Valor Esperado em Gaveta:</span>
                   <span className="text-primary">{brl(valorEsperadoCaixa)}</span>
