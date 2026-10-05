@@ -46,6 +46,14 @@ Credenciais do nfe-service em `public.integrations` (`provider = 'nfe_service'`)
   enquanto for v2, o CSC é obrigatório. O nfe-service decide pela tabela da própria lib.
 - Nota de homologação não tem valor fiscal; o envio ao cliente marca "SEM VALOR FISCAL" no assunto.
 
+## Rejeições já vistas em homologação (PE)
+
+- **972 — responsável técnico:** PE (e AL, AM, MS, PR, SC, TO) exige o grupo `infRespTec` em toda
+  nota; PE não exige CSRT. Vem das variáveis `NFE_RESP_TEC_*` do contêiner do nfe-service (ver
+  `erp-deploy`); sem elas o serviço recusa antes da SEFAZ.
+- **391 — dados do cartão em PIX:** desde a NT 2025.001 (01/09/2025) o PIX (`tPag=17`) também leva o
+  grupo `card` (`tpIntegra=2` sem TEF). As duas primeiras NFC-e de Petrolina caíram nisso.
+
 ## Totais da nota: desconto, acréscimo e entrega
 
 - A nota soma o total pelos itens (vNF = Σ vProd − vDesc + vFrete + vOutro). Desconto geral,

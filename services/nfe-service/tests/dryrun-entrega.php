@@ -2,13 +2,15 @@
 // ============================================================
 // Dry-run (sem SEFAZ) das notas com desconto, acréscimo e entrega.
 //
-// Monta, valida no XSD e assina quatro notas FICTÍCIAS: NFC-e presencial com
+// Monta, valida no XSD e assina quatro notas FICTÍCIAS (com o grupo do
+// responsável técnico e o grupo card no PIX): NFC-e presencial com
 // desconto e acréscimo rateados, NFC-e de entrega a domicílio com frete
 // (indPres=4 + endereço), NFC-e com frete fora da entrega (tem de ser
 // recusada — rejeição 753) e NF-e com frete. Confira vNF = vPag.
 //
 // Uso: num contêiner DESCARTÁVEL da imagem, sem rede, sem tocar o serviço:
 //   docker run -d --rm --name nfe-teste --network none -e NFE_SERVICE_TOKEN=teste-local \
+//     -e NFE_RESP_TEC_CNPJ=11222333000181 -e NFE_RESP_TEC_CONTATO=TESTE -e NFE_RESP_TEC_EMAIL=teste@teste.invalid -e NFE_RESP_TEC_FONE=87999999999 \
 //     -v $PWD/src/index.php:/app/src/index.php:ro -v $PWD/tests/dryrun-entrega.php:/tmp/dryrun.php:ro nfe-service:latest
 //   docker exec nfe-teste sh -c "openssl req -x509 -newkey rsa:2048 -keyout /tmp/k.pem -out /tmp/c.pem \
 //     -days 1 -nodes -subj /CN=TESTE 2>/dev/null && openssl pkcs12 -export -legacy -out /tmp/t.pfx \
@@ -61,5 +63,6 @@ foreach ($casos as $nome => $c) {
   preg_match_all("~<vPag>([^<]*)</vPag>~", $x, $vp);
   echo "XSD+assinatura OK | vProd=", $tag("vProd"), " vDesc=", $tag("vDesc"), " vFrete=", $tag("vFrete"),
     " vOutro=", $tag("vOutro"), " vNF=", $tag("vNF"), " | vPag=", implode("+", $vp[1]), " | indPres=", $ip[1] ?? "-",
-    " modFrete=", $mf[1] ?? "-", " enderDest=", strpos($x, "<enderDest>") !== false ? "sim" : "nao", PHP_EOL;
+    " modFrete=", $mf[1] ?? "-", " enderDest=", strpos($x, "<enderDest>") !== false ? "sim" : "nao",
+    " card=", strpos($x, "<card>") !== false ? "sim" : "nao", " infRespTec=", strpos($x, "<infRespTec>") !== false ? "sim" : "nao", PHP_EOL;
 }

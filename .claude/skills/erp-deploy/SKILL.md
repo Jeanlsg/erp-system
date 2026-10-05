@@ -82,8 +82,16 @@ ssh "$ERP_SSH_HOST" "
   TOKEN=\$(docker inspect $ERP_NFE_SERVICE_CONTAINER --format '{{range .Config.Env}}{{println .}}{{end}}' | grep ^NFE_SERVICE_TOKEN= | cut -d= -f2-) &&
   docker rm -f $ERP_NFE_SERVICE_CONTAINER &&
   docker run -d --name $ERP_NFE_SERVICE_CONTAINER --network $ERP_DOCKER_NETWORK --restart unless-stopped \
-    -e NFE_SERVICE_TOKEN=\"\$TOKEN\" -e TZ=America/Bahia nfe-service:latest"
+    -e NFE_SERVICE_TOKEN=\"\$TOKEN\" -e TZ=America/Bahia \
+    -e NFE_RESP_TEC_CNPJ='$ERP_RESP_TEC_CNPJ' -e NFE_RESP_TEC_CONTATO='$ERP_RESP_TEC_CONTATO' \
+    -e NFE_RESP_TEC_EMAIL='$ERP_RESP_TEC_EMAIL' -e NFE_RESP_TEC_FONE='$ERP_RESP_TEC_FONE' \
+    nfe-service:latest"
 ```
+
+- ⚠️ **Responsável técnico** (`NFE_RESP_TEC_*`, valores em `ERP_RESP_TEC_*` no `.env`): PE rejeita
+  toda nota sem ele (972). Sem as variáveis, o serviço recusa a nota de PE antes da SEFAZ, com a
+  mensagem dizendo o que configurar. Confira depois de recriar:
+  `docker inspect $ERP_NFE_SERVICE_CONTAINER --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -c ^NFE_RESP_TEC_` → 4.
 
 - `composer.lock` trava a versão do sped-nfe: sem ele, um rebuild já pulou de 5.1 para 5.2 e quebrou `model()`.
 - Leia o token do container atual antes de removê-lo: ele é o mesmo que as edge functions usam.

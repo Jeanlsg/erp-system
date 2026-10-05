@@ -368,9 +368,11 @@ function buildXml(array $req): string {
         $std = new stdClass();
         $std->tPag = str_pad((string)($pag['forma'] ?? '99'), 2, '0', STR_PAD_LEFT);
         $std->vPag = number_format((float)($pag['valor'] ?? 0), 2, '.', '');
-        // Cartão sem TEF integrado leva o grupo card com tpIntegra=2 — sem
-        // ele, parte das SEFAZ rejeita o detPag de cartão.
-        if (in_array($std->tPag, ['03', '04'], true)) {
+        // Cartão e PIX sem TEF integrado levam o grupo card com tpIntegra=2.
+        // ⚠️ PIX (17) passou a exigir o grupo na NT 2025.001 (desde 01/09/2025):
+        // sem ele, rejeição 391 "Não informados os dados do cartão" — foi o que
+        // derrubou as duas primeiras NFC-e de homologação de Petrolina, em PIX.
+        if (in_array($std->tPag, ['03', '04', '17'], true)) {
             $std->tpIntegra = 2;
         }
         $make->tagdetPag($std);
@@ -380,6 +382,29 @@ function buildXml(array $req): string {
         $std = new stdClass();
         $std->infCpl = mb_substr((string)$nota['observacoes'], 0, 2000);
         $make->taginfAdic($std);
+    }
+
+    // --- responsável técnico (grupo infRespTec, NT 2018.005) ---
+    // Quem desenvolveu o sistema. AL, AM, MS, PE, PR, SC e TO rejeitam a nota
+    // sem ele (972) — foi a rejeição da primeira NFC-e de teste de Petrolina.
+    // PE não exige CSRT. Os dados vêm do ambiente do contêiner (NFE_RESP_TEC_*),
+    // não do código: são da empresa desenvolvedora, não do emitente.
+    $rtCnpj = preg_replace('/\D/', '', (string)(getenv('NFE_RESP_TEC_CNPJ') ?: ''));
+    if ($rtCnpj !== '') {
+        $std = new stdClass();
+        $std->CNPJ     = $rtCnpj;
+        $std->xContato = mb_substr((string)(getenv('NFE_RESP_TEC_CONTATO') ?: ''), 0, 60);
+        $std->email    = mb_substr((string)(getenv('NFE_RESP_TEC_EMAIL') ?: ''), 0, 60);
+        $std->fone     = preg_replace('/\D/', '', (string)(getenv('NFE_RESP_TEC_FONE') ?: ''));
+        // CSRT só onde a UF credencia o software (não é o caso de PE nem BA);
+        // com ele a lib calcula o hashCSRT pela chave da nota.
+        if ((getenv('NFE_RESP_TEC_CSRT') ?: '') !== '') {
+            $std->CSRT   = getenv('NFE_RESP_TEC_CSRT');
+            $std->idCSRT = getenv('NFE_RESP_TEC_CSRT_ID') ?: '01';
+        }
+        $make->taginfRespTec($std);
+    } elseif (in_array($ufEmit, ['AL', 'AM', 'MS', 'PE', 'PR', 'SC', 'TO'], true)) {
+        out(422, ['erro' => "a SEFAZ-{$ufEmit} exige o responsável técnico na nota (rejeição 972): configure NFE_RESP_TEC_CNPJ, _CONTATO, _EMAIL e _FONE no nfe-service"]);
     }
 
     try {
