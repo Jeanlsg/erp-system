@@ -37,6 +37,17 @@ defeito real). Regras puras ficam em `src/lib/*` e têm teste; mantenha assim.
    depois de gravar, e de novo quando a fila offline sobe. ⚠️ Sem isso, o fechamento mostrou como
    esperado na gaveta só o saldo inicial depois de R$ 400 vendidos em dinheiro.
 
+## Cancelar venda (Vendas › Cancelar)
+
+`erp.cancelar_venda(venda, motivo, simular)` (migration 099) + `src/lib/cancelar-venda.ts` (ordem,
+testada) + `src/components/cancelar-venda-dialog.tsx`. Ordem: **simula no banco → cancela a nota na
+SEFAZ → cancela a venda** (invertido, uma recusa do banco deixaria a nota cancelada e a venda de pé).
+Desfaz pelos movimentos da venda (estoque e lotes ao custo da saída), cancela contas/crediário/
+promissórias, estorna pontos; comissão pendente e pedido de entrega caem pelos triggers. Recusa:
+caixa da venda fechado, venda com devolução, parcela a prazo já recebida, nota em contingência, quem
+não tem `venda.cancelar` (`erp.usuario_tem_permissao`, mesmo critério do `can()`). Motivo ≥ 15
+caracteres (vai como justificativa da nota). Fora disso, o caminho é Devolução.
+
 ## Offline
 
 - `public/sw.js`: navegação network-first com fallback para o shell; `/assets/*` cache-first;

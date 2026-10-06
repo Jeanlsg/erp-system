@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
 
     const { data: nota } = await admin
       .from("erp_notas_fiscais")
-      .select("id, numero, serie, tipo, status, ambiente, chave_acesso, valor_total, danfe_path, xml_assinado, xml_gerado, loja_id, venda_id, consumidor_email, venda:erp_vendas(cliente:erp_pessoas(nome_razao, email, celular, telefone))")
+      .select("id, numero, serie, tipo, status, ambiente, chave_acesso, valor_total, danfe_path, xml_path, xml_assinado, xml_gerado, loja_id, venda_id, consumidor_email, venda:erp_vendas(cliente:erp_pessoas(nome_razao, email, celular, telefone))")
       .eq("id", nota_id).maybeSingle();
     if (!nota) return json(422, { erro: "nota não encontrada" });
     if (nota.status !== "autorizada") {
@@ -75,7 +75,15 @@ Deno.serve(async (req) => {
       });
 
     // ---- anexos: XML sempre; DANFE do bucket ou gerado na hora ----
-    const xml = nota.xml_assinado ?? nota.xml_gerado;
+    // ⚠️ A emissão guarda o XML autorizado só no bucket `fiscal` (xml_path);
+    // as colunas xml_assinado/xml_gerado ficam vazias. Lendo só as colunas,
+    // TODO envio ao cliente falhava com "nota sem XML armazenado" — visto no
+    // teste de homologação de 05/10/2026.
+    let xml: string | null = nota.xml_assinado ?? nota.xml_gerado ?? null;
+    if (!xml && nota.xml_path) {
+      const { data: arqXml } = await adminPublic.storage.from("fiscal").download(nota.xml_path);
+      if (arqXml) xml = await arqXml.text();
+    }
     if (!xml) return json(422, { erro: "nota sem XML armazenado" });
     const rotulo = nota.tipo === "nfce" ? "NFCe" : "NFe";
     const nomeBase = `${rotulo}_${nota.serie}_${nota.numero}`;

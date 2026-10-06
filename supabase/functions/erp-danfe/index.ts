@@ -49,7 +49,7 @@ Deno.serve(async (req) => {
 
     const { data: nota } = await admin
       .from("erp_notas_fiscais")
-      .select("id, numero, serie, tipo, status, loja_id, danfe_path, xml_assinado, xml_gerado")
+      .select("id, numero, serie, tipo, status, loja_id, danfe_path, xml_path, xml_assinado, xml_gerado")
       .eq("id", nota_id).maybeSingle();
     if (!nota) return json(422, { erro: "nota não encontrada" });
 
@@ -58,7 +58,12 @@ Deno.serve(async (req) => {
       return json(200, { ok: true, danfe_path: nota.danfe_path, gerado_agora: false });
     }
 
-    const xml = nota.xml_assinado ?? nota.xml_gerado;
+    // o XML autorizado mora no bucket `fiscal` (xml_path); as colunas ficam vazias
+    let xml: string | null = nota.xml_assinado ?? nota.xml_gerado ?? null;
+    if (!xml && nota.xml_path) {
+      const { data: arqXml } = await adminPublic.storage.from("fiscal").download(nota.xml_path);
+      if (arqXml) xml = await arqXml.text();
+    }
     if (!xml) {
       return json(422, {
         erro: "nota sem XML armazenado — o DANFE é desenhado a partir do XML, e sem ele não há o que renderizar",

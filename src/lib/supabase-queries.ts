@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { cancelarVendaEmOrdem, type NotaDaVenda, type ResultadoCancelamento } from "@/lib/cancelar-venda";
 import { supabase } from "@/lib/supabase";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import type {
@@ -5625,6 +5626,50 @@ export function useCancelarNFe() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['erp_notas_fiscais'] });
       qc.invalidateQueries({ queryKey: ['erp_nfe_eventos'] });
+    },
+  });
+}
+
+/**
+ * Cancelar venda (migration 099). A ordem — simular, cancelar a nota na
+ * SEFAZ, cancelar a venda — está em src/lib/cancelar-venda.ts: invertida,
+ * uma recusa do banco deixaria a nota cancelada e a venda de pé.
+ */
+export function useCancelarVenda() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ vendaId, motivo, aoAvancar }: { vendaId: string; motivo: string; aoAvancar?: (etapa: string) => void }) => {
+      const rpc = async (simular: boolean) => {
+        const { data, error } = await supabase.rpc("cancelar_venda", { p_venda_id: vendaId, p_motivo: motivo, p_simular: simular });
+        if (error) throw error;
+        return data as ResultadoCancelamento;
+      };
+      return cancelarVendaEmOrdem({
+        simular: () => rpc(true),
+        notas: async () => {
+          const { data, error } = await supabase
+            .from("erp_notas_fiscais").select("id, numero, tipo, status").eq("venda_id", vendaId);
+          if (error) throw error;
+          return (data ?? []) as NotaDaVenda[];
+        },
+        cancelarNota: async (notaId) => {
+          const { data, error } = await supabase.functions.invoke("erp-eventos-fiscais", {
+            body: { acao: "cancelar", nota_id: notaId, justificativa: motivo },
+          });
+          if (error) throw new Error(await erroEdgeFunction(error, "falha ao cancelar a nota"));
+          if (data && (data as any).cancelada === false) throw new Error((data as any).motivo ?? "SEFAZ recusou");
+          return data;
+        },
+        cancelar: () => rpc(false),
+        aoAvancar,
+      });
+    },
+    // A venda cancelada mexe em tudo que a venda mexeu: caixa, estoque, contas,
+    // comissão, fidelidade, pedidos — e nas notas.
+    onSettled: () => {
+      invalidarDominios(qc, ...DOMINIOS_DA_VENDA);
+      qc.invalidateQueries({ queryKey: ["erp_notas_fiscais"] });
+      qc.invalidateQueries({ queryKey: ["erp_nfe_eventos"] });
     },
   });
 }

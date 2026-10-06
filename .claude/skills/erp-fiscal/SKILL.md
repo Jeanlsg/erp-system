@@ -54,6 +54,10 @@ Credenciais do nfe-service em `public.integrations` (`provider = 'nfe_service'`)
 - **391 — dados do cartão em PIX:** desde a NT 2025.001 (01/09/2025) o PIX (`tPag=17`) também leva o
   grupo `card` (`tpIntegra=2` sem TEF). As duas primeiras NFC-e de Petrolina caíram nisso.
 
+- **XML da nota mora no bucket `fiscal` (`xml_path`)**: a emissão não preenche `xml_assinado`/
+  `xml_gerado`. Quem precisar do XML (envio ao cliente, DANFE) lê o bucket quando a coluna vem vazia —
+  antes, todo envio ao cliente falhava com "nota sem XML armazenado".
+
 ## Totais da nota: desconto, acréscimo e entrega
 
 - A nota soma o total pelos itens (vNF = Σ vProd − vDesc + vFrete + vOutro). Desconto geral,
