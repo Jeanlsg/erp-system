@@ -83,13 +83,14 @@ export async function registrarVenda(
       marcarFalhaDeRede();
       return { enviada: false, uuid_local };
     }
-    // Erro de regra (estoque, permissão): não adianta reenviar sozinho.
-    await enfileirar({
-      ...item,
-      tentativas: 1,
-      status: "bloqueada",
-      ultimo_erro: (err as any)?.message ?? String(err),
-    });
+    // Erro de regra (estoque, CPF, pagamento que não fecha) com o servidor
+    // respondendo: a venda NÃO aconteceu, o operador está vendo o erro e a
+    // venda continua na tela para corrigir e confirmar de novo (com outra
+    // chave). Guardar uma cópia "recusada" aqui criava fantasmas — a loja
+    // ficou com "2 vendas recusadas" de tentativas já refeitas (10/10/2026) —
+    // e reenviar um fantasma lançaria a venda duas vezes. Recusada na fila só
+    // fica a venda feita SEM internet, que ninguém viu falhar (drenarFila).
+    await removerDaFila(uuid_local);
     throw err;
   }
 }

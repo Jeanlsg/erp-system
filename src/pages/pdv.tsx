@@ -49,6 +49,8 @@ import { documentoValido, mascaraDocumento } from "@/lib/documento";
 import { ComboboxBusca } from "@/components/ui/combobox-busca";
 import { ClienteRapidoPdvDialog } from "@/components/cliente-rapido-pdv";
 import { EntregaVendaPdv } from "@/components/entrega-venda-pdv";
+import { VendasRecusadasDialog } from "@/components/vendas-recusadas-dialog";
+import { assinaturaDoCupom, reacaoAoCupom } from "@/lib/estado-venda";
 import { totalComEntrega, faltaNaEntrega, entregaParaPayload, type EntregaVenda } from "@/lib/entrega-venda";
 import {
   PagamentosVenda, faltaPagar, trocoDe, aplicarDigitado, prepararFinalizacao, type Pagamento,
@@ -603,6 +605,26 @@ export function PDVPage() {
     setDocFiscal((d) => (d === "nfe" ? lerDocFiscalPadrao() : d));
   }, []);
 
+  // ⚠️ O estado da venda (desconto, acréscimo, pagamentos, entrega) é DESTA
+  // venda. Cupom esvaziado = venda nova; itens trocados depois de lançar
+  // pagamento = pagamentos de outro total. Antes, a coqueteleira de R$ 15
+  // abria com os pagamentos da creatina (src/lib/estado-venda.ts).
+  const assinaturaCupom = useMemo(() => assinaturaDoCupom(cart), [cart]);
+  const assinaturaAnterior = useRef(assinaturaCupom);
+  useEffect(() => {
+    const reacao = reacaoAoCupom(assinaturaAnterior.current, assinaturaCupom, pagamentos.length > 0);
+    assinaturaAnterior.current = assinaturaCupom;
+    if (reacao === "zerar_venda") {
+      limparCarrinho();
+    } else if (reacao === "descartar_pagamentos") {
+      setPagamentos([]);
+      setValorRecebido("");
+      toast.info("Os itens mudaram: os pagamentos lançados foram desfeitos. Lance de novo.", { duration: 6000 });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reage só à mudança do cupom
+  }, [assinaturaCupom]);
+  const [verRecusadas, setVerRecusadas] = useState(false);
+
   // Abrir caixa
   /**
    * Confere a senha de quem está assumindo o caixa.
@@ -868,8 +890,8 @@ export function PDVPage() {
       }
     } catch (err: any) {
       console.error("Erro ao finalizar venda:", err);
-      // Erro de regra (estoque, permissão) — a venda ficou na fila marcada
-      // como bloqueada, então não some, mas também não sobe sozinha.
+      // Erro de regra (estoque, CPF, pagamento): a venda não aconteceu e
+      // continua na tela para corrigir e confirmar de novo.
       toast.error(
         `Erro ao finalizar venda: ${err?.message ?? "erro desconhecido"}. Verifique antes de tentar novamente.`,
         { duration: 10000 }
@@ -1346,9 +1368,10 @@ export function PDVPage() {
                   </span>
                 )}
                 {fila.bloqueadas > 0 && (
-                  <span className="text-red-600">
-                    {fila.bloqueadas} venda(s) recusada(s) pelo servidor — verifique em Vendas
-                  </span>
+                  <button type="button" className="font-medium text-red-600 underline underline-offset-2"
+                    onClick={() => setVerRecusadas(true)}>
+                    {fila.bloqueadas} venda(s) recusada(s) pelo servidor — ver e resolver
+                  </button>
                 )}
                 {catalogo.usandoEspelho && catalogo.copiadoEm && (
                   <span className="text-muted-foreground">
@@ -1918,6 +1941,8 @@ export function PDVPage() {
         aoLer={aoLerCodigo}
         titulo="Bipar produtos"
       />
+
+      <VendasRecusadasDialog aberto={verRecusadas} aoFechar={() => setVerRecusadas(false)} fila={fila} />
 
       {/* ============ TELA DE PAGAMENTO (F10) ============
           Ocupa a frente de caixa inteira: à esquerda o que está sendo pago
