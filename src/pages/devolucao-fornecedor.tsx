@@ -306,7 +306,8 @@ export function DevolucaoFornecedorPage() {
     try {
       const nota = lerXmlNfe(await arquivo.text());
       const doc = soDigitos(fornecedor?.cpf_cnpj);
-      if (doc && soDigitos(nota.emitente_cnpj) !== doc) {
+      // mesma empresa (raiz do CNPJ): a compra pode ter saído de outra filial do fornecedor
+      if (doc && soDigitos(nota.emitente_cnpj).padStart(14, "0").slice(0, 8) !== doc.padStart(14, "0").slice(0, 8)) {
         toast.error(`Este XML é de ${nota.emitente_nome || nota.emitente_cnpj}, não do fornecedor escolhido.`);
         return;
       }

@@ -85,9 +85,13 @@ describe("faltasDoFornecedor e faltaParaEmitir", () => {
   it("DANFE de outro CNPJ, item sem nota de origem e CFOP de entrada", () => {
     const outra = CHAVE.slice(0, 6) + "99888777000166" + CHAVE.slice(20);
     const f = faltaParaEmitir({ chaves: [outra], fornecedor, itens: [{ ...item, cfop: "1202" }] });
-    expect(f.join(" | ")).toMatch(/outro CNPJ/);
+    expect(f.join(" | ")).toMatch(/outra empresa/);
     expect(f.join(" | ")).toMatch(/nota de entrada de "WHEY"/);
     expect(f.join(" | ")).toMatch(/CFOP de saída/);
+  });
+  it("compra emitida por outra filial do mesmo fornecedor (mesma raiz de CNPJ) passa", () => {
+    const filial = CHAVE.slice(0, 6) + CNPJ.slice(0, 8) + "000262" + CHAVE.slice(20);
+    expect(faltaParaEmitir({ chaves: [filial], fornecedor, itens: [{ ...item, chave_nota_origem: filial }] })).toEqual([]);
   });
   it("nota normal (finalidade 1) não exige DANFE", () => {
     expect(faltaParaEmitir({ finalidade: 1, chaves: [], fornecedor, itens: [{ ...item, chave_nota_origem: null }] })).toEqual([]);
