@@ -72,9 +72,10 @@ export function PdvLayout() {
       {mostrarMenu && <AppSidebar />}
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-      <header className="flex shrink-0 items-center justify-between gap-3 border-b bg-card px-4 py-2">
+      {/* preto com borda vermelha, igual ao header do sistema (10/10/2026) */}
+      <header className="dark flex shrink-0 items-center justify-between gap-3 border-b-2 border-b-red-600 bg-[#121212] px-4 py-2 text-foreground">
         <div className="flex items-center gap-3 min-w-0">
-          <span className="font-semibold tracking-tight">Frente de caixa</span>
+          <span className="font-semibold tracking-tight text-white">Frente de caixa</span>
           {/* Trava só com venda em andamento. Com o cupom vazio, trocar a
               filial leva ao caixa aberto dela ou à abertura — é assim que o
               admin alterna entre Petrolina e Juazeiro, e que quem só opera o
@@ -117,7 +118,7 @@ export function PdvLayout() {
 
         <div className="flex items-center gap-3">
           <div className="text-right leading-tight">
-            <p className="text-sm font-medium">{user?.nome}</p>
+            <p className="text-sm font-medium text-white">{user?.nome}</p>
             <p className="text-xs text-muted-foreground">
               {papeis.map((p) => roleLabels[p] ?? p).join(", ")}
             </p>
