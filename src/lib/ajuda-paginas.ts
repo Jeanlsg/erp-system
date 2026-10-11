@@ -98,8 +98,16 @@ const A: Record<string, AjudaPagina> = {
   "email-marketing": { titulo: "E-mail Marketing", descricao: "Crie campanhas e envie para todos os cadastros ativos com e-mail. O disparo usa o Resend já configurado e a campanha guarda enviados e falhas." },
   torpedos: { titulo: "Torpedos SMS", descricao: "Envio de SMS para clientes. Depende de provedor contratado." },
   "notas-fiscais": {
-    titulo: "Notas Fiscais",
-    descricao: "NF-e e NFC-e emitidas: consulta, XML, DANFE (gerado na hora se a nota não o tiver arquivado), cancelamento, carta de correção e inutilização de numeração.",
+    titulo: "Notas de Venda",
+    descricao: "NF-e e NFC-e emitidas, separadas em abas (NFC-e, NF-e, devoluções, canceladas, inutilizações): consulta, XML, DANFE (gerado na hora se a nota não o tiver arquivado), cancelamento, carta de correção e inutilização de numeração.",
+  },
+  "devolucao-fornecedor": {
+    titulo: "Devolução a Fornecedor",
+    descricao: "Mercadoria que volta ao fornecedor: rascunho com CFOP, quantidade, valor e tributação por item, espelho da nota antes de enviar, confirmação (baixa do estoque) e emissão da NF-e de devolução.",
+  },
+  "fiscal/relatorio-contadora": {
+    titulo: "Relatório da Contadora",
+    descricao: "As notas do mês da filial: imprimir o relatório e baixar num ZIP os XML das notas, dos cancelamentos, das cartas de correção, das inutilizações e das notas de entrada.",
   },
   faturamento: { titulo: "Faturamento", descricao: "Emissão de NF-e de venda (modelo 55) para pedidos e clientes com cadastro completo." },
   remessas: {
@@ -176,7 +184,7 @@ const A: Record<string, AjudaPagina> = {
     titulo: "Configurações SEFAZ",
     descricao: "Ambiente (homologação/produção), séries, numeração e o CSC da NFC-e por loja. Sem CSC cadastrado, a NFC-e é recusada antes de transmitir.",
   },
-  "gestao/painel-contador": { titulo: "Painel do Contador", descricao: "Visão para o contador: documentos fiscais e arquivos do período. A escrituração (SPED) é gerada em Fiscal → Escrituração." },
+  "gestao/painel-contador": { titulo: "Painel do Contador", descricao: "O mês fiscal da filial: notas autorizadas por tipo, canceladas, inutilizações, entradas, vendas sem nota e o financeiro do mês, com atalhos para o relatório/ZIP e a Escrituração (SPED)." },
   "gestao/documentos-demonstrativos": { titulo: "Documentos Demonstrativos", descricao: "DRE simplificado e demonstrativos. A versão completa está em Análise Gerencial." },
   "gestao/avaliacoes": { titulo: "Avaliações", descricao: "Avaliações de clientes sobre a loja." },
   "gestao/recomendacoes": { titulo: "Recomendações", descricao: "Indicações registradas por clientes." },

@@ -96,9 +96,14 @@ export function faltaParaEmitir(d: {
   itens: Pick<ItemDevolucao, "nome" | "cfop" | "quantidade" | "item_nota_origem" | "ncm">[];
 }): string[] {
   const f: string[] = [];
-  if (soDigitos(d.chave_nota_origem).length !== 44) f.push("chave de acesso (44 dígitos) da nota de compra");
+  const chave = soDigitos(d.chave_nota_origem);
+  if (chave.length !== 44) f.push("chave de acesso (44 dígitos) da nota de compra");
   const doc = soDigitos(d.fornecedor?.cpf_cnpj);
   if (doc.length !== 14 && doc.length !== 11) f.push("CNPJ do fornecedor");
+  // a chave traz o CNPJ do emitente da compra; outro CNPJ = SEFAZ recusa (1194)
+  else if (chave.length === 44 && chave.slice(6, 20) !== doc.padStart(14, "0")) {
+    f.push("chave da nota de compra de outro CNPJ (não é deste fornecedor)");
+  }
   const end = d.fornecedor?.endereco ?? {};
   if (!end?.logradouro || !(end?.cidade || end?.municipio) || !(end?.uf || d.fornecedor?.uf)) f.push("endereço do fornecedor (rua, cidade, UF)");
   if (!d.itens.length) f.push("itens");

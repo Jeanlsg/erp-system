@@ -39,11 +39,15 @@ describe("aplicarTributacao", () => {
 
 describe("faltaParaEmitir", () => {
   const ok = {
-    chave_nota_origem: "2".repeat(44),
+    chave_nota_origem: "26" + "2610" + "11444777000161" + "55001000012345" + "1123456784",
     fornecedor: { cpf_cnpj: "11.444.777/0001-61", endereco: { logradouro: "R", cidade: "C", uf: "PE" } },
     itens: [{ nome: "WHEY", cfop: "5202", quantidade: 1, item_nota_origem: 3, ncm: "21069030" }],
   };
   it("completa passa", () => { expect(faltaParaEmitir(ok)).toEqual([]); });
+  it("chave de outro CNPJ é apontada (SEFAZ 1194)", () => {
+    const f = faltaParaEmitir({ ...ok, fornecedor: { ...ok.fornecedor, cpf_cnpj: "53.833.226/0003-00" } });
+    expect(f.join(" | ")).toMatch(/outro CNPJ/);
+  });
   it("aponta chave, item da nota e CFOP de entrada", () => {
     const f = faltaParaEmitir({ ...ok, chave_nota_origem: "123", itens: [{ ...ok.itens[0], item_nota_origem: null, cfop: "1202" }] });
     expect(f.join(" | ")).toMatch(/chave de acesso/);

@@ -193,6 +193,14 @@ Deno.serve(async (req) => {
       }).eq("id", nota.id);
       if (updErr) console.error(`nota cancelada na SEFAZ mas falhou ao atualizar: ${updErr.message}`);
 
+      // Nota de devolução a fornecedor cancelada: a devolução volta a
+      // "confirmada" (a mercadoria continua fora do estoque) para poder
+      // emitir a nota de novo. Sem isto ela ficava "faturada" com nota morta.
+      const { error: devErr } = await admin.from("erp_devolucoes_fornecedor")
+        .update({ status: "confirmada", nota_fiscal_id: null, updated_at: new Date().toISOString() })
+        .eq("nota_fiscal_id", nota.id);
+      if (devErr) console.error(`nota cancelada mas a devolução não voltou a confirmada: ${devErr.message}`);
+
       return json(200, { cancelada: true, cstat: data.cstat, motivo: data.motivo, protocolo: data.protocolo });
     }
 

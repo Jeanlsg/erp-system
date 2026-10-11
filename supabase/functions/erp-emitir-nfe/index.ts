@@ -317,6 +317,12 @@ Deno.serve(async (req) => {
       if (docF.length !== 14 && docF.length !== 11) faltas.push("CNPJ do fornecedor");
       if (!endF.logradouro || !(endF.cidade || endF.municipio) || !(endF.uf || f.uf)) faltas.push("endereço do fornecedor");
       if (chaveOrig.length !== 44) faltas.push("chave de acesso da nota de compra");
+      // A chave traz o CNPJ de quem emitiu a compra (posições 7–20). A SEFAZ
+      // recusa (1194) devolução para outro CNPJ que não o emitente da nota
+      // referenciada — visto no teste de 10/10; avisa antes de transmitir.
+      else if (docF && chaveOrig.slice(6, 20) !== docF.padStart(14, "0")) {
+        faltas.push("a chave da nota de compra é de outro CNPJ, não deste fornecedor");
+      }
       for (const i of dev.itens ?? []) if (!(Number(i.item_nota_origem) > 0)) faltas.push(`nº do item na nota de compra (${i.nome})`);
       if (faltas.length) return json(422, { erro: "faltam dados para a nota de devolução", faltas });
 
