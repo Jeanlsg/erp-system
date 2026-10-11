@@ -270,7 +270,7 @@ Uma nota de devolução AUTORIZADA ponta a ponta só dá com uma nota de compra 
 Áudios (Antonio, 12h03): histórico de alteração item por item (o sistema diz 4, a prateleira tem 2:
 quando entrou, o que saiu por venda, quem alterou) e mexer no produto pela ficha. A ficha
 (Estoque Produtos → nome do produto) já fazia isso; testada com produto de exemplo, apareceram e
-foram corrigidos (commit 32f… migration 110):
+foram corrigidos (commit 22daa53, migration 110):
 - custo médio: estoque sem custo médio gravado contava como custo zero na reposição (4 un. + 3 a
   R$ 72 = R$ 30,86); 9 de 10 estoques com saldo estavam assim — preenchidos com o custo do cadastro;
 - margem: a lista calculava sobre o custo (71%) e a ficha sobre o preço (41,7%); agora sobre o preço
