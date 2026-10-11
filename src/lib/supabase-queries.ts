@@ -4163,13 +4163,22 @@ export function useDefinirLojasDoUsuario() {
 // FAIXAS DE COMISSÃO DE SERVIÇO (migration 097)
 // ========================================
 
-export function useFaixasServico(funcionarioId?: string | null) {
+// Faixas de comissão por funcionário: "servico" (097) e "venda" — produtos
+// vendidos (107). Mesmo formato e mesma regra: o total do mês define a faixa,
+// e o banco refaz as comissões pendentes do mês quando a tabela muda.
+type TipoFaixa = "servico" | "venda";
+const TABELA_FAIXAS: Record<TipoFaixa, string> = {
+  servico: "erp_comissao_servico_faixas",
+  venda: "erp_comissao_venda_faixas",
+};
+
+export function useFaixasComissao(tipo: TipoFaixa, funcionarioId?: string | null) {
   return useQuery<{ venda_minima: number; percentual: number }[]>({
-    queryKey: ["erp_comissao_servico_faixas", funcionarioId],
+    queryKey: [TABELA_FAIXAS[tipo], funcionarioId],
     enabled: !!funcionarioId,
     queryFn: async () => {
       if (!isSupabaseConfigured() || !funcionarioId) return [];
-      const { data, error } = await supabase.from("erp_comissao_servico_faixas")
+      const { data, error } = await supabase.from(TABELA_FAIXAS[tipo])
         .select("venda_minima, percentual").eq("funcionario_id", funcionarioId)
         .order("venda_minima");
       if (error) throw error;
@@ -4178,42 +4187,38 @@ export function useFaixasServico(funcionarioId?: string | null) {
   });
 }
 
-/**
- * Grava as faixas de um funcionário (troca a lista inteira). O banco refaz
- * as comissões pendentes do mês dele com as faixas novas.
- */
-export function useDefinirFaixasServico() {
+/** Grava as faixas de um funcionário (troca a lista inteira). */
+export function useDefinirFaixasComissao(tipo: TipoFaixa) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ funcionarioId, faixas }: {
       funcionarioId: string; faixas: { venda_minima: number; percentual: number }[];
     }) => {
-      const { error: e1 } = await supabase.from("erp_comissao_servico_faixas")
-        .delete().eq("funcionario_id", funcionarioId);
+      const { error: e1 } = await supabase.from(TABELA_FAIXAS[tipo]).delete().eq("funcionario_id", funcionarioId);
       if (e1) throw e1;
       if (faixas.length) {
-        const { error } = await supabase.from("erp_comissao_servico_faixas")
+        const { error } = await supabase.from(TABELA_FAIXAS[tipo])
           .insert(faixas.map((f) => ({ funcionario_id: funcionarioId, ...f })));
         if (error) throw error;
       }
       return faixas;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["erp_comissao_servico_faixas"] });
-      qc.invalidateQueries({ queryKey: ["erp_faixa_servico_situacao"] });
+      qc.invalidateQueries({ queryKey: [TABELA_FAIXAS[tipo]] });
+      qc.invalidateQueries({ queryKey: [`erp_faixa_${tipo}_situacao`] });
       qc.invalidateQueries({ queryKey: ["erp_comissoes"] });
     },
   });
 }
 
-/** Quanto o funcionário vendeu de serviço no mês, a faixa atual e a próxima. */
-export function useSituacaoFaixaServico(funcionarioId?: string | null, referencia?: string) {
+/** Quanto o funcionário vendeu no mês (serviços ou produtos), a faixa atual e a próxima. */
+export function useSituacaoFaixa(tipo: TipoFaixa, funcionarioId?: string | null, referencia?: string) {
   return useQuery<any | null>({
-    queryKey: ["erp_faixa_servico_situacao", funcionarioId, referencia],
+    queryKey: [`erp_faixa_${tipo}_situacao`, funcionarioId, referencia],
     enabled: !!funcionarioId,
     queryFn: async () => {
       if (!isSupabaseConfigured() || !funcionarioId) return null;
-      const { data, error } = await supabase.schema("erp").rpc("situacao_faixa_servico", {
+      const { data, error } = await supabase.schema("erp").rpc(`situacao_faixa_${tipo}`, {
         p_funcionario: funcionarioId,
         p_ref: referencia ?? new Date().toLocaleDateString("sv-SE"),
       });
@@ -4222,6 +4227,11 @@ export function useSituacaoFaixaServico(funcionarioId?: string | null, referenci
     },
   });
 }
+
+export const useFaixasServico = (funcionarioId?: string | null) => useFaixasComissao("servico", funcionarioId);
+export const useDefinirFaixasServico = () => useDefinirFaixasComissao("servico");
+export const useSituacaoFaixaServico = (funcionarioId?: string | null, referencia?: string) =>
+  useSituacaoFaixa("servico", funcionarioId, referencia);
 
 // ========================================
 // METAS E COMISSÕES (frente 5 do plano)

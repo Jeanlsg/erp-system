@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ComboboxBusca } from "@/components/ui/combobox-busca";
 import { supabase } from "@/lib/supabase";
-import { useFuncionarios, useMetas, useCriarMeta, useExcluirMeta, useLancarComissoesEmContas, isSupabaseConfigured, useSituacaoFaixaServico, useFaixasServico } from "@/lib/supabase-queries";
+import { useFuncionarios, useMetas, useCriarMeta, useExcluirMeta, useLancarComissoesEmContas, isSupabaseConfigured, useSituacaoFaixaServico, useFaixasServico, useFaixasComissao, useSituacaoFaixa } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { brl, date } from "@/lib/format";
@@ -77,6 +77,10 @@ export function ComissoesPage() {
   const { data: faixasDoVendedor = [] } = useFaixasServico(funcionarioId || null);
   const { data: situacaoFaixa } = useSituacaoFaixaServico(
     faixasDoVendedor.length ? funcionarioId : null, fim);
+  // e a faixa sobre vendas de produtos (107)
+  const { data: faixasVendaDoVendedor = [] } = useFaixasComissao("venda", funcionarioId || null);
+  const { data: situacaoFaixaVenda } = useSituacaoFaixa("venda",
+    faixasVendaDoVendedor.length ? funcionarioId : null, fim);
   const nomeDe = (c: any) => c.funcionario?.pessoa?.nome_razao ?? c.funcionario?.cargo ?? "—";
 
   // totais por vendedor, só do que está na tela
@@ -189,30 +193,9 @@ export function ComissoesPage() {
         </CardContent></Card>
       </div>
 
-      {/* Faixa de comissão de serviço do vendedor filtrado */}
-      {situacaoFaixa && (
-        <Card>
-          <CardContent className="flex flex-wrap items-center gap-x-8 gap-y-2 p-4 text-sm">
-            <div>
-              <p className="text-xs uppercase text-muted-foreground">Serviços no mês</p>
-              <p className="text-lg font-semibold tabular-nums">{brl(Number(situacaoFaixa.total))}</p>
-            </div>
-            <div>
-              <p className="text-xs uppercase text-muted-foreground">Faixa atual</p>
-              <p className="text-lg font-semibold tabular-nums">{Number(situacaoFaixa.percentual)}%</p>
-            </div>
-            <div className="text-muted-foreground">
-              {situacaoFaixa.proxima_venda_minima != null ? (
-                <>Faltam <b className="text-foreground">{brl(Number(situacaoFaixa.falta))}</b> em serviços para
-                  subir para <b className="text-foreground">{Number(situacaoFaixa.proximo_percentual)}%</b> — e o mês
-                  inteiro passa a esse percentual.</>
-              ) : (
-                <>Na faixa mais alta.</>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Faixas de comissão do vendedor filtrado: vendas (produtos) e serviços */}
+      {situacaoFaixaVenda && <CartaoFaixa rotulo="Vendas no mês" unidade="em vendas" situacao={situacaoFaixaVenda} />}
+      {situacaoFaixa && <CartaoFaixa rotulo="Serviços no mês" unidade="em serviços" situacao={situacaoFaixa} />}
 
       {/* Metas do período */}
       <Card>
@@ -371,7 +354,7 @@ export function ComissoesPage() {
                     <td className="p-3 font-mono text-xs">{c.venda?.numero_pedido ?? "—"}</td>
                     <td className="p-3">{nomeDe(c)}</td>
                     <td className="p-3 text-right tabular-nums">{brl(c.valor_venda)}</td>
-                    <td className="p-3 text-right tabular-nums">{Number(c.percentual_comissao).toFixed(2)}%</td>
+                    <td className="p-3 text-right tabular-nums">{Number(c.percentual_comissao).toFixed(2)}%{c.faixa_venda ? " (faixa)" : ""}</td>
                     <td className="p-3 text-right text-xs tabular-nums text-muted-foreground">
                       {Number(c.valor_servicos ?? 0) > 0
                         ? <>{brl(Number(c.valor_servicos))} a {Number(c.percentual_servico ?? 0)}%{c.faixa_servico ? " (faixa)" : ""}</>
@@ -396,5 +379,32 @@ export function ComissoesPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+/** Situação da faixa no mês: quanto vendeu, a faixa atual e quanto falta para a próxima. */
+function CartaoFaixa({ rotulo, unidade, situacao }: { rotulo: string; unidade: string; situacao: any }) {
+  return (
+    <Card>
+      <CardContent className="flex flex-wrap items-center gap-x-8 gap-y-2 p-4 text-sm">
+        <div>
+          <p className="text-xs uppercase text-muted-foreground">{rotulo}</p>
+          <p className="text-lg font-semibold tabular-nums">{brl(Number(situacao.total))}</p>
+        </div>
+        <div>
+          <p className="text-xs uppercase text-muted-foreground">Faixa atual</p>
+          <p className="text-lg font-semibold tabular-nums">{Number(situacao.percentual)}%</p>
+        </div>
+        <div className="text-muted-foreground">
+          {situacao.proxima_venda_minima != null ? (
+            <>Faltam <b className="text-foreground">{brl(Number(situacao.falta))}</b> {unidade} para
+              subir para <b className="text-foreground">{Number(situacao.proximo_percentual)}%</b> — e o mês
+              inteiro passa a esse percentual.</>
+          ) : (
+            <>Na faixa mais alta.</>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

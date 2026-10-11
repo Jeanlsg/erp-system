@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { validarFaixas, faixaAtingida } from "@/lib/faixas-comissao";
+import { validarFaixas } from "@/lib/faixas-comissao";
+import { EditorFaixasComissao, faixasEmNumeros, type FaixaTexto } from "@/components/editor-faixas-comissao";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Building2, Plus, Search, Loader2, UserCheck, UserX, Mail, Phone, Pencil, UserMinus, RotateCcw, KeyRound } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { useFuncionarios, useCreateFuncionario, useUpdateFuncionario, isSupabaseConfigured, useFaixasServico, useDefinirFaixasServico } from "@/lib/supabase-queries";
+import { useFuncionarios, useCreateFuncionario, useUpdateFuncionario, isSupabaseConfigured, useFaixasServico, useDefinirFaixasServico, useFaixasComissao, useDefinirFaixasComissao } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
@@ -48,13 +49,22 @@ export function FuncionariosPage() {
   // mês, ganha Y% sobre todos os serviços do mês. Sem faixa, vale o % fixo.
   const { data: faixasSalvas = [] } = useFaixasServico(editando?.id ?? null);
   const definirFaixas = useDefinirFaixasServico();
-  const [faixas, setFaixas] = useState<{ venda_minima: string; percentual: string }[]>([]);
+  const [faixas, setFaixas] = useState<FaixaTexto[]>([]);
   useEffect(() => {
     setFaixas(faixasSalvas.map((f) => ({ venda_minima: String(f.venda_minima), percentual: String(f.percentual) })));
   }, [editando?.id, JSON.stringify(faixasSalvas)]); // eslint-disable-line react-hooks/exhaustive-deps
-  const faixasNumericas = faixas
-    .filter((f) => f.venda_minima !== "" || f.percentual !== "")
-    .map((f) => ({ venda_minima: Number(String(f.venda_minima).replace(",", ".")), percentual: Number(String(f.percentual).replace(",", ".")) }));
+  const faixasNumericas = faixasEmNumeros(faixas);
+  // Faixas sobre VENDAS de produtos (migration 107, pedido de 11/10/2026):
+  // bateu X em vendas no mês, ganha Y% sobre todos os produtos do mês —
+  // muda de faixa como uma tabela de frete. Sem faixa, vale o % fixo.
+  const { data: faixasVendaSalvas = [] } = useFaixasComissao("venda", editando?.id ?? null);
+  const definirFaixasVenda = useDefinirFaixasComissao("venda");
+  const [faixasVenda, setFaixasVenda] = useState<FaixaTexto[]>([]);
+  useEffect(() => {
+    setFaixasVenda(faixasVendaSalvas.map((f) => ({ venda_minima: String(f.venda_minima), percentual: String(f.percentual) })));
+  }, [editando?.id, JSON.stringify(faixasVendaSalvas)]); // eslint-disable-line react-hooks/exhaustive-deps
+  const faixasVendaNumericas = faixasEmNumeros(faixasVenda);
+  const checagemFaixasVenda = validarFaixas(faixasVendaNumericas);
   const checagemFaixas = validarFaixas(faixasNumericas);
   const [form, setForm] = useState({
     nome: "",
@@ -220,6 +230,7 @@ export function FuncionariosPage() {
     if (!editando) return;
     if (!form.nome) { toast.error("Informe o nome do funcionário."); return; }
     if (checagemFaixas.erros.length) { toast.error(checagemFaixas.erros[0]); return; }
+    if (checagemFaixasVenda.erros.length) { toast.error(`Faixas de vendas: ${checagemFaixasVenda.erros[0]}`); return; }
     if (!validarAcesso()) return;
     try {
       const usuarioId = await garantirAcesso();
@@ -236,6 +247,7 @@ export function FuncionariosPage() {
         usuario_id: usuarioId,
       });
       await definirFaixas.mutateAsync({ funcionarioId: editando.id, faixas: faixasNumericas });
+      await definirFaixasVenda.mutateAsync({ funcionarioId: editando.id, faixas: faixasVendaNumericas });
       void qc.invalidateQueries({ queryKey: ["erp_usuarios_vinculo"] });
       invalidarDominios(qc, "pessoas");
       void qc.invalidateQueries({ queryKey: ["erp_usuarios"] });
@@ -295,6 +307,7 @@ export function FuncionariosPage() {
 
   const handleCriar = async () => {
     if (checagemFaixas.erros.length) { toast.error(checagemFaixas.erros[0]); return; }
+    if (checagemFaixasVenda.erros.length) { toast.error(`Faixas de vendas: ${checagemFaixasVenda.erros[0]}`); return; }
     if (!form.nome) {
       toast.error("Informe o nome do funcionário.");
       return;
@@ -353,6 +366,10 @@ export function FuncionariosPage() {
     if (criado?.id && faixasNumericas.length) {
       try { await definirFaixas.mutateAsync({ funcionarioId: criado.id, faixas: faixasNumericas }); }
       catch (e: any) { toast.warning(`Funcionário salvo, mas as faixas de comissão não: ${e.message ?? e}`); }
+    }
+    if (criado?.id && faixasVendaNumericas.length) {
+      try { await definirFaixasVenda.mutateAsync({ funcionarioId: criado.id, faixas: faixasVendaNumericas }); }
+      catch (e: any) { toast.warning(`Funcionário salvo, mas as faixas de comissão sobre vendas não: ${e.message ?? e}`); }
     }
 
     // 3) acesso ao sistema — depois do funcionário existir, para uma falha
@@ -600,6 +617,13 @@ export function FuncionariosPage() {
                   </div>
                   <div><Label>Chave PIX</Label><Input value={form.chave_pix} onChange={(e) => setForm({ ...form, chave_pix: e.target.value })} /></div>
                 </div>
+                <EditorFaixasComissao
+                  titulo="Faixas de comissão sobre vendas (produtos)"
+                  descricao="O total de produtos que a pessoa vender no mês define a faixa, e o percentual dela vale para todas as vendas do mês — sobe de faixa como numa tabela de frete. Sem faixas, vale a Comissão % fixa acima."
+                  rotuloTotal="em vendas"
+                  faixas={faixasVenda}
+                  aoMudar={setFaixasVenda}
+                />
                 <div>
                   <Label>Comissão sobre serviço %</Label>
                   <Input type="number" step="0.01" min="0" value={form.comissao_servico}
@@ -610,46 +634,13 @@ export function FuncionariosPage() {
                     cadastradas abaixo, são elas que valem.
                   </p>
                 </div>
-                <div className="rounded-md border bg-background p-3">
-                  <Label>Faixas de comissão de serviço</Label>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    O total de serviços que a pessoa vender no mês define a faixa, e o
-                    percentual dela vale para todos os serviços do mês.
-                  </p>
-                  <div className="mt-2 space-y-2">
-                    {faixas.map((f, i) => (
-                      <div key={i} className="flex flex-wrap items-center gap-2 text-sm">
-                        <span className="text-muted-foreground">Vendeu a partir de R$</span>
-                        <Input className="h-8 w-28" inputMode="decimal" value={f.venda_minima}
-                          onChange={(e) => setFaixas((l) => l.map((x, k) => k === i ? { ...x, venda_minima: e.target.value } : x))} />
-                        <span className="text-muted-foreground">no mês, ganha</span>
-                        <Input className="h-8 w-20" inputMode="decimal" value={f.percentual}
-                          onChange={(e) => setFaixas((l) => l.map((x, k) => k === i ? { ...x, percentual: e.target.value } : x))} />
-                        <span className="text-muted-foreground">%</span>
-                        <Button type="button" variant="ghost" size="sm" className="h-8 text-destructive"
-                          onClick={() => setFaixas((l) => l.filter((_, k) => k !== i))}>
-                          Remover
-                        </Button>
-                      </div>
-                    ))}
-                    <Button type="button" variant="outline" size="sm"
-                      onClick={() => setFaixas((l) => [...l, { venda_minima: "", percentual: "" }])}>
-                      Adicionar faixa
-                    </Button>
-                  </div>
-                  {checagemFaixas.erros.map((e) => (
-                    <p key={e} className="mt-2 text-xs text-destructive">{e}</p>
-                  ))}
-                  {checagemFaixas.avisos.map((a) => (
-                    <p key={a} className="mt-2 text-xs text-amber-700 dark:text-amber-400">{a}</p>
-                  ))}
-                  {faixasNumericas.length > 0 && checagemFaixas.erros.length === 0 && (
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      Exemplo: com R$ 1.500 em serviços no mês, a comissão de serviço é{" "}
-                      <b>{faixaAtingida(faixasNumericas, 1500)}%</b> sobre os R$ 1.500.
-                    </p>
-                  )}
-                </div>
+                <EditorFaixasComissao
+                  titulo="Faixas de comissão de serviço"
+                  descricao="O total de serviços que a pessoa vender no mês define a faixa, e o percentual dela vale para todos os serviços do mês."
+                  rotuloTotal="em serviços"
+                  faixas={faixas}
+                  aoMudar={setFaixas}
+                />
               </div>
             </details>
 
