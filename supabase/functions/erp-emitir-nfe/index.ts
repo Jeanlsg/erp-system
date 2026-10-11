@@ -284,9 +284,11 @@ Deno.serve(async (req) => {
       }
     } else if (isDevolFornecedor) {
       // ---- Devolução a fornecedor: NF-e de SAÍDA, finalidade 4 ----
-      const { data: dev } = await admin.from("erp_devolucoes_fornecedor")
+      const { data: dev, error: errDev } = await admin.from("erp_devolucoes_fornecedor")
         .select("*, itens:erp_devolucao_fornecedor_itens(*, produto:erp_produtos(sku, codigo_barras, ncm, cest, unidade)), fornecedor:erp_pessoas!erp_devolucoes_fornecedor_fornecedor_id_fkey(*), transportadora:erp_pessoas!erp_devolucoes_fornecedor_transportadora_id_fkey(*)")
         .eq("id", devolucao_fornecedor_id).maybeSingle();
+      // erro de consulta (GRANT, embed) não é "não encontrada" — mostra o motivo
+      if (errDev) return json(500, { erro: `não foi possível ler a devolução: ${errDev.message}` });
       if (!dev) return json(422, { erro: "devolução não encontrada" });
       if (dev.loja_id !== loja_id) return json(422, { erro: "a devolução é de outra loja" });
       if (!ehEspelho && dev.status !== "confirmada") {
