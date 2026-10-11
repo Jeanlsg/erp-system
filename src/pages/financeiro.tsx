@@ -141,7 +141,8 @@ export function FinanceiroPage() {
   const nfces = notas.filter((n: any) => n.tipo === "nfce").length;
   const cfes = notas.filter((n: any) => n.tipo === "cfe").length;
 
-  const margemLucro = kpis.data?.vendas_finalizadas ? (kpis.data.lucro_total / kpis.data.vendas_finalizadas) * 100 : 0;
+  // fração: pct() multiplica por 100 (antes saía "4613.6%" para 46%)
+  const margemLucro = kpis.data?.vendas_finalizadas ? kpis.data.lucro_total / kpis.data.vendas_finalizadas : 0;
 
   const handleCriarConta = async () => {
     if (!modalConta || !formConta.descricao || !formConta.valor || !formConta.data_vencimento) return;
@@ -175,9 +176,10 @@ export function FinanceiroPage() {
   );
 
   const BotaoAcao = ({ titulo, icone: Icon, onClick, badge }: any) => (
-    <Button variant="outline" className="h-auto py-3 flex flex-col items-center gap-1" onClick={onClick}>
-      {Icon && <Icon className="h-5 w-5" />}
-      <span className="text-xs">{titulo}</span>
+    // Com cor (pedido da loja, 10/10/2026: telas do financeiro "muito brancas")
+    <Button variant="outline" className="group h-auto flex-col items-center gap-1 border-l-4 border-l-red-600 py-3 hover:bg-red-600 hover:text-white" onClick={onClick}>
+      {Icon && <Icon className="h-6 w-6 text-red-600 group-hover:text-white" />}
+      <span className="text-xs font-medium">{titulo}</span>
       {badge && <Badge variant="secondary" className="text-[10px]">{badge}</Badge>}
     </Button>
   );
@@ -381,7 +383,8 @@ export function FinanceiroPage() {
 
       {/* ABAS */}
       <Tabs value={aba} onValueChange={(v) => setAba(v as AbaAtiva)}>
-        <TabsList className="grid grid-cols-5 lg:grid-cols-10 w-full">
+        {/* 12 abas: com 10 colunas as duas últimas caíam numa linha cortada */}
+        <TabsList className="grid h-auto w-full grid-cols-4 sm:grid-cols-6 lg:grid-cols-12">
           <TabsTrigger value="fluxo">Fluxo</TabsTrigger>
           <TabsTrigger value="vendas">Vendas</TabsTrigger>
           <TabsTrigger value="graficos">Gráficos</TabsTrigger>
@@ -615,7 +618,7 @@ export function FinanceiroPage() {
                         <td className="p-3"><Badge variant="outline">{f.forma.toUpperCase()}</Badge></td>
                         <td className="p-3 text-center">{num(f.count)}</td>
                         <td className="p-3 text-right tabular-nums font-semibold">{brl(f.total)}</td>
-                        <td className="p-3 text-right tabular-nums">{pct((f.total / total) * 100)}</td>
+                        <td className="p-3 text-right tabular-nums">{pct(f.total / total)}</td>
                       </tr>
                     );
                   })}
@@ -648,7 +651,7 @@ export function FinanceiroPage() {
                       <tr key={idx} className="border-b hover:bg-accent">
                         <td className="p-3 font-medium">{t.bandeira}</td>
                         <td className="p-3 text-center"><Badge variant="outline">{t.tipo}</Badge></td>
-                        <td className="p-3 text-right tabular-nums">{pct(t.taxa, 2)}</td>
+                        <td className="p-3 text-right tabular-nums">{pct(t.taxa / 100, 2)}</td>
                         <td className="p-3 text-right tabular-nums">{brl(t.total_vendido)}</td>
                         <td className="p-3 text-right tabular-nums font-semibold text-red-600">{brl(t.custo_taxa)}</td>
                       </tr>
