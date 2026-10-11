@@ -614,7 +614,8 @@ export function FinanceiroPage() {
                   {formas.data?.map((f) => {
                     const total = formas.data?.reduce((s, x) => s + x.total, 0) ?? 1;
                     return (
-                      <tr key={f.forma} className="border-b hover:bg-accent">
+                      // ?forma= vem do menu Gestão Recebimentos (Cheque, Dinheiro, Cartões)
+                      <tr key={f.forma} className={`border-b hover:bg-accent ${f.forma === searchParams.get("forma") ? "bg-primary/10 font-semibold" : ""}`}>
                         <td className="p-3"><Badge variant="outline">{f.forma.toUpperCase()}</Badge></td>
                         <td className="p-3 text-center">{num(f.count)}</td>
                         <td className="p-3 text-right tabular-nums font-semibold">{brl(f.total)}</td>

@@ -1,9 +1,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
-  Home, Calculator, Wallet, Receipt, Truck, Bike, MessageSquare, ShoppingCart, Barcode, CreditCard, Wrench, FileText, Users, Building2, Package, Calendar, LineChart, Briefcase, Mail, Settings, Cog, Store, Key, HelpCircle, PanelLeftClose, PanelLeftOpen, LayoutDashboard, RotateCcw, PackagePlus, ShoppingBag, ArrowLeftRight, ScrollText, Banknote, AlertTriangle, Shield, Search, Smartphone, Star, Lock, Network, Send, FolderTree, ScanBarcode, ChevronRight, Minus, Flag, Upload, ChevronDown, ExternalLink, BookOpen,
-  Undo2,
-  FileArchive, ScissorsLineDashed,
+  Home, Calculator, Wallet, Receipt, Truck, Bike, MessageSquare, ShoppingCart, Barcode, CreditCard, Wrench, FileText, Users, Building2, Package, Calendar, LineChart, Briefcase, Mail, Settings, Cog, Store, Key, HelpCircle, PanelLeftClose, PanelLeftOpen, LayoutDashboard, RotateCcw, PackagePlus, ShoppingBag, ArrowLeftRight, ScrollText, Banknote, AlertTriangle, Shield, Search, Smartphone, Star, Lock, Network, Send, FolderTree, ScanBarcode, ChevronRight, Minus, Flag, ChevronDown, ExternalLink, BookOpen,
 } from "lucide-react";
 
 import { useAuth, type Permission } from "@/lib/store/auth-store";
@@ -26,6 +24,8 @@ export type NavItem = {
   children?: NavItem[];
   /** Link externo: abre em nova aba, não passa por flag nem por rota. */
   external?: boolean;
+  /** Outras rotas que acendem este item (telas abertas por abas dentro dele). */
+  tambem?: string[];
 };
 
 export type NavSection = {
@@ -106,7 +106,11 @@ export function permissaoDaRota(pathname: string): Permission | null {
       return pathname === base || pathname.startsWith(base + "/");
     })
     .sort((a, b) => b.url.length - a.url.length)[0];
-  return casa?.perm ?? null;
+  if (casa?.perm) return casa.perm;
+  const aba = ABAS_NOTAS_FISCAIS
+    .filter((a) => { const base = a.url.split("?")[0]; return pathname === base || pathname.startsWith(base + "/"); })
+    .sort((a, b) => b.url.length - a.url.length)[0];
+  return aba?.perm ?? casa?.perm ?? null;
 }
 
 // Preto com destaque vermelho vivo, como pediu a loja (10/10/2026): o
@@ -155,24 +159,51 @@ const SCROLLBAR_W = 0;
 // veicular) simplesmente não aparece. Flags e permissões continuam
 // mandando: item desligado some, grupo vazio some.
 // ============================================================
+// Telas fiscais que, como no Excellent, abrem pelas abas de "Notas Fiscais"
+// (Notas vendas, Notas entrada, Notas devolução fornecedor…) e não têm item
+// próprio no menu. Sem esta lista elas ficariam abertas a qualquer usuário
+// logado: permissaoDaRota só enxerga o que está no menu.
+export const ABAS_NOTAS_FISCAIS: { titulo: string; url: string; perm: Permission }[] = [
+  { titulo: "Notas vendas", url: "/notas-fiscais", perm: "fiscal.emitir" },
+  { titulo: "Notas entrada", url: "/compras/importar-nfe", perm: "compra.criar" },
+  { titulo: "Notas devolução fornecedor", url: "/devolucao-fornecedor", perm: "compra.criar" },
+  { titulo: "Inutilização sequência", url: "/notas-fiscais?aba=inutilizacoes", perm: "fiscal.emitir" },
+  { titulo: "Manifesto", url: "/fiscal/notas-recebidas", perm: "compra.criar" },
+  { titulo: "Sintegra / SPED", url: "/fiscal/escrituracao", perm: "fiscal.emitir" },
+  // do ERP (o Excellent não tinha):
+  { titulo: "Remessas entre filiais", url: "/remessas", perm: "fiscal.emitir" },
+  { titulo: "Relatório da contadora", url: "/fiscal/relatorio-contadora", perm: "fiscal.emitir" },
+  { titulo: "Documentos demonstrativos", url: "/gestao/documentos-demonstrativos", perm: "fiscal.emitir" },
+];
+
+// ============================================================
+// Menu com os MESMOS nomes e nas MESMAS posições do Excellent Sistemas (o
+// sistema anterior da loja), conferido no próprio Excellent em 11/10/2026:
+// Página Inicial; Vendas e Pedidos; Gestão; Vendas pela Internet;
+// Configurações — cada grupo na ordem de lá. Sem o prefixo "Ex", que é a
+// marca deles.
+//
+// O que só o ERP tem fica no FIM do grupo onde um usuário do Excellent
+// procuraria, para não tirar nada do lugar. O que não existe aqui (Pedidos
+// iFood, Comanda/Mesa, Gerador de Boletos, Mala Direta, Torpedos, Boleto,
+// DOC/TED, Consultas Veiculares, Gestão Agendas, Painel Gestor, Downloads,
+// Links Úteis) não aparece. As telas fiscais abrem pelas abas de "Notas
+// Fiscais", como lá (ABAS_NOTAS_FISCAIS). Flags e permissões continuam
+// mandando: item desligado some, grupo vazio some.
+// ============================================================
 export const sections: NavSection[] = [
   {
-    // Sem título, como no Excellent: a Página Inicial fica solta acima das
-    // quatro seções nomeadas (Vendas e Pedidos, Gestão, Vendas pela
-    // Internet, Configurações).
     label: "",
     items: [
-      { title: "Dashboard", url: "/", icon: LayoutDashboard, exact: true },
-      // Visão Geral foi unificada no Dashboard — mesma pergunta, duas telas
+      { title: "Página Inicial", url: "/", icon: LayoutDashboard, exact: true },
     ],
   },
   {
     label: "Vendas e Pedidos",
     items: [
-      { title: "PDV", url: "/pdv", icon: ScanBarcode, perm: "pdv.usar" },
-      { title: "Caixa", url: "/caixa", icon: Wallet, perm: "caixa.abrir" },
-      { title: "Vendas", url: "/vendas", icon: Receipt, perm: "pdv.usar" },
-      { title: "Devoluções", url: "/devolucoes", icon: RotateCcw, perm: "venda.criar" },
+      { title: "Frente de Caixa", url: "/pdv", icon: ScanBarcode, perm: "pdv.usar" },
+      { title: "Notas Fiscais", url: "/notas-fiscais", icon: FileText, perm: "fiscal.emitir",
+        tambem: ABAS_NOTAS_FISCAIS.map((a) => a.url.split("?")[0]).filter((u) => u !== "/notas-fiscais") },
       { title: "Pedidos Delivery", url: "/pedidos-delivery", icon: Bike, perm: "venda.criar" },
       // { title: "Pedidos iFood", url: "/ifood", icon: ShoppingCart, perm: "venda.criar" }, // desativado: cliente não usa iFood — reativar descomentando aqui e a rota
       { title: "ExApp Pedidos", url: "/exapp-pedidos", icon: MessageSquare, perm: "venda.criar" },
@@ -181,15 +212,15 @@ export const sections: NavSection[] = [
         children: [
           { title: "E-mail Marketing", url: "/email-marketing", icon: Mail, perm: "cliente.ver" },
           { title: "Cartão Fidelidade", url: "/cartao-fidelidade", icon: CreditCard, perm: "cliente.ver" },
-          // Crediário e Promissórias saíram daqui: apareciam TAMBÉM em Gestão ›
-          // Gestão Recebimentos, e é lá que pertencem — as telas tratam limite
-          // de crédito, parcela e baixa, que é recebimento, não venda.
+          // como no Excellent, também aparecem em Gestão Recebimentos
+          { title: "Crediário Próprio", url: "/crediario-proprio", icon: CreditCard, perm: "financeiro.ver" },
+          { title: "Promissória", url: "/promissoria", icon: ScrollText, perm: "financeiro.ver" },
         ],
       },
       {
         title: "Controle Comercial", url: "", icon: Briefcase,
         children: [
-          { title: "Pedido / Pré-venda", url: "/controle-comercial/pedido", icon: ShoppingCart, perm: "venda.criar" },
+          { title: "Pedido/Pré-venda", url: "/controle-comercial/pedido", icon: ShoppingCart, perm: "venda.criar" },
           { title: "Orçamento", url: "/controle-comercial/orcamento", icon: FileText, perm: "venda.criar" },
           { title: "Ordem de Serviço", url: "/controle-comercial/os", icon: Wrench, perm: "venda.criar" },
           { title: "Venda Consignada", url: "/controle-comercial/consignacao", icon: Truck, perm: "venda.criar" },
@@ -197,37 +228,43 @@ export const sections: NavSection[] = [
         ],
       },
       { title: "TEF / SITEF", url: "/tef-sitef", icon: CreditCard, perm: "config.ver" },
+      // do ERP:
+      { title: "Caixa", url: "/caixa", icon: Wallet, perm: "caixa.abrir" },
+      { title: "Vendas", url: "/vendas", icon: Receipt, perm: "pdv.usar" },
+      { title: "Devoluções", url: "/devolucoes", icon: RotateCcw, perm: "venda.criar" },
     ],
   },
   {
     label: "Gestão",
     items: [
-      // Eram quatro itens para a MESMA tela ou para telas que respondem o
-      // mesmo tipo de pergunta: "Contas a Pagar/Receber" era /financeiro com
-      // ?aba=apagar, e Relatórios e Análise Gerencial viraram abas de lá.
-      // Um item só; a navegação acontece dentro da tela.
-      { title: "Relatórios Financeiros", url: "/financeiro", icon: LineChart, perm: "financeiro.ver" },
+      {
+        title: "Financeiro", url: "", icon: LineChart,
+        children: [
+          { title: "Relatórios Financeiros", url: "/financeiro", icon: LineChart, perm: "financeiro.ver" },
+        ],
+      },
       {
         title: "Gestão Empresarial", url: "", icon: Building2,
         children: [
           { title: "Clientes", url: "/gestao/clientes", icon: Users, perm: "cliente.editar" },
           { title: "Fornecedores", url: "/gestao/fornecedores", icon: Truck, perm: "compra.ver" },
           { title: "Funcionários", url: "/gestao/funcionarios", icon: Building2, perm: "usuario.ver" },
-          { title: "Comissões", url: "/gestao/comissoes", icon: Banknote, perm: "usuario.ver" },
           { title: "Transportadoras", url: "/gestao/transportadoras", icon: Truck, perm: "compra.ver" },
-          { title: "Cadastro e Estoque", url: "/produtos-estoque-lotes", icon: Package, perm: "produto.ver" },
+          { title: "Estoque Produtos", url: "/produtos-estoque-lotes", icon: Package, perm: "produto.ver" },
+          { title: "Serviços Oferecidos", url: "/gestao/servicos", icon: Wrench, perm: "produto.ver" },
+          { title: "Agenda Telefônica", url: "/gestao/agenda-telefonica", icon: Smartphone, perm: "cliente.ver" },
+          { title: "Documentos Administrativos", url: "/gestao/documentos", icon: FolderTree, perm: "cliente.ver" },
+          { title: "Arquivos e Pastas", url: "/gestao/arquivos-pastas", icon: FolderTree, perm: "cliente.ver" },
+          { title: "E-mail Inteligente", url: "/gestao/email-inteligente", icon: Mail, perm: "cliente.ver" },
+          { title: "Agenda de Compromissos", url: "/gestao/agenda-compromissos", icon: Calendar, perm: "cliente.ver" },
+          { title: "Regiões de Entrega", url: "/gestao/regioes-entrega", icon: MapPin, perm: "config.ver" },
+          // do ERP:
+          { title: "Comissões", url: "/gestao/comissoes", icon: Banknote, perm: "usuario.ver" },
           { title: "Movimentações (Kardex)", url: "/estoque/movimentacoes", icon: ArrowLeftRight, perm: "produto.ver" },
           { title: "Inventário / Balanço", url: "/estoque/inventario", icon: Package, perm: "estoque.ajustar" },
           { title: "Transferências", url: "/estoque.transferencia", icon: ArrowLeftRight, perm: "estoque.transferir" },
           { title: "Compras", url: "/compras", icon: ShoppingBag, perm: "compra.criar" },
           { title: "Kits & Combos", url: "/kits", icon: PackagePlus, perm: "produto.ver" },
-          { title: "Serviços", url: "/gestao/servicos", icon: Wrench, perm: "produto.ver" },
-          { title: "Agenda Telefônica", url: "/gestao/agenda-telefonica", icon: Smartphone, perm: "cliente.ver" },
-          { title: "Documentos", url: "/gestao/documentos", icon: FolderTree, perm: "cliente.ver" },
-          { title: "Arquivos e Pastas", url: "/gestao/arquivos-pastas", icon: FolderTree, perm: "cliente.ver" },
-          { title: "Email Inteligente", url: "/gestao/email-inteligente", icon: Mail, perm: "cliente.ver" },
-          { title: "Agenda Compromissos", url: "/gestao/agenda-compromissos", icon: Calendar, perm: "cliente.ver" },
-          { title: "Regiões de Entrega", url: "/gestao/regioes-entrega", icon: MapPin, perm: "config.ver" },
           { title: "Lojas", url: "/lojas", icon: Store, perm: "loja.ver" },
         ],
       },
@@ -237,8 +274,9 @@ export const sections: NavSection[] = [
           { title: "Parcelar Débitos", url: "/gestao/parcelar-debitos", icon: ScrollText, perm: "financeiro.ver" },
           { title: "Localizar Pessoas", url: "/gestao/localizar-pessoas", icon: Search, perm: "financeiro.ver" },
           { title: "Negativar Devedores", url: "/gestao/negativar-devedores", icon: AlertTriangle, perm: "financeiro.ver" },
-          { title: "Encaminhar Protesto", url: "/gestao/encaminhar-protesto", icon: Send, perm: "financeiro.ver" },
-          { title: "Recomendações", url: "/gestao/recomendacoes", icon: ThumbsUp, perm: "financeiro.ver" },
+          { title: "Encaminhar para Protesto", url: "/gestao/encaminhar-protesto", icon: Send, perm: "financeiro.ver" },
+          { title: "Recomendo/Não Recomendo", url: "/gestao/recomendacoes", icon: ThumbsUp, perm: "financeiro.ver" },
+          // do ERP:
           { title: "Solicitação de Parceria", url: "/gestao/solicitacao-parceria", icon: Network, perm: "financeiro.ver" },
         ],
       },
@@ -246,42 +284,26 @@ export const sections: NavSection[] = [
         title: "Gestão Recebimentos", url: "", icon: Banknote,
         children: [
           { title: "Crediário Próprio", url: "/crediario-proprio", icon: CreditCard, perm: "financeiro.ver" },
-          { title: "Crediário (com juros)", url: "/gestao/gerar-crediario", icon: CreditCard, perm: "financeiro.ver" },
-          { title: "Promissórias", url: "/promissoria", icon: ScrollText, perm: "financeiro.ver" },
-      // { title: "Recebimento Cheque", url: "/gestao/recebimento-cheque", icon: ScrollText }, // desativado: o mesmo dado já aparece em Relatórios Financeiros › aba Formas
-      // { title: "Dinheiro", url: "/gestao/dinheiro", icon: DollarSign }, // desativado: o mesmo dado já aparece em Relatórios Financeiros › aba Formas
-      // { title: "Cartão de Débito", url: "/gestao/cartao-debito", icon: CreditCard }, // desativado: o mesmo dado já aparece em Relatórios Financeiros › aba Formas
-      // { title: "Cartão de Crédito", url: "/gestao/cartao-credito", icon: CreditCard }, // desativado: o mesmo dado já aparece em Relatórios Financeiros › aba Formas
+          { title: "Crediário", url: "/gestao/gerar-crediario", icon: CreditCard, perm: "financeiro.ver" },
+          { title: "Promissória", url: "/promissoria", icon: ScrollText, perm: "financeiro.ver" },
+          // por forma de pagamento: os números estão em Relatórios Financeiros › Formas
+          { title: "Cheque", url: "/financeiro?aba=formas&forma=cheque", icon: ScrollText, perm: "financeiro.ver" },
+          { title: "Dinheiro", url: "/financeiro?aba=formas&forma=dinheiro", icon: Banknote, perm: "financeiro.ver" },
+          { title: "Cartão de Débito", url: "/financeiro?aba=formas&forma=cartao_debito", icon: CreditCard, perm: "financeiro.ver" },
+          { title: "Cartão de Crédito", url: "/financeiro?aba=formas&forma=cartao_credito", icon: CreditCard, perm: "financeiro.ver" },
         ],
       },
       {
         title: "Análise de Crédito", url: "", icon: Search,
         children: [
-          { title: "Pessoa Física", url: "/gestao/consulta-pessoa-fisica", icon: Users, perm: "financeiro.ver" },
-          { title: "Pessoa Jurídica", url: "/gestao/consulta-pessoa-juridica", icon: Building2, perm: "financeiro.ver" },
-          { title: "Cheques", url: "/gestao/consulta-cheque", icon: ScrollText, perm: "financeiro.ver" },
+          { title: "Consulta Pessoa Física", url: "/gestao/consulta-pessoa-fisica", icon: Users, perm: "financeiro.ver" },
+          { title: "Consulta Pessoa Jurídica", url: "/gestao/consulta-pessoa-juridica", icon: Building2, perm: "financeiro.ver" },
+          { title: "Consulta de Cheque", url: "/gestao/consulta-cheque", icon: ScrollText, perm: "financeiro.ver" },
         ],
       },
-      {
-        // Organizado como no sistema anterior da loja (pedido de 10/10/2026:
-        // "tenta deixar os nomes iguais"): antes as notas estavam espalhadas
-        // em Vendas e Pedidos, Gestão Empresarial e aqui.
-        title: "Fiscal", url: "", icon: FileText,
-        children: [
-          { title: "Notas de Venda", url: "/notas-fiscais", icon: FileText, perm: "fiscal.emitir" },
-          { title: "Notas de Entrada", url: "/compras/importar-nfe", icon: Upload, perm: "compra.criar" },
-          { title: "Notas de Devolução a Fornecedor", url: "/devolucao-fornecedor", icon: Undo2, perm: "compra.criar" },
-          { title: "Inutilização de Numeração", url: "/notas-fiscais?aba=inutilizacoes", icon: ScissorsLineDashed, perm: "fiscal.emitir" },
-          { title: "Manifesto (Notas Recebidas)", url: "/fiscal/notas-recebidas", icon: FileText, perm: "compra.criar" },
-          { title: "Remessas entre Filiais", url: "/remessas", icon: ArrowLeftRight, perm: "fiscal.emitir" },
-          { title: "Relatório da Contadora", url: "/fiscal/relatorio-contadora", icon: FileArchive, perm: "fiscal.emitir" },
-          { title: "Escrituração (SPED)", url: "/fiscal/escrituracao", icon: Calculator, perm: "fiscal.emitir" },
-          { title: "Painel do Contador", url: "/gestao/painel-contador", icon: Calculator, perm: "fiscal.emitir" },
-          { title: "Certificado Digital", url: "/gestao/nfe-certificado", icon: Lock, perm: "config.editar" },
-          { title: "Configurações SEFAZ", url: "/gestao/configuracoes-sefaz", icon: Settings, perm: "fiscal.emitir" },
-          { title: "Documentos Demonstrativos", url: "/gestao/documentos-demonstrativos", icon: LineChart, perm: "fiscal.emitir" },
-        ],
-      },
+      { title: "Gestão Usuários", url: "/gestao/usuarios", icon: Users, perm: "usuario.ver" },
+      { title: "Faturamento", url: "/faturamento", icon: FileText, perm: "fiscal.emitir" },
+      // do ERP:
       {
         title: "Atendimento", url: "", icon: Bell,
         children: [
@@ -291,14 +313,12 @@ export const sections: NavSection[] = [
           { title: "Exclusão LGPD", url: "/gestao/exclusao-informacoes", icon: Shield, perm: "config.editar" },
         ],
       },
-      { title: "Usuários e Permissões", url: "/gestao/usuarios", icon: Users, perm: "usuario.ver" },
-      // { title: "Visão Geral", url: "/gestao", icon: LayoutDashboard }, // desativado: duplicava a Visão Geral (/visao-geral) — reativar descomentando aqui, a rota e o import em App.tsx
     ],
   },
   {
     label: "Vendas pela Internet",
     items: [
-      // { title: "iFood Marketplace", url: "/marketplace-ifood", icon: ShoppingCart }, // desativado: cliente não usa iFood — reativar descomentando aqui e a rota
+      // { title: "iFood", url: "/marketplace-ifood", icon: ShoppingCart }, // desativado: cliente não usa iFood — reativar descomentando aqui e a rota
     ],
   },
   {
@@ -306,11 +326,8 @@ export const sections: NavSection[] = [
     items: [
       { title: "Configurações do Sistema", url: "/config/sistema", icon: Cog, perm: "config.ver" },
       { title: "Configurações Empresariais", url: "/config/empresarial", icon: Briefcase, perm: "config.editar" },
-      { title: "Dados Empresariais", url: "/gestao/dados-empresariais", icon: Building2, perm: "config.ver" },
-      { title: "Configurações Gerais", url: "/gestao/configuracoes-gerais", icon: Settings, perm: "config.editar" },
-      { title: "Minhas Chaves PIX", url: "/config/minhas-chaves", icon: Key, perm: "config.ver" },
-      { title: "Gerar Código de Barras", url: "/gestao/codigo-barras", icon: Barcode, perm: "produto.ver" },
-      { title: "Equipamentos", url: "/equipamentos", icon: Barcode, perm: "config.ver" },
+      { title: "Minhas Chaves", url: "/config/minhas-chaves", icon: Key, perm: "config.ver" },
+      { title: "Acessar meu Contador", url: "/gestao/painel-contador", icon: Calculator, perm: "fiscal.emitir" },
       {
         title: "Treinamento Sistema", url: "", icon: HelpCircle,
         children: [
@@ -319,6 +336,13 @@ export const sections: NavSection[] = [
           { title: "Ajuda", url: "/ajuda", icon: HelpCircle },
         ],
       },
+      // do ERP:
+      { title: "Certificado Digital", url: "/gestao/nfe-certificado", icon: Lock, perm: "config.editar" },
+      { title: "Configurações SEFAZ", url: "/gestao/configuracoes-sefaz", icon: Settings, perm: "fiscal.emitir" },
+      { title: "Dados Empresariais", url: "/gestao/dados-empresariais", icon: Building2, perm: "config.ver" },
+      { title: "Configurações Gerais", url: "/gestao/configuracoes-gerais", icon: Settings, perm: "config.editar" },
+      { title: "Gerar Código de Barras", url: "/gestao/codigo-barras", icon: Barcode, perm: "produto.ver" },
+      { title: "Equipamentos", url: "/equipamentos", icon: Barcode, perm: "config.ver" },
     ],
   },
 ];
@@ -439,10 +463,10 @@ function SidebarGroup({
   item, globalCollapsed, isActive, flagMap,
 }: {
   item: NavItem; globalCollapsed: boolean;
-  isActive: (url: string, exact?: boolean) => boolean; flagMap: FlagMap;
+  isActive: (url: string, exact?: boolean, tambem?: string[]) => boolean; flagMap: FlagMap;
 }) {
   const filhos = item.children ?? [];
-  const temAtivo = filhos.some((f) => !f.external && isActive(f.url, f.exact));
+  const temAtivo = filhos.some((f) => !f.external && isActive(f.url, f.exact, f.tambem));
   const [aberto, setAberto] = useState(temAtivo);
   useEffect(() => { if (temAtivo) setAberto(true); }, [temAtivo]);
 
@@ -451,7 +475,7 @@ function SidebarGroup({
       <>
         {filhos.map((f) => (
           <li key={f.url} className="relative" style={{ marginRight: `-${8 + SCROLLBAR_W}px` }}>
-            <SidebarLeaf item={f} active={!f.external && isActive(f.url, f.exact)} globalCollapsed flagMap={flagMap} />
+            <SidebarLeaf item={f} active={!f.external && isActive(f.url, f.exact, f.tambem)} globalCollapsed flagMap={flagMap} />
           </li>
         ))}
       </>
@@ -479,7 +503,7 @@ function SidebarGroup({
         <ul className="ml-4 flex flex-col gap-0.5 border-l border-white/10 pl-1">
           {filhos.map((f) => (
             <li key={f.url} className="relative" style={{ marginRight: `-${12 + SCROLLBAR_W + 20}px` }}>
-              <SidebarLeaf item={f} active={!f.external && isActive(f.url, f.exact)} globalCollapsed={false} flagMap={flagMap} nested />
+              <SidebarLeaf item={f} active={!f.external && isActive(f.url, f.exact, f.tambem)} globalCollapsed={false} flagMap={flagMap} nested />
             </li>
           ))}
         </ul>
@@ -496,7 +520,7 @@ function SidebarSection({
   section, globalCollapsed, isActive, flagMap,
 }: {
   section: NavSection; globalCollapsed: boolean;
-  isActive: (url: string, exact?: boolean) => boolean; flagMap: FlagMap;
+  isActive: (url: string, exact?: boolean, tambem?: string[]) => boolean; flagMap: FlagMap;
 }) {
   // Hook aqui é seguro — sempre chamado no mesmo nível do componente.
   const sectionCollapsed = useSectionCollapsed(section.label);
@@ -532,7 +556,7 @@ function SidebarSection({
               <SidebarGroup key={item.title} item={item} globalCollapsed={globalCollapsed} isActive={isActive} flagMap={flagMap} />
             ) : (
               <li key={item.url} className="relative" style={{ marginRight: `-${(globalCollapsed ? 8 : 12) + SCROLLBAR_W}px` }}>
-                <SidebarLeaf item={item} active={!item.external && isActive(item.url, item.exact)} globalCollapsed={globalCollapsed} flagMap={flagMap} />
+                <SidebarLeaf item={item} active={!item.external && isActive(item.url, item.exact, item.tambem)} globalCollapsed={globalCollapsed} flagMap={flagMap} />
               </li>
             ),
           )}
@@ -588,7 +612,8 @@ export function AppSidebar() {
   // um irmão com query estiver ativo — senão os dois ficam destacados.
   const irmaosComQuery = (base: string) =>
     allUrls.filter((u) => u.startsWith(base + "?"));
-  const isActive = (url: string, exact?: boolean) => {
+  const isActive = (url: string, exact?: boolean, tambem?: string[]) => {
+    if (tambem?.some((p) => pathname === p || pathname.startsWith(p + "/"))) return true;
     const [urlPath, urlQuery] = url.split("?");
     if (urlQuery) return pathname === urlPath && search === "?" + urlQuery;
     if (irmaosComQuery(url).some((u) => pathname === urlPath && search === "?" + u.split("?")[1])) return false;

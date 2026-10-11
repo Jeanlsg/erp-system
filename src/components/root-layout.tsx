@@ -4,6 +4,7 @@ import { HelpCircle, LogOut, Store, User as UserIcon, PlayCircle, BookOpen } fro
 import { toast } from "sonner";
 
 import { AppSidebar } from "@/components/app-sidebar";
+import { AbasNotasFiscais, ehTelaDeNotas } from "@/components/abas-notas-fiscais";
 import { ModoDemonstracao, temDemonstracao } from "@/components/modo-demonstracao";
 import { FeatureGuard } from "@/components/feature-guard";
 import { PermissaoGuard } from "@/components/permissao-guard";
@@ -329,7 +330,12 @@ export function RootLayout() {
                       Usuários e Permissões.
                     </p>
                   </div>
-                ) : <Outlet />}
+                ) : (
+                  <>
+                    {ehTelaDeNotas(location.pathname) && <AbasNotasFiscais />}
+                    <Outlet />
+                  </>
+                )}
               </PermissaoGuard>
             </FeatureGuard>
           </div>

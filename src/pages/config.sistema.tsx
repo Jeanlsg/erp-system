@@ -19,7 +19,7 @@ import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { dateTime, date } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { sections as MENU, type NavItem } from "@/components/app-sidebar";
+import { sections as MENU, ABAS_NOTAS_FISCAIS, type NavItem } from "@/components/app-sidebar";
 
 export function ConfigSistemaPage() {
   // O conjunto de telas do sistema é decisão do dono, não de qualquer admin:
@@ -258,6 +258,10 @@ function FeatureFlagsPanel() {
       if (soltas.length) blocos.unshift({ linhas: soltas });
       if (blocos.length) lista.push({ titulo: s.label || "Página inicial", blocos });
     }
+    // telas fiscais: sem item no menu, abrem pelas abas de Notas Fiscais
+    const abas = ABAS_NOTAS_FISCAIS.map((a) => linha({ title: a.titulo, url: a.url } as NavItem))
+      .filter((l): l is Linha => !!l);
+    if (abas.length) lista.push({ titulo: "Abas de Notas Fiscais", blocos: [{ linhas: abas }] });
     const fora = flags
       .filter((f) => !usados.has(f.path))
       .map((f) => ({ titulo: f.titulo, path: f.path, flag: f }));
