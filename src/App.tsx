@@ -20,6 +20,7 @@ import { AgendaPage } from "@/pages/agenda";
 import { FuncionariosPage } from "@/pages/funcionarios";
 import { ProdutosEstoqueLotesPage } from "@/pages/produtos-estoque-lotes";
 import { ProdutoFichaPage } from "@/pages/produto-ficha";
+import { RelatorioContadoraPage } from "@/pages/fiscal.relatorio-contadora";
 import { ExclusaoInformacoesPage } from "@/pages/lgpd";
 import { EstoqueMovimentacoesPage } from "@/pages/estoque-movimentacoes";
 import { InventarioPage } from "@/pages/inventario";
@@ -255,6 +256,7 @@ export default function App() {
         <Route path="fiscal" element={<FiscalPage />} />
         <Route path="fiscal/notas-recebidas" element={<FiscalDfePage />} />
         <Route path="fiscal/escrituracao" element={<FiscalSpedPage />} />
+        <Route path="fiscal/relatorio-contadora" element={<RelatorioContadoraPage />} />
         {/* viraram abas de Relatórios Financeiros; o link antigo continua valendo */}
         <Route path="relatorios" element={<Navigate to="/financeiro?aba=relatorios" replace />} />
         <Route path="relatorios/analise" element={<Navigate to="/financeiro?aba=gerencial" replace />} />
