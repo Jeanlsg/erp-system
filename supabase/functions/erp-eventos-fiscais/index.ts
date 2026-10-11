@@ -141,6 +141,22 @@ Deno.serve(async (req) => {
       }
     }
 
+    /**
+     * Guarda o XML protocolado do evento (procEventoNFe / ProcInutNFe) no
+     * bucket fiscal — a contadora recebe no ZIP do mês. Falha no upload não
+     * desfaz o evento, que já valeu na SEFAZ: registra sem o arquivo.
+     */
+    async function guardarXml(nome: string, b64: string | null | undefined): Promise<string | null> {
+      if (!b64) return null;
+      const path = `${loja_id}/${new Date().getFullYear()}/eventos/${nome}.xml`;
+      const { error } = await adminPublic.storage.from("fiscal").upload(
+        path, Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)),
+        { contentType: "application/xml", upsert: true },
+      );
+      if (error) { console.error(`falha ao guardar XML do evento ${nome}: ${error.message}`); return null; }
+      return path;
+    }
+
     // ---------------- CANCELAMENTO ----------------
     if (acao === "cancelar") {
       const justificativa = String(body?.justificativa ?? "").trim();
@@ -158,11 +174,12 @@ Deno.serve(async (req) => {
       });
 
       const aceito = ok && data?.cancelada === true;
+      const xmlPath = aceito ? await guardarXml(`${nota.chave_acesso}-cancelamento`, data?.xml_base64) : null;
       await admin.from("erp_nfe_eventos").insert({
         nota_id: nota.id, loja_id, tipo: "cancelamento", justificativa,
         aceito, cstat: data?.cstat ?? null, motivo: data?.motivo ?? data?.erro ?? null,
         protocolo: data?.protocolo ?? null, ambiente: sefaz.ambiente,
-        usuario_id: erpUser.id,
+        usuario_id: erpUser.id, xml_path: xmlPath,
       });
 
       if (!aceito) {
@@ -204,12 +221,13 @@ Deno.serve(async (req) => {
       });
 
       const aceito = ok && data?.registrada === true;
+      const xmlPath = aceito ? await guardarXml(`${nota.chave_acesso}-cce-${sequencia}`, data?.xml_base64) : null;
       await admin.from("erp_nfe_eventos").insert({
         nota_id: nota.id, loja_id, tipo: "carta_correcao", sequencia,
         justificativa: correcao, aceito,
         cstat: data?.cstat ?? null, motivo: data?.motivo ?? data?.erro ?? null,
         protocolo: data?.protocolo ?? null, ambiente: sefaz.ambiente,
-        usuario_id: erpUser.id,
+        usuario_id: erpUser.id, xml_path: xmlPath,
       });
 
       if (!aceito) return json(422, { erro: "SEFAZ não registrou a carta de correção", detalhe: data });
@@ -254,10 +272,12 @@ Deno.serve(async (req) => {
     });
 
     const inutilizada = ok && data?.inutilizada === true;
+    const xmlPath = inutilizada
+      ? await guardarXml(`inutilizacao-${modelo}-${serie}-${numero_inicial}-${numero_final}`, data?.xml_base64) : null;
     await admin.from("erp_inutilizacoes").insert({
       loja_id, modelo, serie, numero_inicial, numero_final, justificativa,
       inutilizada, cstat: data?.cstat ?? null, motivo: data?.motivo ?? data?.erro ?? null,
-      ambiente: sefaz.ambiente, usuario_id: erpUser.id,
+      protocolo: data?.protocolo || null, ambiente: sefaz.ambiente, usuario_id: erpUser.id, xml_path: xmlPath,
     });
 
     if (!inutilizada) return json(422, { erro: "SEFAZ não aceitou a inutilização", detalhe: data });

@@ -25,6 +25,20 @@ use NFePHP\DA\NFe\Danfce;
 // (no XML e no DANFE). As lojas são PE/BA, ambas UTC-3.
 date_default_timezone_set(getenv('TZ') ?: 'America/Recife');
 
+/**
+ * XML protocolado de um evento aceito (procEventoNFe / ProcInutNFe): é o
+ * arquivo que a contadora precisa guardar junto com a nota. Falha aqui não
+ * desfaz o evento — volta null e a edge registra sem o arquivo.
+ */
+function xmlDoEvento(Tools $tools, string $resp): ?string {
+    try {
+        return base64_encode(Complements::toAuthorize($tools->lastRequest, $resp));
+    } catch (\Throwable $e) {
+        error_log('xmlDoEvento: ' . $e->getMessage());
+        return null;
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Infra HTTP mínima
 // ---------------------------------------------------------------------------
@@ -352,25 +366,43 @@ function buildXml(array $req): string {
         $std->item = $nItem;
         $make->tagimposto($std);
 
-        // ICMS — Simples Nacional (CSOSN) ou regime normal (CST)
+        // Base do ICMS do item = valor do produto − desconto + frete + outras
+        // (os valores já chegam rateados por item, ver rateio.ts na edge).
+        $baseItem = round($vProd - (float)($item['valor_desconto'] ?? 0)
+            + (float)($item['valor_frete'] ?? 0) + (float)($item['valor_outro'] ?? 0), 2);
+        $crt = (int)($req['emitente']['crt'] ?? 1);
+
+        // ICMS — Simples Nacional (CSOSN, CRT 1/4) ou regime normal (CST, CRT 2/3)
         $std = new stdClass();
         $std->item  = $nItem;
         $std->orig  = (int)($item['origem'] ?? 0);
-        if ((int)($req['emitente']['crt'] ?? 1) === 3) {
+        if ($crt === 2 || $crt === 3) {
             $std->CST = (string)($item['cst'] ?? '00');
+            $aliq = (float)($item['aliquota_icms'] ?? 0);
+            $bc   = isset($item['valor_bc']) ? (float)$item['valor_bc'] : $baseItem;
             if ($std->CST === '00') {
-                $std->modBC  = 3;
-                $std->vBC    = number_format($vProd, 2, '.', '');
-                $std->pICMS  = number_format((float)($item['aliquota_icms'] ?? 18), 4, '.', '');
-                $std->vICMS  = number_format(round($vProd * (float)($item['aliquota_icms'] ?? 18) / 100, 2), 2, '.', '');
+                // Tributada integralmente: sem alíquota a nota sairia com ICMS
+                // zero num CST que diz "tributada" — recusa antes da SEFAZ.
+                if ($aliq <= 0) out(422, ['erro' => "item {$nItem}: CST 00 exige a alíquota do ICMS (cadastre no produto)"]);
+                $std->modBC = 3;
+                $std->vBC   = number_format($bc, 2, '.', '');
+                $std->pICMS = number_format($aliq, 4, '.', '');
+                $std->vICMS = number_format(isset($item['valor_icms']) ? (float)$item['valor_icms'] : round($bc * $aliq / 100, 2), 2, '.', '');
+            } elseif ($std->CST === '90') {
+                if ($aliq > 0 && $bc > 0) {
+                    $std->modBC = 3;
+                    $std->vBC   = number_format($bc, 2, '.', '');
+                    $std->pICMS = number_format($aliq, 4, '.', '');
+                    $std->vICMS = number_format(isset($item['valor_icms']) ? (float)$item['valor_icms'] : round($bc * $aliq / 100, 2), 2, '.', '');
+                }
+            } elseif (!in_array($std->CST, ['40', '41', '50', '60'], true)) {
+                // 10/20/30/51/70 pedem redução de base, diferimento ou ICMS-ST
+                // calculados, que o sistema ainda não tem.
+                out(422, ['erro' => "item {$nItem}: CST {$std->CST} ainda não é emitido pelo sistema"]);
             }
             $make->tagICMS($std);
         } else {
             $std->CSOSN = (string)($item['csosn'] ?? '102');
-            // Base do ICMS do item = valor do produto − desconto + frete + outras
-            // (os valores já chegam rateados por item, ver rateio.ts na edge).
-            $baseItem = round($vProd - (float)($item['valor_desconto'] ?? 0)
-                + (float)($item['valor_frete'] ?? 0) + (float)($item['valor_outro'] ?? 0), 2);
             if ($std->CSOSN === '101') {
                 // Com permissão de crédito: o schema exige pCredSN e vCredICMSSN.
                 $pCred = (float)($item['aliquota_credito_sn'] ?? 0);
@@ -396,20 +428,30 @@ function buildXml(array $req): string {
             $make->tagICMSSN($std);
         }
 
-        // PIS/COFINS — Simples Nacional: CST 49 (outras operações, sem
-        // destaque). O schema exige base e alíquota mesmo zeradas: grupo com
-        // campos nulos é rejeitado pelo XSD na assinatura — pego no dry_run.
-        $std = new stdClass();
-        $std->item = $nItem;
-        $std->CST  = '49';
-        $std->vBC  = 0.00; $std->pPIS = 0.00; $std->vPIS = 0.00;
-        $make->tagPIS($std);
-
-        $std = new stdClass();
-        $std->item = $nItem;
-        $std->CST  = '49';
-        $std->vBC  = 0.00; $std->pCOFINS = 0.00; $std->vCOFINS = 0.00;
-        $make->tagCOFINS($std);
+        // PIS/COFINS pelo CST do produto. Sem CST: Simples sai 49 (outras
+        // operações, sem destaque) e regime normal 01. O schema exige base e
+        // alíquota mesmo zeradas nos grupos Aliq/Outr: grupo com campos nulos
+        // é rejeitado pelo XSD na assinatura — pego no dry_run.
+        foreach (['PIS' => 'pis', 'COFINS' => 'cofins'] as $tag => $campo) {
+            $cst  = (string)($item["cst_{$campo}"] ?? (($crt === 2 || $crt === 3) ? '01' : '49'));
+            $aliq = (float)($item["aliquota_{$campo}"] ?? 0);
+            $std = new stdClass();
+            $std->item = $nItem;
+            $std->CST  = $cst;
+            if (in_array($cst, ['01', '02'], true)) {
+                if ($aliq <= 0) out(422, ['erro' => "item {$nItem}: {$tag} com CST {$cst} exige a alíquota (cadastre no produto)"]);
+            } elseif (in_array($cst, ['04', '05', '06', '07', '08', '09'], true)) {
+                $make->{"tag{$tag}"}($std);   // não tributado: só o CST
+                continue;
+            } elseif ((int)$cst < 49 || (int)$cst > 99) {
+                out(422, ['erro' => "item {$nItem}: CST {$cst} de {$tag} ainda não é emitido pelo sistema"]);
+            }
+            $bc = $aliq > 0 ? $baseItem : 0.0;
+            $std->vBC = number_format($bc, 2, '.', '');
+            $std->{"p{$tag}"} = number_format($aliq, 4, '.', '');
+            $std->{"v{$tag}"} = number_format(round($bc * $aliq / 100, 2), 2, '.', '');
+            $make->{"tag{$tag}"}($std);
+        }
     }
 
     // --- totais (a lib soma sozinha quando o std vem vazio) ---
@@ -620,6 +662,7 @@ try {
             'cstat'      => $cstat,
             'motivo'     => (string)($ev->xMotivo ?? $st->xMotivo ?? ''),
             'protocolo'  => (string)($ev->nProt ?? ''),
+            'xml_base64' => in_array($cstat, ['135', '155'], true) ? xmlDoEvento($tools, $resp) : null,
         ]);
     }
 
@@ -640,6 +683,7 @@ try {
             'cstat'      => $cstat,
             'motivo'     => (string)($ev->xMotivo ?? $st->xMotivo ?? ''),
             'protocolo'  => (string)($ev->nProt ?? ''),
+            'xml_base64' => $cstat === '135' ? xmlDoEvento($tools, $resp) : null,
         ]);
     }
 
@@ -661,6 +705,8 @@ try {
             'inutilizada' => $cstat === '102',
             'cstat'       => $cstat,
             'motivo'      => (string)($inf->xMotivo ?? $st->xMotivo ?? ''),
+            'protocolo'   => (string)($inf->nProt ?? ''),
+            'xml_base64'  => $cstat === '102' ? xmlDoEvento($tools, $resp) : null,
         ]);
     }
 

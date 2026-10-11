@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { cfopParaUf, calcularIcms, creditoSimples, faltaNoTributoDoProduto, CSOSNS, ORIGENS_MERCADORIA } from "./tabelas-fiscais";
+import { cfopParaUf, calcularIcms, creditoSimples, faltaNoTributoDoProduto, CSOSNS, CSTS_ICMS, ORIGENS_MERCADORIA } from "./tabelas-fiscais";
 
 describe("tabelas", () => {
   it("origens 0 a 8", () => {
@@ -33,5 +33,17 @@ describe("faltaNoTributoDoProduto", () => {
     expect(faltaNoTributoDoProduto({ csosn: "900", icms: 18 })).toBeNull();
     expect(faltaNoTributoDoProduto({ csosn: "102" })).toBeNull();
     expect(faltaNoTributoDoProduto({ csosn: "201" })).toMatch(/não é suportado/);
+  });
+  it("CST 00 sem alíquota, PIS 01 sem alíquota; 49 e 06 passam sem alíquota", () => {
+    expect(faltaNoTributoDoProduto({ cst_icms: "00" })).toMatch(/CST 00/);
+    expect(faltaNoTributoDoProduto({ cst_icms: "00", icms: 18 })).toBeNull();
+    expect(faltaNoTributoDoProduto({ cst_pis: "01" })).toMatch(/PIS com CST 01/);
+    expect(faltaNoTributoDoProduto({ cst_pis: "01", pis: 0.65, cst_cofins: "01", cofins: 3 })).toBeNull();
+    expect(faltaNoTributoDoProduto({ cst_pis: "49", cst_cofins: "06" })).toBeNull();
+    expect(faltaNoTributoDoProduto({ cst_icms: "10" })).toMatch(/não é suportado/);
+  });
+  it("não oferece CST com ST/redução que o emissor não monta", () => {
+    expect(CSTS_ICMS.map((c) => c.valor)).not.toContain("10");
+    expect(CSTS_ICMS.map((c) => c.valor)).not.toContain("20");
   });
 });

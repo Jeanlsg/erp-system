@@ -33,6 +33,42 @@ export const CSOSNS: { valor: string; rotulo: string; destaca: boolean; credito:
   { valor: "900", rotulo: "900 — Outros (com destaque de ICMS)", destaca: true, credito: false },
 ];
 
+/** Regime tributário da loja (CRT da NF-e). */
+export const REGIMES: { valor: number; rotulo: string; usaCst: boolean }[] = [
+  { valor: 1, rotulo: "1 — Simples Nacional", usaCst: false },
+  { valor: 2, rotulo: "2 — Simples Nacional, excesso de sublimite", usaCst: true },
+  { valor: 3, rotulo: "3 — Regime normal (Lucro Presumido/Real)", usaCst: true },
+  { valor: 4, rotulo: "4 — MEI", usaCst: false },
+];
+
+/**
+ * CST do ICMS (regime normal). Mesma regra do CSOSN: só entra o que o
+ * emissor monta — 10/20/30/51/70 pedem redução de base, diferimento ou
+ * ICMS-ST calculados.
+ */
+export const CSTS_ICMS: { valor: string; rotulo: string; destaca: boolean }[] = [
+  { valor: "00", rotulo: "00 — Tributada integralmente", destaca: true },
+  { valor: "40", rotulo: "40 — Isenta", destaca: false },
+  { valor: "41", rotulo: "41 — Não tributada", destaca: false },
+  { valor: "50", rotulo: "50 — Suspensão", destaca: false },
+  { valor: "60", rotulo: "60 — ICMS cobrado anteriormente por ST", destaca: false },
+  { valor: "90", rotulo: "90 — Outras", destaca: false },
+];
+
+/** CST de PIS e de COFINS (mesma tabela). Vazio no produto = 49 no Simples. */
+export const CSTS_PIS_COFINS: { valor: string; rotulo: string; aliquota: boolean }[] = [
+  { valor: "01", rotulo: "01 — Tributável, alíquota básica", aliquota: true },
+  { valor: "02", rotulo: "02 — Tributável, alíquota diferenciada", aliquota: true },
+  { valor: "04", rotulo: "04 — Monofásica, revenda a alíquota zero", aliquota: false },
+  { valor: "05", rotulo: "05 — Substituição tributária", aliquota: false },
+  { valor: "06", rotulo: "06 — Alíquota zero", aliquota: false },
+  { valor: "07", rotulo: "07 — Isenta", aliquota: false },
+  { valor: "08", rotulo: "08 — Sem incidência", aliquota: false },
+  { valor: "09", rotulo: "09 — Suspensão", aliquota: false },
+  { valor: "49", rotulo: "49 — Outras operações de saída", aliquota: false },
+  { valor: "99", rotulo: "99 — Outras operações", aliquota: false },
+];
+
 export const CFOPS: { valor: string; rotulo: string; grupo: string }[] = [
   { valor: "5102", rotulo: "5102 — Venda de mercadoria (no estado)", grupo: "Venda" },
   { valor: "6102", rotulo: "6102 — Venda de mercadoria (fora do estado)", grupo: "Venda" },
@@ -73,10 +109,25 @@ export function creditoSimples(valor: number, aliquota: number): number {
 }
 
 /** O que falta no produto para a nota sair, ou null. */
-export function faltaNoTributoDoProduto(p: { csosn?: string | null; icms?: number | string | null; aliquota_credito_sn?: number | string | null }): string | null {
+export function faltaNoTributoDoProduto(p: {
+  csosn?: string | null; icms?: number | string | null; aliquota_credito_sn?: number | string | null;
+  cst_icms?: string | null; cst_pis?: string | null; pis?: number | string | null;
+  cst_cofins?: string | null; cofins?: number | string | null;
+}): string | null {
   const c = csosnInfo(p.csosn ?? "102");
   if (!c) return `CSOSN ${p.csosn} não é suportado pelo emissor`;
   if (c.credito && !(Number(p.aliquota_credito_sn) > 0)) return "CSOSN 101 exige a alíquota de crédito do Simples";
   if (c.destaca && !(Number(p.icms) > 0)) return "CSOSN 900 com destaque exige a alíquota do ICMS";
+  if (p.cst_icms) {
+    const s = CSTS_ICMS.find((x) => x.valor === p.cst_icms);
+    if (!s) return `CST ${p.cst_icms} do ICMS não é suportado pelo emissor`;
+    if (s.destaca && !(Number(p.icms) > 0)) return "CST 00 exige a alíquota do ICMS";
+  }
+  for (const [nome, cst, aliq] of [["PIS", p.cst_pis, p.pis], ["COFINS", p.cst_cofins, p.cofins]] as const) {
+    if (!cst) continue;
+    const s = CSTS_PIS_COFINS.find((x) => x.valor === cst);
+    if (!s) return `CST ${cst} de ${nome} não é suportado pelo emissor`;
+    if (s.aliquota && !(Number(aliq) > 0)) return `${nome} com CST ${cst} exige a alíquota`;
+  }
   return null;
 }

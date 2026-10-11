@@ -49,7 +49,7 @@ import {
 import { ImportarProdutosDialog } from "@/components/importar-produtos";
 import { LotesProdutoDialog } from "@/components/lotes-produto";
 import { ComboboxBusca } from "@/components/ui/combobox-busca";
-import { CFOPS, CSOSNS, ORIGENS_MERCADORIA, faltaNoTributoDoProduto } from "@/lib/tabelas-fiscais";
+import { CFOPS, CSOSNS, CSTS_ICMS, CSTS_PIS_COFINS, ORIGENS_MERCADORIA, faltaNoTributoDoProduto } from "@/lib/tabelas-fiscais";
 
 // =============================
 // Ações rápidas (botões topo)
@@ -98,6 +98,7 @@ export function ProdutosEstoqueLotesPage() {
     unidade: "UN", estoque_minimo: "0", duracao_dias: "", marca: "", codigo_barras: "",
     categoria_id: "", ncm: "", cest: "", cfop_padrao: "5102", csosn: "102",
     origem_mercadoria: "0", icms: "", aliquota_credito_sn: "",
+    cst_icms: "", cst_pis: "", pis: "", cst_cofins: "", cofins: "",
   });
   const [formCategoria, setFormCategoria] = useState({ nome: "", descricao: "" });
 
@@ -304,6 +305,7 @@ export function ProdutosEstoqueLotesPage() {
       unidade: "UN", estoque_minimo: "0", duracao_dias: "", marca: "", codigo_barras: "",
       ncm: "", cest: "", cfop_padrao: "5102", csosn: "102",
       origem_mercadoria: "0", icms: "", aliquota_credito_sn: "",
+    cst_icms: "", cst_pis: "", pis: "", cst_cofins: "", cofins: "",
       categoria_id: "",
     });
     setModalProduto(true);
@@ -337,6 +339,9 @@ export function ProdutosEstoqueLotesPage() {
       origem_mercadoria: String(p.origem_mercadoria ?? 0),
       icms: p.icms != null && Number(p.icms) > 0 ? String(p.icms) : "",
       aliquota_credito_sn: p.aliquota_credito_sn != null && Number(p.aliquota_credito_sn) > 0 ? String(p.aliquota_credito_sn) : "",
+      cst_icms: p.cst_icms ?? "", cst_pis: p.cst_pis ?? "", cst_cofins: p.cst_cofins ?? "",
+      pis: p.pis != null && Number(p.pis) > 0 ? String(p.pis) : "",
+      cofins: p.cofins != null && Number(p.cofins) > 0 ? String(p.cofins) : "",
     });
     setModalProduto(true);
   };
@@ -364,6 +369,11 @@ export function ProdutosEstoqueLotesPage() {
       origem_mercadoria: parseInt(formProduto.origem_mercadoria) || 0,
       icms: formProduto.icms === "" ? null : (parseFloat(formProduto.icms.replace(",", ".")) || null),
       aliquota_credito_sn: formProduto.aliquota_credito_sn === "" ? null : (parseFloat(formProduto.aliquota_credito_sn.replace(",", ".")) || null),
+      cst_icms: formProduto.cst_icms || null,
+      cst_pis: formProduto.cst_pis || null,
+      pis: formProduto.pis === "" ? null : (parseFloat(formProduto.pis.replace(",", ".")) || null),
+      cst_cofins: formProduto.cst_cofins || null,
+      cofins: formProduto.cofins === "" ? null : (parseFloat(formProduto.cofins.replace(",", ".")) || null),
     };
     // CSOSN que o emissor não monta sem o dado: recusa aqui, não na SEFAZ
     const faltaTributo = faltaNoTributoDoProduto(payload);
@@ -929,6 +939,35 @@ export function ProdutosEstoqueLotesPage() {
                     <p className="mt-0.5 text-[11px] text-muted-foreground">Informada pela contadora (faixa do Simples).</p>
                   </div>
                 )}
+                <div className="col-span-2">
+                  <Label>CST do ICMS (regime normal)</Label>
+                  <select className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                    value={formProduto.cst_icms}
+                    onChange={(e) => setFormProduto({ ...formProduto, cst_icms: e.target.value })}>
+                    <option value="">— (loja no Simples: vale o CSOSN)</option>
+                    {CSTS_ICMS.map((c) => <option key={c.valor} value={c.valor}>{c.rotulo}</option>)}
+                  </select>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">Só é usado se o regime da loja (Configurações SEFAZ) for normal.</p>
+                </div>
+                {([["PIS", "cst_pis", "pis", "0,65"], ["COFINS", "cst_cofins", "cofins", "3"]] as const).map(([nome, cst, aliq, ex]) => (
+                  <div key={nome} className="col-span-2 grid grid-cols-3 gap-3">
+                    <div className="col-span-2">
+                      <Label>CST do {nome}</Label>
+                      <select className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                        value={formProduto[cst]}
+                        onChange={(e) => setFormProduto({ ...formProduto, [cst]: e.target.value })}>
+                        <option value="">— padrão (49 no Simples, sem destaque)</option>
+                        {CSTS_PIS_COFINS.map((c) => <option key={c.valor} value={c.valor}>{c.rotulo}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <Label>Alíquota {nome} (%)</Label>
+                      <Input inputMode="decimal" placeholder={`Ex.: ${ex}`} value={formProduto[aliq]}
+                        disabled={!CSTS_PIS_COFINS.find((c) => c.valor === formProduto[cst])?.aliquota}
+                        onChange={(e) => setFormProduto({ ...formProduto, [aliq]: e.target.value })} />
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>

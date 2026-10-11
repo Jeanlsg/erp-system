@@ -10,7 +10,7 @@
 // ============================================================
 
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { zipSync, strToU8 } from "fflate";
 import { Download, FileArchive, Loader2, Printer, Calculator } from "lucide-react";
 import { toast } from "sonner";
@@ -20,12 +20,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
-import { lerTudo } from "@/lib/ler-tudo";
+import { useNotasDoMes } from "@/lib/notas-do-mes";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { brl } from "@/lib/format";
 import {
-  caminhoNoZip, htmlRelatorioContadora, intervaloDoMes, nomeDoZip, notasDoRelatorio, resumoDasNotas, rotuloNota, type NotaRel,
+  caminhoNoZip, htmlRelatorioContadora, nomeDoZip, notasDoRelatorio, resumoDasNotas, rotuloNota,
 } from "@/lib/relatorio-contadora";
 
 const mesAnterior = () => {
@@ -36,30 +36,13 @@ const mesAnterior = () => {
 export function RelatorioContadoraPage() {
   const { lojaId, lojas } = useAutoSelectLoja();
   const loja = (lojas as any[]).find((l) => l.id === lojaId) ?? null;
-  const [mes, setMes] = useState(mesAnterior());
+  // o Painel do Contador abre aqui já no mês que estava vendo
+  const [params] = useSearchParams();
+  const [mes, setMes] = useState(/^\d{4}-\d{2}$/.test(params.get("mes") ?? "") ? params.get("mes")! : mesAnterior());
   const [incluirHomologacao, setIncluirHomologacao] = useState(false);
   const [zipando, setZipando] = useState<string | null>(null);
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["erp_relatorio_contadora", lojaId, mes],
-    enabled: !!lojaId && /^\d{4}-\d{2}$/.test(mes),
-    queryFn: async () => {
-      const { de, ate } = intervaloDoMes(mes);
-      const notas = await lerTudo<NotaRel>(() => supabase.from("erp_notas_fiscais")
-        .select("id, tipo, numero, serie, status, ambiente, finalidade, data_emissao, valor_total, chave_acesso, xml_path, consumidor_nome")
-        .eq("loja_id", lojaId!).gte("data_emissao", de).lt("data_emissao", ate)
-        .order("data_emissao").order("id"));
-      const entradas = await lerTudo<any>(() => supabase.from("erp_nfe_entrada")
-        .select("id, numero, serie, emitente_nome, emitente_cnpj, data_emissao, valor_total, chave_acesso, status")
-        .eq("loja_id", lojaId!).gte("data_emissao", de).lt("data_emissao", ate)
-        .order("data_emissao").order("id"));
-      const { data: inut, error } = await supabase.from("erp_inutilizacoes")
-        .select("modelo, serie, numero_inicial, numero_final, ambiente, inutilizada, created_at")
-        .eq("loja_id", lojaId!).eq("inutilizada", true).gte("created_at", de).lt("created_at", ate).order("created_at");
-      if (error) throw error;
-      return { notas, entradas: entradas.filter((e) => e.status !== "cancelada"), inutilizacoes: inut ?? [] };
-    },
-  });
+  const { data, isLoading } = useNotasDoMes(lojaId, mes);
 
   const notas = useMemo(() => notasDoRelatorio(data?.notas ?? [], incluirHomologacao), [data, incluirHomologacao]);
   const inutilizacoes = useMemo(() => (data?.inutilizacoes ?? []).filter((i: any) => incluirHomologacao || i.ambiente === "producao"), [data, incluirHomologacao]);
@@ -88,6 +71,20 @@ export function RelatorioContadoraPage() {
         const { data: arq, error } = await supabase.storage.from("fiscal").download(n.xml_path);
         if (error || !arq) { faltando.push(`${rotuloNota(n)} ${n.numero}`); continue; }
         arquivos[caminhoNoZip(n)] = new Uint8Array(await arq.arrayBuffer());
+      }
+      // XML dos eventos (cancelamento, CC-e) das notas do relatório e das
+      // inutilizações: guardados desde 10/10/2026 — os anteriores não existem
+      const idsNoRelatorio = new Set(notas.map((n) => n.id));
+      const arquivosExtra = [
+        ...(data?.eventos ?? []).filter((ev) => idsNoRelatorio.has(ev.nota_id))
+          .map((ev) => ({ path: ev.xml_path, pasta: "eventos", nome: `${ev.tipo} ${ev.nota_id.slice(0, 8)}` })),
+        ...inutilizacoes.map((i) => ({ path: i.xml_path, pasta: "inutilizacoes", nome: `inutilização ${i.serie}/${i.numero_inicial}-${i.numero_final}` })),
+      ];
+      for (const x of arquivosExtra) {
+        if (!x.path) { faltando.push(x.nome); continue; }
+        const { data: arq, error } = await supabase.storage.from("fiscal").download(x.path);
+        if (error || !arq) { faltando.push(x.nome); continue; }
+        arquivos[`${x.pasta}/${x.path.split("/").pop()}`] = new Uint8Array(await arq.arrayBuffer());
       }
       if (entradas.length) {
         setZipando("Baixando notas de entrada…");
@@ -222,8 +219,9 @@ export function RelatorioContadoraPage() {
       </Card>
 
       <p className="text-xs text-muted-foreground">
-        O ZIP traz o XML de cada nota (pastas nfce, nfe, devolucoes, canceladas e entradas) e o relatório em HTML.
-        O XML do evento de cancelamento e das inutilizações ainda não é guardado pelo sistema: elas aparecem no relatório como lista.
+        O ZIP traz o XML de cada nota (pastas nfce, nfe, devolucoes, canceladas e entradas), o XML dos eventos de
+        cancelamento e carta de correção (eventos), o das inutilizações (inutilizacoes) e o relatório em HTML.
+        Eventos e inutilizações anteriores a 10/10/2026 não tiveram o XML guardado.
       </p>
     </div>
   );

@@ -29,6 +29,7 @@ import { useNotificacoesHeader } from "@/lib/hooks/use-notificacoes-header";
 import { useAuth } from "@/lib/store/auth-store";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { date, dateTime, brl } from "@/lib/format";
+import { REGIMES } from "@/lib/tabelas-fiscais";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 
 // ====================================================================
@@ -592,7 +593,7 @@ export function ConfiguracoesSefazPage() {
       loja_id: lojaId, ambiente: "homologacao",
       uf: loja?.uf ?? "",          // a UF é da loja, não um padrão de outro estado
       serie_nfe: 1, serie_nfce: 1, numeracao_atual_nfe: 1, numeracao_atual_nfce: 1,
-      timezone: "America/Sao_Paulo", timeout_segundos: 30,
+      timezone: "America/Sao_Paulo", timeout_segundos: 30, crt: 1,
     });
   }
 
@@ -642,6 +643,15 @@ export function ConfiguracoesSefazPage() {
                 </select>
               </div>
               <div><Label>UF</Label><Input maxLength={2} value={form.uf ?? ""} onChange={(e) => setForm({ ...form, uf: e.target.value.toUpperCase() })} /></div>
+            </div>
+            <div>
+              <Label>Regime tributário (CRT)</Label>
+              <select className="flex h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm" value={String(form.crt ?? 1)} onChange={(e) => setForm({ ...form, crt: parseInt(e.target.value) })}>
+                {REGIMES.map((r) => <option key={r.valor} value={String(r.valor)}>{r.rotulo}</option>)}
+              </select>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                Define se a nota usa o CSOSN (Simples/MEI) ou o CST do ICMS (regime normal) do produto. Confirme com a contadora antes de mudar.
+              </p>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Série NF-e</Label><Input type="number" value={form.serie_nfe ?? 1} onChange={(e) => setForm({ ...form, serie_nfe: parseInt(e.target.value) })} /></div>

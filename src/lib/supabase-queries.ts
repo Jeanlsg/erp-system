@@ -3138,7 +3138,7 @@ export function useUpdatePedidoStatus() {
 // ========================================
 // NOTAS FISCAIS
 // ========================================
-export function useNotasFiscais(filters?: { lojaId?: string; tipo?: string; status?: string }) {
+export function useNotasFiscais(filters?: { lojaId?: string; tipo?: string; status?: string; finalidade?: number }) {
   return useQuery<any[]>({
     queryKey: ['erp_notas_fiscais', filters],
     queryFn: async () => {
@@ -3148,6 +3148,7 @@ export function useNotasFiscais(filters?: { lojaId?: string; tipo?: string; stat
       if (filters?.lojaId) query = query.eq('loja_id', filters.lojaId);
       if (filters?.tipo) query = query.eq('tipo', filters.tipo);
       if (filters?.status) query = query.eq('status', filters.status);
+      if (filters?.finalidade) query = query.eq('finalidade', filters.finalidade);
       const { data, error } = await query;
       if (error) throw error;
       return data ?? [];

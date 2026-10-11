@@ -24,6 +24,7 @@ export interface NotaRel {
   chave_acesso?: string | null;
   xml_path?: string | null;
   consumidor_nome?: string | null;
+  venda_id?: string | null;
 }
 
 /** "2026-10" → intervalo [início, fim) em ISO, no horário local da loja. */
@@ -68,6 +69,23 @@ export function resumoDasNotas(notas: NotaRel[]): ResumoContadora {
     valorAutorizado: Math.round(valorAutorizado * 100) / 100,
     porTipo: [...porTipo.entries()].map(([rotulo, t]) => ({ rotulo, ...t, valor: Math.round(t.valor * 100) / 100 })),
   };
+}
+
+/**
+ * Vendas finalizadas do mês sem nota autorizada — o que a contadora pergunta
+ * primeiro ("vendeu e não emitiu?"). A nota conta se é da venda e está
+ * autorizada no ambiente considerado.
+ */
+export function vendasSemNota(
+  vendas: { id: string; total?: number | string | null; status?: string | null }[],
+  notas: Pick<NotaRel, "venda_id" | "status" | "ambiente">[],
+  incluirHomologacao = false,
+): { quantidade: number; valor: number } {
+  const comNota = new Set(notas
+    .filter((n) => n.venda_id && n.status === "autorizada" && (incluirHomologacao || n.ambiente === "producao"))
+    .map((n) => n.venda_id));
+  const sem = vendas.filter((v) => v.status === "finalizada" && !comNota.has(v.id));
+  return { quantidade: sem.length, valor: Math.round(sem.reduce((s, v) => s + (Number(v.total) || 0), 0) * 100) / 100 };
 }
 
 /** Caminho do XML dentro do ZIP: pastas por tipo, nome pela chave. */

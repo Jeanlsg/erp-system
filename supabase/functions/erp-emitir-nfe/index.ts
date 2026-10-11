@@ -31,6 +31,20 @@ function json(status: number, body: unknown): Response {
   });
 }
 
+/**
+ * CST do ICMS (regime normal) e PIS/COFINS do cadastro do produto (item 8,
+ * 10/10/2026). A alíquota só vai junto com um CST escolhido: produto sem CST
+ * continua saindo como antes (49 sem destaque no Simples).
+ */
+function outrosTributos(p: any) {
+  const num = (v: any) => (v != null && v !== "" ? Number(v) : undefined);
+  return {
+    ...(p?.cst_icms ? { cst: String(p.cst_icms) } : {}),
+    ...(p?.cst_pis ? { cst_pis: String(p.cst_pis), aliquota_pis: num(p.pis) } : {}),
+    ...(p?.cst_cofins ? { cst_cofins: String(p.cst_cofins), aliquota_cofins: num(p.cofins) } : {}),
+  };
+}
+
 const FORMA_PAG_MAP: Record<string, string> = {
   dinheiro: "01", cheque: "02", cartao_credito: "03", cartao_debito: "04",
   crediario: "05", boleto: "15", pix: "17", transferencia: "18", promissoria: "99",
@@ -261,6 +275,7 @@ Deno.serve(async (req) => {
         origem: Number(i.produto?.origem_mercadoria ?? 0),
         aliquota_icms: i.produto?.icms != null ? Number(i.produto.icms) : undefined,
         aliquota_credito_sn: i.produto?.aliquota_credito_sn != null ? Number(i.produto.aliquota_credito_sn) : undefined,
+        ...outrosTributos(i.produto),
         unidade: i.produto?.unidade ?? "UN",
         quantidade: Number(i.quantidade),
         valor_unitario: Number(i.preco_unitario ?? i.preco ?? 0),
@@ -285,7 +300,7 @@ Deno.serve(async (req) => {
     } else if (isDevolFornecedor) {
       // ---- Devolução a fornecedor: NF-e de SAÍDA, finalidade 4 ----
       const { data: dev, error: errDev } = await admin.from("erp_devolucoes_fornecedor")
-        .select("*, itens:erp_devolucao_fornecedor_itens(*, produto:erp_produtos(sku, codigo_barras, ncm, cest, unidade)), fornecedor:erp_pessoas!erp_devolucoes_fornecedor_fornecedor_id_fkey(*), transportadora:erp_pessoas!erp_devolucoes_fornecedor_transportadora_id_fkey(*)")
+        .select("*, itens:erp_devolucao_fornecedor_itens(*, produto:erp_produtos(sku, codigo_barras, ncm, cest, unidade, cst_icms, cst_pis, cst_cofins, pis, cofins)), fornecedor:erp_pessoas!erp_devolucoes_fornecedor_fornecedor_id_fkey(*), transportadora:erp_pessoas!erp_devolucoes_fornecedor_transportadora_id_fkey(*)")
         .eq("id", devolucao_fornecedor_id).maybeSingle();
       // erro de consulta (GRANT, embed) não é "não encontrada" — mostra o motivo
       if (errDev) return json(500, { erro: `não foi possível ler a devolução: ${errDev.message}` });
@@ -329,6 +344,9 @@ Deno.serve(async (req) => {
         ...(seguros[k] > 0 ? { valor_seguro: seguros[k] } : {}),
         ...(outros[k] > 0 ? { valor_outro: outros[k] } : {}),
         origem: Number(i.icms_origem ?? 0), csosn: i.icms_csosn ?? "102",
+        ...outrosTributos(i.produto),
+        // regime normal: o destaque da tela de tributação (CSOSN 900) é o CST 90
+        ...(i.icms_csosn === "900" ? { cst: "90" } : {}),
         ...(i.icms_csosn === "900" && Number(i.icms_aliquota) > 0
           ? { aliquota_icms: Number(i.icms_aliquota), valor_bc: Number(i.icms_base) || undefined, valor_icms: Number(i.icms_valor) || undefined }
           : {}),
@@ -445,6 +463,7 @@ Deno.serve(async (req) => {
         origem: Number(i.produto?.origem_mercadoria ?? 0),
         aliquota_icms: i.produto?.icms != null ? Number(i.produto.icms) : undefined,
         aliquota_credito_sn: i.produto?.aliquota_credito_sn != null ? Number(i.produto.aliquota_credito_sn) : undefined,
+        ...outrosTributos(i.produto),
         unidade: i.produto?.unidade ?? "UN",
         quantidade: Number(i.quantidade),
         valor_unitario: Number(i.preco_unitario ?? i.preco ?? 0),
@@ -542,7 +561,7 @@ Deno.serve(async (req) => {
         razao: loja.nome,
         fantasia: loja.apelido,
         ie: loja.inscricao_estadual,
-        crt: 1, // Simples Nacional — ajustar se mudar de regime
+        crt: Number(sefaz.crt ?? 1), // regime da loja (Configurações SEFAZ); 1 = Simples
         uf: loja.uf,
         endereco: {
           logradouro: loja.logradouro, numero: loja.numero, bairro: loja.bairro,

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  intervaloDoMes, notasDoRelatorio, resumoDasNotas, caminhoNoZip, nomeDoZip, htmlRelatorioContadora, type NotaRel,
+  intervaloDoMes, notasDoRelatorio, resumoDasNotas, caminhoNoZip, nomeDoZip, htmlRelatorioContadora, vendasSemNota, type NotaRel,
 } from "./relatorio-contadora";
 
 const nota = (o: Partial<NotaRel>): NotaRel => ({
@@ -61,5 +61,23 @@ describe("htmlRelatorioContadora", () => {
     expect(h).toContain("INCLUI NOTAS DE HOMOLOGAÇÃO");
     expect(h).toContain("10/2026");
     expect(h).toContain("Nenhuma nota no mês");
+  });
+});
+
+describe("vendasSemNota", () => {
+  const vendas = [
+    { id: "v1", total: 100, status: "finalizada" },
+    { id: "v2", total: 50, status: "finalizada" },
+    { id: "v3", total: 30, status: "cancelada" },
+    { id: "v4", total: 20, status: "finalizada" },
+  ];
+  const notas = [
+    { venda_id: "v1", status: "autorizada", ambiente: "producao" },
+    { venda_id: "v2", status: "autorizada", ambiente: "homologacao" },
+    { venda_id: "v4", status: "rejeitada", ambiente: "producao" },
+  ];
+  it("conta só finalizadas sem nota autorizada; homologação só se pedido", () => {
+    expect(vendasSemNota(vendas, notas)).toEqual({ quantidade: 2, valor: 70 });
+    expect(vendasSemNota(vendas, notas, true)).toEqual({ quantidade: 1, valor: 20 });
   });
 });

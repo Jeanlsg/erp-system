@@ -5,6 +5,7 @@
 // ============================================================
 
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Card, CardContent, CardHeader, CardTitle,
 } from "@/components/ui/card";
@@ -27,14 +28,29 @@ import { brl, date, dateTime } from "@/lib/format";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog";
 
+const ABAS: { id: string; rotulo: string; tipo?: string; status?: string; finalidade?: number }[] = [
+  { id: "todas", rotulo: "Todas" },
+  { id: "nfce", rotulo: "NFC-e (cupom)", tipo: "nfce" },
+  { id: "nfe", rotulo: "NF-e de venda", tipo: "nfe", finalidade: 1 },
+  { id: "devolucoes", rotulo: "Devoluções", finalidade: 4 },
+  { id: "canceladas", rotulo: "Canceladas", status: "cancelada" },
+  { id: "inutilizacoes", rotulo: "Inutilizações" },
+];
+
 export function NotasFiscaisPage() {
   const { lojaId } = useAutoSelectLoja();
-  const [filtroTipo, setFiltroTipo] = useState("");
+  // Abas como no sistema anterior (pedido da loja, 10/10/2026). A aba fica na
+  // URL para o menu abrir direto em "Inutilizações".
+  const [params, setParams] = useSearchParams();
+  const aba = ABAS.find((a) => a.id === params.get("aba"))?.id ?? "todas";
+  const abaAtual = ABAS.find((a) => a.id === aba)!;
+  const trocarAba = (id: string) => setParams(id === "todas" ? {} : { aba: id }, { replace: true });
   const [filtroStatus, setFiltroStatus] = useState("");
   const { data: notas = [], isLoading } = useNotasFiscais({
     lojaId: lojaId ?? undefined,
-    tipo: filtroTipo || undefined,
-    status: filtroStatus || undefined,
+    tipo: abaAtual.tipo,
+    status: abaAtual.status ?? (filtroStatus || undefined),
+    finalidade: abaAtual.finalidade,
   });
 
   const [modalDetalhes, setModalDetalhes] = useState<any | null>(null);
@@ -299,20 +315,10 @@ export function NotasFiscaisPage() {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <CardTitle>Notas Emitidas</CardTitle>
+            <CardTitle>{aba === "inutilizacoes" ? "Inutilizações de numeração" : "Notas Emitidas"}</CardTitle>
             <div className="flex items-center gap-2 flex-wrap">
-              <Filter className="h-4 w-4 text-muted-foreground" />
-              <select
-                className="h-9 rounded border border-input bg-transparent px-2 text-sm"
-                value={filtroTipo}
-                onChange={(e) => setFiltroTipo(e.target.value)}
-              >
-                <option value="">Todos tipos</option>
-                <option value="nfe">NF-e (modelo 55)</option>
-                <option value="nfce">NFC-e (modelo 65)</option>
-                <option value="cfe">CF-e</option>
-              </select>
-              <select
+              {!abaAtual.status && aba !== "inutilizacoes" && <Filter className="h-4 w-4 text-muted-foreground" />}
+              {!abaAtual.status && aba !== "inutilizacoes" && <select
                 className="h-9 rounded border border-input bg-transparent px-2 text-sm"
                 value={filtroStatus}
                 onChange={(e) => setFiltroStatus(e.target.value)}
@@ -323,10 +329,62 @@ export function NotasFiscaisPage() {
                 <option value="denegada">Denegada</option>
                 <option value="rejeitada">Rejeitada</option>
                 <option value="pendente">Pendente</option>
-              </select>
+              </select>}
             </div>
           </div>
+          <div className="mt-3 flex flex-wrap gap-1 border-b">
+            {ABAS.map((a) => (
+              <button key={a.id} type="button" onClick={() => trocarAba(a.id)}
+                className={`-mb-px rounded-t-md border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+                  aba === a.id ? "border-primary bg-primary text-primary-foreground" : "border-transparent text-muted-foreground hover:bg-accent hover:text-foreground"}`}>
+                {a.rotulo}
+              </button>
+            ))}
+          </div>
         </CardHeader>
+        {aba === "inutilizacoes" ? (
+          <CardContent className="p-0">
+            {inutilizacoes.length === 0 ? (
+              <div className="p-12 text-center text-sm text-muted-foreground">Nenhuma inutilização registrada nesta loja.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead><tr>
+                    <th className="p-2 text-left">Data</th><th className="p-2 text-left">Modelo</th><th className="p-2 text-right">Série</th>
+                    <th className="p-2 text-right">Números</th><th className="p-2 text-left">Justificativa</th><th className="p-2 text-left">Situação</th><th className="p-2"></th>
+                  </tr></thead>
+                  <tbody>
+                    {inutilizacoes.map((i: any) => (
+                      <tr key={i.id} className="border-b last:border-0">
+                        <td className="whitespace-nowrap p-2">{dateTime(i.created_at)}</td>
+                        <td className="p-2">{i.modelo === 65 ? "NFC-e" : "NF-e"}{i.ambiente !== "producao" && <Badge variant="outline" className="ml-1 text-[10px]">Homologação</Badge>}</td>
+                        <td className="p-2 text-right tabular-nums">{i.serie}</td>
+                        <td className="p-2 text-right tabular-nums">{i.numero_inicial === i.numero_final ? i.numero_inicial : `${i.numero_inicial} a ${i.numero_final}`}</td>
+                        <td className="max-w-[320px] truncate p-2" title={i.justificativa}>{i.justificativa}</td>
+                        <td className="p-2">
+                          <Badge variant={i.inutilizada ? "default" : "destructive"}>{i.inutilizada ? "Inutilizada" : `Recusada${i.cstat ? ` (${i.cstat})` : ""}`}</Badge>
+                        </td>
+                        <td className="p-2 text-right">
+                          {i.xml_path && (
+                            <Button size="sm" variant="ghost" className="h-7 px-2" title="Baixar o XML da inutilização"
+                              onClick={async () => {
+                                const { data: arq } = await supabase.storage.from("fiscal").download(i.xml_path);
+                                if (!arq) { toast.error("XML não encontrado."); return; }
+                                const u = URL.createObjectURL(arq); const a = document.createElement("a");
+                                a.href = u; a.download = i.xml_path.split("/").pop(); a.click(); setTimeout(() => URL.revokeObjectURL(u), 5000);
+                              }}>
+                              <Download className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        ) : (
         <CardContent className="p-0">
           {isLoading ? (
             <div className="p-8 text-center">
@@ -426,6 +484,7 @@ export function NotasFiscaisPage() {
             </div>
           )}
         </CardContent>
+        )}
       </Card>
 
       {/* Modal de Emissão */}
