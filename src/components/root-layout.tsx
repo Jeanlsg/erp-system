@@ -135,7 +135,7 @@ export function RootLayout() {
       <AppSidebar />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-10 flex h-14 items-center justify-between gap-3 border-b bg-background/95 px-4 backdrop-blur">
+        <header className="sticky top-0 z-10 flex h-14 items-center justify-between gap-3 border-b-2 border-b-red-600 bg-background/95 px-4 backdrop-blur">
           <div className="flex items-center gap-3">
             {/* Seletor só para quem trabalha em mais de uma filial (ou o dono). */}
             {isSupabaseConfigured() && alternaFiliais(lojas) ? (
@@ -264,7 +264,7 @@ export function RootLayout() {
           </div>
         </header>
 
-        <main className="flex-1">
+        <main className="flex-1 bg-[hsl(var(--area))]">
           <div className="p-4 md:p-6">
             <FeatureGuard path={location.pathname}>
               <PermissaoGuard path={location.pathname}>

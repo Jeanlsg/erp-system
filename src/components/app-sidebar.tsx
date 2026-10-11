@@ -108,8 +108,11 @@ export function permissaoDaRota(pathname: string): Permission | null {
   return casa?.perm ?? null;
 }
 
+// Preto com destaque vermelho vivo, como pediu a loja (10/10/2026): o
+// degradê vinho anterior era "um preto meio apagado, um vermelho bem apagado,
+// doía a vista".
 const SIDEBAR_BG =
-  "linear-gradient(180deg, oklch(0.34 0.14 27) 0%, oklch(0.24 0.11 27) 100%)";
+  "linear-gradient(180deg, #161616 0%, #0b0b0b 100%)";
 
 // Ícones auxiliares (locais — `as any` para compatibilidade com o tipo do lucide-react)
 const Bell: any = (props: any) => (
@@ -168,7 +171,6 @@ export const sections: NavSection[] = [
       { title: "PDV", url: "/pdv", icon: ScanBarcode, perm: "pdv.usar" },
       { title: "Caixa", url: "/caixa", icon: Wallet, perm: "caixa.abrir" },
       { title: "Vendas", url: "/vendas", icon: Receipt, perm: "pdv.usar" },
-      { title: "Notas Fiscais", url: "/notas-fiscais", icon: FileText, perm: "fiscal.emitir" },
       { title: "Devoluções", url: "/devolucoes", icon: RotateCcw, perm: "venda.criar" },
       { title: "Pedidos Delivery", url: "/pedidos-delivery", icon: Bike, perm: "venda.criar" },
       // { title: "Pedidos iFood", url: "/ifood", icon: ShoppingCart, perm: "venda.criar" }, // desativado: cliente não usa iFood — reativar descomentando aqui e a rota
@@ -217,8 +219,6 @@ export const sections: NavSection[] = [
           { title: "Inventário / Balanço", url: "/estoque/inventario", icon: Package, perm: "estoque.ajustar" },
           { title: "Transferências", url: "/estoque.transferencia", icon: ArrowLeftRight, perm: "estoque.transferir" },
           { title: "Compras", url: "/compras", icon: ShoppingBag, perm: "compra.criar" },
-          { title: "Importar NFe", url: "/compras/importar-nfe", icon: Upload, perm: "compra.criar" },
-          { title: "Devolução a Fornecedor", url: "/devolucao-fornecedor", icon: Undo2, perm: "compra.criar" },
           { title: "Kits & Combos", url: "/kits", icon: PackagePlus, perm: "produto.ver" },
           { title: "Serviços", url: "/gestao/servicos", icon: Wrench, perm: "produto.ver" },
           { title: "Agenda Telefônica", url: "/gestao/agenda-telefonica", icon: Smartphone, perm: "cliente.ver" },
@@ -262,11 +262,18 @@ export const sections: NavSection[] = [
         ],
       },
       {
+        // Organizado como no sistema anterior da loja (pedido de 10/10/2026:
+        // "tenta deixar os nomes iguais"): antes as notas estavam espalhadas
+        // em Vendas e Pedidos, Gestão Empresarial e aqui.
         title: "Fiscal", url: "", icon: FileText,
         children: [
+          { title: "Notas de Venda", url: "/notas-fiscais", icon: FileText, perm: "fiscal.emitir" },
+          { title: "Notas de Entrada", url: "/compras/importar-nfe", icon: Upload, perm: "compra.criar" },
+          { title: "Notas de Devolução a Fornecedor", url: "/devolucao-fornecedor", icon: Undo2, perm: "compra.criar" },
+          { title: "Manifesto (Notas Recebidas)", url: "/fiscal/notas-recebidas", icon: FileText, perm: "compra.criar" },
           { title: "Remessas entre Filiais", url: "/remessas", icon: ArrowLeftRight, perm: "fiscal.emitir" },
-          { title: "Notas Recebidas (SEFAZ)", url: "/fiscal/notas-recebidas", icon: FileText, perm: "compra.criar" },
           { title: "Escrituração (SPED)", url: "/fiscal/escrituracao", icon: Calculator, perm: "fiscal.emitir" },
+          { title: "Painel do Contador", url: "/gestao/painel-contador", icon: Calculator, perm: "fiscal.emitir" },
           { title: "Certificado Digital", url: "/gestao/nfe-certificado", icon: Lock, perm: "fiscal.emitir" },
           { title: "Configurações SEFAZ", url: "/gestao/configuracoes-sefaz", icon: Settings, perm: "fiscal.emitir" },
           { title: "Documentos Demonstrativos", url: "/gestao/documentos-demonstrativos", icon: LineChart, perm: "fiscal.emitir" },
@@ -299,7 +306,6 @@ export const sections: NavSection[] = [
       { title: "Dados Empresariais", url: "/gestao/dados-empresariais", icon: Building2, perm: "config.ver" },
       { title: "Configurações Gerais", url: "/gestao/configuracoes-gerais", icon: Settings, perm: "config.editar" },
       { title: "Minhas Chaves PIX", url: "/config/minhas-chaves", icon: Key, perm: "config.ver" },
-      { title: "Painel do Contador", url: "/gestao/painel-contador", icon: Calculator, perm: "fiscal.emitir" },
       { title: "Gerar Código de Barras", url: "/gestao/codigo-barras", icon: Barcode, perm: "produto.ver" },
       { title: "Equipamentos", url: "/equipamentos", icon: Barcode, perm: "config.ver" },
       {
@@ -377,19 +383,19 @@ function SidebarLeaf({
       className={cn(
         base,
         active
-          ? "bg-background text-foreground font-semibold hover:bg-background shadow-sm"
-          : "text-white/85 hover:bg-white/10 hover:text-white",
+          ? "bg-[hsl(var(--area))] text-foreground font-semibold hover:bg-[hsl(var(--area))] shadow-sm"
+          : "text-white/85 hover:bg-red-600 hover:text-white",
       )}
     >
       {active && (
         <>
-          <span aria-hidden className="pointer-events-none absolute right-0 bg-background"
+          <span aria-hidden className="pointer-events-none absolute right-0 bg-[hsl(var(--area))]"
             style={{
               top: `-${BULGE_HEIGHT}px`, height: `${BULGE_HEIGHT}px`, width: `${BULGE_WIDTH}px`,
               WebkitMaskImage: `radial-gradient(${BULGE_WIDTH}px ${BULGE_HEIGHT}px at 100% 100%, black 100%, transparent 100.5%)`,
               maskImage: `radial-gradient(${BULGE_WIDTH}px ${BULGE_HEIGHT}px at 100% 100%, black 100%, transparent 100.5%)`,
             }} />
-          <span aria-hidden className="pointer-events-none absolute right-0 bg-background"
+          <span aria-hidden className="pointer-events-none absolute right-0 bg-[hsl(var(--area))]"
             style={{
               bottom: `-${BULGE_HEIGHT}px`, height: `${BULGE_HEIGHT}px`, width: `${BULGE_WIDTH}px`,
               WebkitMaskImage: `radial-gradient(${BULGE_WIDTH}px ${BULGE_HEIGHT}px at 100% 0%, black 100%, transparent 100.5%)`,
@@ -456,7 +462,7 @@ function SidebarGroup({
         className={cn(
           "flex min-h-11 w-full items-center gap-3 rounded-[10px] px-2.5 py-2.5 text-sm transition-colors",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40",
-          temAtivo ? "text-white font-semibold" : "text-white/85 hover:bg-white/10 hover:text-white",
+          temAtivo ? "text-white font-semibold bg-red-600/25" : "text-white/85 hover:bg-red-600 hover:text-white",
         )}
       >
         <item.icon className="h-4 w-4 shrink-0" />
@@ -502,7 +508,7 @@ function SidebarSection({
           type="button"
           onClick={() => toggleSection(section.label)}
           aria-expanded={!isHidden}
-          className="flex w-full items-center justify-between rounded-md px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/50 transition hover:text-white/80"
+          className="flex w-full items-center justify-between rounded-md px-2 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-red-500 transition hover:text-red-300"
           title={isHidden ? `Expandir ${section.label}` : `Recolher ${section.label}`}
         >
           <span className="flex items-center gap-1">

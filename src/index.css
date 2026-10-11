@@ -57,6 +57,8 @@
     --sidebar-primary-foreground: 0 0% 100%;
 
     --radius: 0.5rem;
+    /* fundo da área das telas: cinza-claro, para os cartões brancos se destacarem */
+    --area: 0 0% 94%;
   }
 
   .dark {
@@ -89,6 +91,7 @@
     --border: 0 25% 18%;
     --input: 0 25% 18%;
     --ring: 0 75% 55%;
+    --area: 0 0% 5%;
   }
 }
 
@@ -109,4 +112,11 @@
   .dark .bg-primary-soft {
     background-color: hsl(0 40% 18%);
   }
+}
+/* Cabeçalho de tabela em preto, como no sistema anterior da loja ("tá muito
+   branco"). `:not(.sem-cor)` dá especificidade para vencer o bg-* da tabela;
+   uma tabela que precise do cabeçalho claro usa thead.sem-cor. */
+@layer components {
+  main table > thead:not(.sem-cor) { background-color: hsl(0 0% 13%); }
+  main table > thead:not(.sem-cor) th { color: hsl(0 0% 96%); }
 }
