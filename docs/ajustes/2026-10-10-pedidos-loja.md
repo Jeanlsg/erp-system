@@ -264,3 +264,20 @@ Testado em homologação com dados de teste (apagados depois):
 
 Fora de propósito: "Aplicar alíquota IBPT" (sem tabela IBPT; a lei vale para consumidor final).
 Uma nota de devolução AUTORIZADA ponta a ponta só dá com uma nota de compra real do fornecedor.
+
+## 11/10 — Áudios do grupo: ficha do produto e funcionários/limitações
+
+Áudios (Antonio, 12h03): histórico de alteração item por item (o sistema diz 4, a prateleira tem 2:
+quando entrou, o que saiu por venda, quem alterou) e mexer no produto pela ficha. A ficha
+(Estoque Produtos → nome do produto) já fazia isso; testada com produto de exemplo, apareceram e
+foram corrigidos (commit 32f… migration 110):
+- custo médio: estoque sem custo médio gravado contava como custo zero na reposição (4 un. + 3 a
+  R$ 72 = R$ 30,86); 9 de 10 estoques com saldo estavam assim — preenchidos com o custo do cadastro;
+- margem: a lista calculava sobre o custo (71%) e a ficha sobre o preço (41,7%); agora sobre o preço
+  em todo lugar, com a outra conta na dica;
+- histórico de preço só aparecia depois de recarregar a página.
+
+Funcionários e limitações: cadastro (sem login) testado e apagado; criação de login fica com o Jean.
+Limitações conferidas no banco simulando o usuário caixa (transação desfeita): não lê salário,
+auditoria, configuração SEFAZ nem contas; não altera nem apaga produto; não cria devolução; não se
+promove a admin; vê só as vendas da filial.
