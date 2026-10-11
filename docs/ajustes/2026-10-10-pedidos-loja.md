@@ -156,3 +156,40 @@ Testes em homologação antes de qualquer nota real.
 
 Cada etapa: implementar, testar (automático + conferência no banco; fiscal só em homologação),
 publicar e mandar o relatório da etapa.
+
+---
+
+## Resultado (10/10/2026, noite)
+
+Todas as 7 etapas publicadas (front, migrations 100–102, edges e nfe-service) e testadas no Chrome
+com o acesso de administrador, sempre com dados fictícios apagados ao final.
+
+| Etapa | Commit | Teste ao vivo |
+|---|---|---|
+| 1 | 0b8d06a | desconto e pagamentos zeram ao esvaziar/alterar o cupom |
+| 2 | 79d0003 | frente de caixa (print) |
+| 3 | 41c3b90 | menu Fiscal e cores (print) |
+| 4 | 873120f, e4456d7 | ficha do produto; reposição/ajuste não executados para não mexer no estoque real |
+| 5 | 580a86c | relatório do mês (print); ZIP sem nota autorizada para conferir |
+| 6 | e6e9014 | campos novos no produto; XML validado no emissor sem SEFAZ |
+| 7 | 0537d0e, b0d6304, 742df28 | fornecedor pelo CEP → devolução 6202 com ICMS 12% → espelho e DANFE |
+
+Achados no teste da etapa 7, já corrigidos:
+
+- **Sem GRANT para service_role** em `erp_devolucoes_fornecedor`/itens e `erp_orcamentos`/itens: a
+  edge respondia "devolução não encontrada" (migration 102). Outras tabelas sem GRANT para
+  service_role que nenhuma edge lê hoje: `erp_venda_pagamentos`, `erp_fechamentos_caixa`,
+  `erp_pedido_itens`, `erp_pessoa_enderecos`, `erp_pontos_venda`, `erp_papel_permissoes`, entre
+  outras — uma edge nova que as use vai falhar do mesmo jeito.
+- **dhEmi em UTC**: o PHP do nfe-service ignora a variável TZ; nota emitida depois das 21h saía com
+  a data do dia seguinte. Agora `date_default_timezone_set`.
+
+Pendências:
+
+- Emitir em homologação uma devolução a fornecedor de verdade (só o espelho foi feito).
+- Conferir o ZIP da contadora quando houver notas autorizadas no mês.
+- XML de cancelamento e de inutilização não são guardados.
+- Cancelar a venda não desfaz o "ganho" do lead no CRM.
+- Juazeiro sem CSC e sem certificado vinculado; contador da NFC-e a acertar na virada para produção.
+- `creditar_estoque_atomico` (reposição na ficha) não confere permissão no banco.
+- NT 2025.002: data de produção da referência por item ainda incerta (05/10, 03/11 ou 16/11/2026).
