@@ -366,10 +366,12 @@ function buildXml(array $req): string {
         $std->item = $nItem;
         $make->tagimposto($std);
 
-        // Base do ICMS do item = valor do produto − desconto + frete + outras
-        // (os valores já chegam rateados por item, ver rateio.ts na edge).
+        // Base do ICMS do item = valor do produto − desconto + frete + seguro
+        // + outras (os valores já chegam rateados por item, ver rateio.ts na
+        // edge). O seguro ficava de fora — a devolução a fornecedor o rateia.
         $baseItem = round($vProd - (float)($item['valor_desconto'] ?? 0)
-            + (float)($item['valor_frete'] ?? 0) + (float)($item['valor_outro'] ?? 0), 2);
+            + (float)($item['valor_frete'] ?? 0) + (float)($item['valor_seguro'] ?? 0)
+            + (float)($item['valor_outro'] ?? 0), 2);
         $crt = (int)($req['emitente']['crt'] ?? 1);
 
         // ICMS — Simples Nacional (CSOSN, CRT 1/4) ou regime normal (CST, CRT 2/3)
@@ -452,6 +454,37 @@ function buildXml(array $req): string {
             $std->{"v{$tag}"} = number_format(round($bc * $aliq / 100, 2), 2, '.', '');
             $make->{"tag{$tag}"}($std);
         }
+
+        // IPI devolvido (devolução a fornecedor que comprou com IPI): a lib
+        // soma vIPIDevol no total e no vNF.
+        $ipiDev = $item['ipi_devolvido'] ?? null;
+        if (!empty($ipiDev) && (float)($ipiDev['valor'] ?? 0) > 0) {
+            if (!$isDevolucao) out(422, ['erro' => "item {$nItem}: IPI devolvido só existe na nota de devolução"]);
+            $std = new stdClass();
+            $std->item      = $nItem;
+            $std->pDevol    = number_format(min(100, max(0, (float)($ipiDev['percentual'] ?? 100))), 2, '.', '');
+            $std->vIPIDevol = number_format((float)$ipiDev['valor'], 2, '.', '');
+            $make->tagimpostoDevol($std);
+        }
+    }
+
+    // --- local de entrega diferente do endereço do destinatário (NF-e) ---
+    $en = $req['entrega'] ?? null;
+    if (!$isNFCe && !empty($en['logradouro']) && !empty($en['uf'])) {
+        $std = new stdClass();
+        $doc = preg_replace('/\D/', '', (string)($en['cpf_cnpj'] ?? ''));
+        if (strlen($doc) === 14) $std->CNPJ = $doc; elseif (strlen($doc) === 11) $std->CPF = $doc;
+        $std->xNome   = !empty($en['nome']) ? mb_substr((string)$en['nome'], 0, 60) : null;
+        $std->xLgr    = mb_substr((string)$en['logradouro'], 0, 60);
+        $std->nro     = mb_substr((string)($en['numero'] ?? 'S/N'), 0, 60);
+        $std->xCpl    = !empty($en['complemento']) ? mb_substr((string)$en['complemento'], 0, 60) : null;
+        $std->xBairro = mb_substr((string)($en['bairro'] ?? ''), 0, 60) ?: 'NAO INFORMADO';
+        $std->cMun    = (int)($en['codigo_municipio'] ?? 0);
+        $std->xMun    = mb_substr((string)($en['municipio'] ?? ''), 0, 60);
+        $std->UF      = strtoupper((string)$en['uf']);
+        $std->CEP     = !empty($en['cep']) ? preg_replace('/\D/', '', (string)$en['cep']) : null;
+        if ($std->cMun === 0 || $std->xMun === '') out(422, ['erro' => 'endereço de entrega: informe a cidade com o código IBGE']);
+        $make->tagentrega($std);
     }
 
     // --- totais (a lib soma sozinha quando o std vem vazio) ---
@@ -483,6 +516,7 @@ function buildXml(array $req): string {
             $std = new stdClass();
             $std->placa = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', (string)$ve['placa']));
             $std->UF    = !empty($ve['uf']) ? (string)$ve['uf'] : null;
+            $std->RNTC  = !empty($ve['rntc']) ? mb_substr(preg_replace('/\s+/', '', (string)$ve['rntc']), 0, 20) : null;
             $make->tagveicTransp($std);
         }
         $vo = $req['frete']['volumes'] ?? null;

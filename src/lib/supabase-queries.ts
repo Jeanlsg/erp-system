@@ -4997,7 +4997,7 @@ export function useDevolucoesFornecedor(lojaId?: string) {
     queryFn: async () => {
       if (!isSupabaseConfigured()) return [];
       let q = supabase.from("erp_devolucoes_fornecedor")
-        .select("*, fornecedor:erp_pessoas!erp_devolucoes_fornecedor_fornecedor_id_fkey(nome_razao, cpf_cnpj, uf), itens:erp_devolucao_fornecedor_itens(*)")
+        .select("*, fornecedor:erp_pessoas!erp_devolucoes_fornecedor_fornecedor_id_fkey(nome_razao, cpf_cnpj, uf, email), itens:erp_devolucao_fornecedor_itens(*), nota:erp_notas_fiscais!erp_devolucoes_fornecedor_nota_fiscal_id_fkey(id, numero, serie, status, ambiente, chave_acesso, danfe_path, pdf_url, data_emissao, cstat, mensagem_retorno)")
         .order("created_at", { ascending: false })
         .limit(200);
       if (lojaId) q = q.eq("loja_id", lojaId);

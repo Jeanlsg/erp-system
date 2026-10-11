@@ -216,6 +216,11 @@ Deno.serve(async (req) => {
 
     let chaveReferenciada: string | null = null;
     let notaOriginalId: string | null = null;
+    // devolução a fornecedor pode sair como "nota normal" (finalidade 1),
+    // como no Excellent; o resto é sempre 4 na devolução e 1 na venda
+    let finalidadeNota = isDevolucao || isDevolFornecedor ? 4 : 1;
+    // endereço de entrega diferente do destinatário (tag entrega)
+    let entrega: Record<string, unknown> | undefined;
 
     if (isDevolucao) {
       // Devolução de venda: mesma mercadoria volta, com CFOP de entrada.
@@ -312,21 +317,33 @@ Deno.serve(async (req) => {
       const f = dev.fornecedor ?? {};
       const endF = f.endereco ?? {};
       const docF = String(f.cpf_cnpj ?? "").replace(/\D/g, "");
-      const chaveOrig = String(dev.chave_nota_origem ?? "").replace(/\D/g, "");
+      const itensDev = dev.itens ?? [];
+      finalidadeNota = Number(dev.finalidade) === 1 ? 1 : 4;
+      const soDig = (s: unknown) => String(s ?? "").replace(/\D/g, "");
+      // cada item diz de qual nota de entrada veio (várias notas, como o
+      // "Adicionar outro DANFE" do Excellent); devoluções antigas têm só a
+      // chave do cabeçalho
+      const chaveDoItem = (i: any) => soDig(i.chave_nota_origem) || soDig(dev.chave_nota_origem);
       const faltas: string[] = [];
       if (docF.length !== 14 && docF.length !== 11) faltas.push("CNPJ do fornecedor");
       if (!endF.logradouro || !(endF.cidade || endF.municipio) || !(endF.uf || f.uf)) faltas.push("endereço do fornecedor");
-      if (chaveOrig.length !== 44) faltas.push("chave de acesso da nota de compra");
-      // A chave traz o CNPJ de quem emitiu a compra (posições 7–20). A SEFAZ
-      // recusa (1194) devolução para outro CNPJ que não o emitente da nota
-      // referenciada — visto no teste de 10/10; avisa antes de transmitir.
-      else if (docF && chaveOrig.slice(6, 20) !== docF.padStart(14, "0")) {
-        faltas.push("a chave da nota de compra é de outro CNPJ, não deste fornecedor");
+      if (finalidadeNota === 4) {
+        const chaves = new Set<string>();
+        for (const i of itensDev) {
+          const c = chaveDoItem(i);
+          if (c.length !== 44) faltas.push(`nota de entrada (chave de 44 dígitos) de "${i.nome}"`);
+          else chaves.add(c);
+        }
+        // A chave traz o CNPJ de quem emitiu a compra (posições 7–20). A
+        // SEFAZ recusa (1194) devolução para outro CNPJ que não o emitente da
+        // nota referenciada — visto no teste de 10/10; avisa antes de transmitir.
+        for (const c of chaves) {
+          if (docF && c.slice(6, 20) !== docF.padStart(14, "0")) faltas.push(`a nota ${c.slice(25, 34)} é de outro CNPJ, não deste fornecedor`);
+        }
       }
-      for (const i of dev.itens ?? []) if (!(Number(i.item_nota_origem) > 0)) faltas.push(`nº do item na nota de compra (${i.nome})`);
       if (faltas.length) return json(422, { erro: "faltam dados para a nota de devolução", faltas });
 
-      natureza = "DEVOLUCAO DE COMPRA PARA COMERCIALIZACAO";
+      natureza = String(dev.natureza_operacao ?? "").trim().toUpperCase() || "DEVOLUCAO DE COMPRA PARA COMERCIALIZACAO";
       destinatario = {
         cpf_cnpj: docF, nome: f.nome_razao, ie: f.inscricao_estadual ?? undefined,
         endereco: {
@@ -335,11 +352,13 @@ Deno.serve(async (req) => {
           codigo_municipio: f.codigo_municipio_ibge ?? endF.codigo_municipio ?? endF.codigo_ibge,
         },
       };
-      const itensDev = dev.itens ?? [];
-      const pesos = itensDev.map((i: any) => Number(i.valor_total) || 0);
-      const fretes = ratear(Number(dev.valor_frete) || 0, pesos);
-      const seguros = ratear(Number(dev.valor_seguro) || 0, pesos);
-      const outros = ratear(Number(dev.outras_despesas) || 0, pesos);
+      // Frete, seguro e outras despesas: "rateado igualmente entre os
+      // produtos" (padrão do Excellent) ou informados por produto.
+      const iguais = itensDev.map(() => 1);
+      const porProduto = dev.rateio_frete === "por_produto";
+      const fretes = porProduto ? itensDev.map((i: any) => Number(i.valor_frete) || 0) : ratear(Number(dev.valor_frete) || 0, iguais);
+      const outros = porProduto ? itensDev.map((i: any) => Number(i.outras_despesas) || 0) : ratear(Number(dev.outras_despesas) || 0, iguais);
+      const seguros = ratear(Number(dev.valor_seguro) || 0, iguais);
       itens = itensDev.map((i: any, k: number) => ({
         codigo: i.produto?.sku ?? i.produto_id ?? `ITEM${k + 1}`,
         descricao: i.nome, ean: i.codigo_ean ?? i.produto?.codigo_barras, ncm: i.ncm ?? i.produto?.ncm,
@@ -356,11 +375,19 @@ Deno.serve(async (req) => {
         ...(i.icms_csosn === "900" && Number(i.icms_aliquota) > 0
           ? { aliquota_icms: Number(i.icms_aliquota), valor_bc: Number(i.icms_base) || undefined, valor_icms: Number(i.icms_valor) || undefined }
           : {}),
-        dfe_referenciado: { chave: chaveOrig, n_item: Number(i.item_nota_origem) },
+        // IPI que veio na compra e volta na devolução (impostoDevol)
+        ...(Number(i.ipi_devolvido_valor) > 0
+          ? { ipi_devolvido: { percentual: Number(i.ipi_devolvido_percentual) || 100, valor: Number(i.ipi_devolvido_valor) } }
+          : {}),
+        ...(finalidadeNota === 4
+          ? { dfe_referenciado: { chave: chaveDoItem(i), ...(Number(i.item_nota_origem) > 0 ? { n_item: Number(i.item_nota_origem) } : {}) } }
+          : {}),
       }));
-      totalNota = Math.round((pesos.reduce((a: number, b: number) => a + b, 0)
-        - itensDev.reduce((a: number, i: any) => a + (Number(i.valor_desconto) || 0), 0)
-        + (Number(dev.valor_frete) || 0) + (Number(dev.valor_seguro) || 0) + (Number(dev.outras_despesas) || 0)) * 100) / 100;
+      const soma = (xs: number[]) => xs.reduce((a, b) => a + (Number(b) || 0), 0);
+      totalNota = Math.round((soma(itensDev.map((i: any) => Number(i.valor_total)))
+        - soma(itensDev.map((i: any) => Number(i.valor_desconto)))
+        + soma(fretes) + soma(seguros) + soma(outros)
+        + soma(itensDev.map((i: any) => Number(i.ipi_devolvido_valor)))) * 100) / 100;
       pagamentos = [{ forma: "90", valor: 0 }];
       const tr = dev.transportadora;
       frete = {
@@ -368,12 +395,23 @@ Deno.serve(async (req) => {
         ...(tr ? { transportadora: { cpf_cnpj: tr.cpf_cnpj, nome: tr.nome_razao, ie: tr.inscricao_estadual,
           endereco: [tr.endereco?.logradouro, tr.endereco?.numero].filter(Boolean).join(", "),
           municipio: tr.endereco?.cidade ?? tr.endereco?.municipio, uf: tr.endereco?.uf ?? tr.uf } } : {}),
-        ...(dev.placa_veiculo ? { veiculo: { placa: dev.placa_veiculo, uf: loja.uf } } : {}),
+        ...(dev.placa_veiculo ? { veiculo: { placa: dev.placa_veiculo, uf: loja.uf, rntc: dev.rntc ?? undefined } } : {}),
         volumes: { quantidade: dev.volumes_qtd, especie: dev.volumes_especie, peso_liquido: dev.peso_liquido, peso_bruto: dev.peso_bruto },
       } as any;
+      const e = dev.entrega;
+      if (e?.logradouro && e?.uf) {
+        entrega = {
+          cpf_cnpj: docF, nome: f.nome_razao, logradouro: e.logradouro, numero: e.numero || "S/N", complemento: e.complemento,
+          bairro: e.bairro || "", municipio: e.cidade, codigo_municipio: e.codigo_municipio, uf: e.uf, cep: e.cep,
+        };
+      }
       notaExtra = { tipo_operacao: "saida", schema: "PL_010_V1.30", consumidor_final: 0, presenca: 0 };
-      observacoes = [`Devolucao: ${dev.motivo}`, dev.numero_nota_origem ? `Ref. NF-e ${dev.numero_nota_origem}` : null, dev.observacoes]
-        .filter(Boolean).join(" | ");
+      const numeros = [...new Set(itensDev.map((i: any) => chaveDoItem(i)).filter((c: string) => c.length === 44)
+        .map((c: string) => String(Number(c.slice(25, 34)))))];
+      observacoes = [
+        dev.observacoes || (dev.motivo ? `Devolucao: ${dev.motivo}` : null),
+        finalidadeNota === 4 && numeros.length ? `Ref. NF-e ${numeros.join(", ")}` : null,
+      ].filter(Boolean).join(" | ");
     } else if (remessa_id) {
       const { data: remessa } = await admin
         .from("erp_remessas")
@@ -579,10 +617,11 @@ Deno.serve(async (req) => {
       // CSC só faz sentido na NFC-e — é o que assina o QR Code do cupom
       ...(isNFCe ? { csc: sefaz.csc_token, csc_id: sefaz.csc_id } : {}),
       ...(frete ? { frete } : {}),
+      ...(entrega ? { entrega } : {}),
       nota: {
         modelo, serie: serieDoc, numero, natureza, observacoes,
         ...(presenca ? { presenca } : {}),
-        finalidade: isDevolucao || isDevolFornecedor ? 4 : 1,
+        finalidade: finalidadeNota,
         ...(chaveReferenciada ? { chave_referenciada: chaveReferenciada } : {}),
         ...notaExtra,
         // Venda que subiu da fila offline: a emissão é posterior ao fato, e a
@@ -704,7 +743,7 @@ Deno.serve(async (req) => {
       tipo: tipoDoc,
       numero,
       serie: serieDoc,
-      finalidade: isDevolucao || isDevolFornecedor ? 4 : 1,
+      finalidade: finalidadeNota,
       nota_referenciada_id: notaOriginalId,
       chave_acesso: resultado.chave || null,
       protocolo: resultado.protocolo || null,
