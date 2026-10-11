@@ -5441,8 +5441,9 @@ export function useMovimentosDoProduto(produtoId?: string, lojaId?: string | nul
       return lerTudo(() => {
         let q = supabase.from("erp_estoque_movimentacoes").select("*")
           .eq("produto_id", produtoId).eq("loja_id", lojaId);
-        if (de) q = q.gte("created_at", `${de}T00:00:00`);
-        if (ate) q = q.lte("created_at", `${ate}T23:59:59.999`);
+        // o dia é o do relógio da loja, não o UTC do banco
+        if (de) q = q.gte("created_at", new Date(`${de}T00:00:00`).toISOString());
+        if (ate) q = q.lte("created_at", new Date(`${ate}T23:59:59.999`).toISOString());
         return q.order("created_at", { ascending: false }).order("id");
       });
     },

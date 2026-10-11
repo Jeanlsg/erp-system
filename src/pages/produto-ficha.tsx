@@ -31,8 +31,11 @@ import {
   TIPOS_MOVIMENTO, alteracoesDePreco, htmlFichaProduto, resumoMovimentos, rotuloOrigem, sinalDoMovimento,
 } from "@/lib/ficha-produto";
 
-const hoje = () => new Date().toISOString().slice(0, 10);
-const diasAtras = (n: number) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+// Data LOCAL (AAAA-MM-DD). toISOString() é UTC: à noite em Recife já é o dia
+// seguinte, e a tela mostrava "até amanhã".
+const dataLocal = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const hoje = () => dataLocal(new Date());
+const diasAtras = (n: number) => { const d = new Date(); d.setDate(d.getDate() - n); return dataLocal(d); };
 
 export function ProdutoFichaPage() {
   const { id } = useParams<{ id: string }>();
@@ -59,7 +62,10 @@ export function ProdutoFichaPage() {
 
   const produto = ficha?.produto;
   const estoque = Number(ficha?.estoque?.quantidade ?? 0);
-  const custoMedio = Number(ficha?.estoque?.custo_medio ?? produto?.preco_custo ?? 0);
+  // Produto importado por planilha tem custo no cadastro e custo médio zerado
+  // na loja (nenhuma entrada com custo ainda): mostra o do cadastro.
+  const custoMedioLoja = Number(ficha?.estoque?.custo_medio) || 0;
+  const custoMedio = custoMedioLoja || Number(produto?.preco_custo ?? 0);
 
   // ---- preços ----
   const [custo, setCusto] = useState<number | "">("");
@@ -140,7 +146,7 @@ export function ProdutoFichaPage() {
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {[
           ["Estoque atual", String(estoque), estoque <= 0 ? "bg-red-600" : "bg-neutral-800"],
-          ["Custo médio", brl(custoMedio), "bg-neutral-800"],
+          [custoMedioLoja ? "Custo médio" : "Custo (cadastro)", brl(custoMedio), "bg-neutral-800"],
           ["Preço de venda", brl(produto.preco_venda), "bg-neutral-800"],
           ["Margem", `${margem.toFixed(1)}%`, margem < 20 ? "bg-red-600" : "bg-green-600"],
         ].map(([rot, val, cor]) => (
