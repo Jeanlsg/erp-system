@@ -14,8 +14,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose,
 } from "@/components/ui/dialog";
 import {
-  Calculator, Plus, Trash2, Loader2, ShoppingCart,
-  Lock, Unlock, Settings,
+  Calculator, Plus, Trash2, Loader2, Lock, Unlock, Settings,
   Check, X, AlertCircle, CloudOff, RefreshCw, Cloud, Camera,
   UserPlus,
   Search, Keyboard,
@@ -1101,14 +1100,14 @@ export function PDVPage() {
           </Button>
           {caixaAberto && (
             <>
-              <Button variant="outline" size="sm" onClick={() => setModalSangria(true)}>
-                Sangria
+              <Button size="sm" className="bg-neutral-900 text-white hover:bg-neutral-700" onClick={() => setModalSangria(true)}>
+                Sangria <span className="ml-1 font-mono text-[10px] opacity-70">Ctrl+S</span>
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setModalEntrada(true)}>
-                Entrada Extra
+              <Button size="sm" className="bg-neutral-900 text-white hover:bg-neutral-700" onClick={() => setModalEntrada(true)}>
+                Entrada Extra <span className="ml-1 font-mono text-[10px] opacity-70">Ctrl+E</span>
               </Button>
-              <Button variant="destructive" size="sm" onClick={() => setModalFechamento(true)}>
-                Fechar Caixa
+              <Button size="sm" className="bg-red-600 text-white hover:bg-red-700" onClick={() => setModalFechamento(true)}>
+                Fechar Caixa <span className="ml-1 font-mono text-[10px] opacity-80">Ctrl+X</span>
               </Button>
             </>
           )}
@@ -1397,6 +1396,19 @@ export function PDVPage() {
             )}
 
 
+            {/* Faixa escura com o último produto lançado, em letra grande, como no
+                sistema anterior: o operador confere de longe o que entrou. */}
+            <div className="flex items-center justify-between gap-3 bg-neutral-900 px-4 py-3 text-white">
+              <span className="truncate text-2xl font-bold tracking-wide uppercase">
+                {cart.length ? cart[cart.length - 1].nome : "Caixa livre"}
+              </span>
+              {cart.length > 0 && (
+                <span className="shrink-0 text-lg font-semibold tabular-nums text-red-400">
+                  {cart[cart.length - 1].quantidade} × {brl(cart[cart.length - 1].preco_unitario)}
+                </span>
+              )}
+            </div>
+
             {/* Linha de entrada: código → TAB → quantidade */}
             <div className="border-b bg-muted/20 p-3">
               <div className="flex flex-wrap items-end gap-2">
@@ -1535,12 +1547,18 @@ export function PDVPage() {
 
             {/* Barra de atalhos, como no sistema antigo: o operador enxerga a
                 tecla sem decorar */}
-            <div className="flex flex-wrap items-center gap-1 border-t bg-muted/30 px-2 py-1.5 text-xs">
+            {/* Botões grandes em preto (cancelar em vermelho, pagamento em verde),
+                como pediu a loja: "tá muito branco, a pessoa se bate pra achar". */}
+            <div className="grid grid-cols-3 gap-1.5 border-t bg-neutral-100 p-2 sm:grid-cols-4 xl:grid-cols-6 dark:bg-neutral-900">
               {ATALHOS_VISIVEIS.map((a) => (
                 <button key={a.tecla} type="button" onClick={a.acao} disabled={a.ativo === false}
-                  className="rounded px-2 py-1 hover:bg-accent disabled:opacity-40">
-                  <span className="font-mono font-semibold">{a.tecla}</span>
-                  <span className="ml-1 text-muted-foreground">{a.rotulo}</span>
+                  className={`flex flex-col items-center justify-center rounded-md px-2 py-2 text-center text-sm font-semibold leading-tight text-white shadow-sm transition-colors disabled:opacity-40 ${
+                    a.tecla === "F11" ? "bg-red-600 hover:bg-red-700"
+                      : a.tecla === "F10" ? "bg-green-600 hover:bg-green-700"
+                      : a.tecla === "Ctrl+X" ? "bg-red-800 hover:bg-red-900"
+                      : "bg-neutral-800 hover:bg-red-700"}`}>
+                  <span>{a.rotulo}</span>
+                  <span className="mt-0.5 font-mono text-[11px] font-normal opacity-75">({a.tecla})</span>
                 </button>
               ))}
             </div>
@@ -1586,95 +1604,70 @@ export function PDVPage() {
               </div>
             </div>
 
-            {/* Carrinho */}
-            <div className="flex-1 overflow-y-auto">
-              <div className="p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="font-semibold flex items-center gap-2">
-                    <ShoppingCart className="h-4 w-4" />
-                    Carrinho
-                  </h3>
-                  <span className="text-xs text-muted-foreground">{cart.length} item(s)</span>
+            {/* Desconto e acréscimo na tela principal (pedido da loja: "aqui não tem o
+                desconto na tela principal"). O mesmo estado da tela de pagamento;
+                trava depois do primeiro pagamento lançado, como lá. O desconto de
+                UM item continua no F6/F7. (Aqui ficava uma segunda lista
+                "Carrinho" que repetia o cupom.) */}
+            <div className="flex-1 overflow-y-auto p-4">
+              <div className="rounded-md border-2 border-red-600/70 bg-background p-3">
+                <p className="mb-2 text-sm font-semibold text-red-700 dark:text-red-400">Desconto e acréscimo da venda</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs">Desconto geral</Label>
+                    <div className="mt-1 flex gap-1">
+                      <Input type="number" step="0.01" min="0" placeholder="0,00" value={desconto}
+                        disabled={pagamentos.length > 0 || cart.length === 0}
+                        onChange={(e) => setDesconto(e.target.value)} className="h-10 text-base" />
+                      <Button type="button" variant={descontoPercentual ? "default" : "outline"} className="h-10 px-3"
+                        disabled={pagamentos.length > 0 || cart.length === 0}
+                        onClick={() => setDescontoPercentual(!descontoPercentual)}
+                        title="Alternar entre R$ e %">{descontoPercentual ? "%" : "R$"}</Button>
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Acréscimo (R$)</Label>
+                    <Input type="number" step="0.01" min="0" placeholder="0,00" value={acrescimo}
+                      disabled={pagamentos.length > 0 || cart.length === 0}
+                      onChange={(e) => setAcrescimo(e.target.value)} className="mt-1 h-10 text-base" />
+                  </div>
                 </div>
-
-                {cart.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <ShoppingCart className="h-10 w-10 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">Carrinho vazio</p>
-                    <p className="text-xs">Clique em um produto para adicionar</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {cart.map((item) => (
-                      <div key={item.produto_id} className="flex items-center gap-2 p-2 bg-background rounded-lg border">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium line-clamp-1">{item.nome}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {brl(item.preco_unitario)} x {item.quantidade}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-6 w-6"
-                            onClick={() => atualizarQuantidade(item.produto_id, item.quantidade - 1)}
-                          >
-                            <span className="text-xs">-</span>
-                          </Button>
-                          <span className="text-xs w-6 text-center">{item.quantidade}</span>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-6 w-6"
-                            onClick={() => atualizarQuantidade(item.produto_id, item.quantidade + 1)}
-                          >
-                            <Plus className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 text-destructive"
-                            onClick={() => remover(item.produto_id)}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                        <div className="text-right min-w-[70px]">
-                          <p className="text-xs font-semibold">{brl(item.preco_unitario * item.quantidade)}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  Desconto em um item só: selecione o item e use F6. Depois de lançar pagamento, desconto e
+                  acréscimo travam — remova os pagamentos para alterar.
+                </p>
               </div>
             </div>
 
             {/* Totais — o pagamento em si é a tela exclusiva (F10) */}
-            <div className="border-t bg-background p-4 space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>Subtotal</span>
-                <span>{brl(subtotal)}</span>
+            <div className="space-y-2 border-t bg-background p-3">
+              <div className="grid grid-cols-3 gap-1.5 text-white">
+                <div className="rounded-md bg-neutral-800 px-2 py-1.5">
+                  <p className="text-[10px] uppercase opacity-75">Itens</p>
+                  <p className="text-base font-bold tabular-nums">{cart.length} · {cart.reduce((q, i) => q + i.quantidade, 0)}</p>
+                </div>
+                <div className="rounded-md bg-neutral-800 px-2 py-1.5">
+                  <p className="text-[10px] uppercase opacity-75">Subtotal</p>
+                  <p className="text-base font-bold tabular-nums">{brl(subtotal)}</p>
+                </div>
+                <div className={`rounded-md px-2 py-1.5 ${totalDesconto > 0 ? "bg-red-600" : "bg-neutral-800"}`}>
+                  <p className="text-[10px] uppercase opacity-75">Descontos</p>
+                  <p className="text-base font-bold tabular-nums">{totalDesconto > 0 ? "-" : ""}{brl(totalDesconto)}</p>
+                </div>
               </div>
-              {totalDesconto > 0 && (
-                <div className="flex justify-between text-sm text-red-600">
-                  <span>Descontos</span>
-                  <span>-{brl(totalDesconto)}</span>
+              {(acresc > 0 || taxaEntrega > 0) && (
+                <div className="flex justify-between px-1 text-sm">
+                  <span>{acresc > 0 ? "Acréscimo" : ""}{acresc > 0 && taxaEntrega > 0 ? " + " : ""}{taxaEntrega > 0 ? "Entrega" : ""}</span>
+                  <span className="tabular-nums">+{brl(acresc + taxaEntrega)}</span>
                 </div>
               )}
-              {acresc > 0 && (
-                <div className="flex justify-between text-sm">
-                  <span>Acréscimo</span>
-                  <span>+{brl(acresc)}</span>
-                </div>
-              )}
-              <div className="flex justify-between text-lg font-bold border-t pt-2">
-                <span>TOTAL</span>
-                <span className="text-green-600">{brl(total)}</span>
+              <div className="flex items-end justify-between rounded-md bg-green-600 px-3 py-2 text-white">
+                <span className="text-sm font-semibold uppercase">Total</span>
+                <span className="text-4xl font-bold tabular-nums">{brl(total)}</span>
               </div>
 
               <div className="flex gap-2 pt-2">
-                <Button variant="outline" className="flex-1"
+                <Button className="flex-1 bg-red-600 text-white hover:bg-red-700"
                   onClick={() => {
                     // O F11 já perguntava; o botão limpava direto. Mesmo ato,
                     // mesma pergunta — perder o cupom por um clique errado é
@@ -1684,7 +1677,7 @@ export function PDVPage() {
                     }
                   }}>
                   <X className="h-4 w-4 mr-1" />
-                  Cancelar
+                  Cancelar venda (F11)
                 </Button>
                 <Button
                   className="flex-1 bg-green-600 hover:bg-green-700"
