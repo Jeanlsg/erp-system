@@ -49,6 +49,7 @@ import {
 import { ImportarProdutosDialog } from "@/components/importar-produtos";
 import { LotesProdutoDialog } from "@/components/lotes-produto";
 import { ComboboxBusca } from "@/components/ui/combobox-busca";
+import { CFOPS, CSOSNS, ORIGENS_MERCADORIA, faltaNoTributoDoProduto } from "@/lib/tabelas-fiscais";
 
 // =============================
 // Ações rápidas (botões topo)
@@ -96,6 +97,7 @@ export function ProdutosEstoqueLotesPage() {
     sku: "", nome: "", preco_custo: "0", preco_venda: "0",
     unidade: "UN", estoque_minimo: "0", duracao_dias: "", marca: "", codigo_barras: "",
     categoria_id: "", ncm: "", cest: "", cfop_padrao: "5102", csosn: "102",
+    origem_mercadoria: "0", icms: "", aliquota_credito_sn: "",
   });
   const [formCategoria, setFormCategoria] = useState({ nome: "", descricao: "" });
 
@@ -301,6 +303,7 @@ export function ProdutosEstoqueLotesPage() {
       sku: "", nome: "", preco_custo: "0", preco_venda: "0",
       unidade: "UN", estoque_minimo: "0", duracao_dias: "", marca: "", codigo_barras: "",
       ncm: "", cest: "", cfop_padrao: "5102", csosn: "102",
+      origem_mercadoria: "0", icms: "", aliquota_credito_sn: "",
       categoria_id: "",
     });
     setModalProduto(true);
@@ -331,6 +334,9 @@ export function ProdutosEstoqueLotesPage() {
       categoria_id: cat?.id ?? "",
       ncm: p.ncm ?? "", cest: p.cest ?? "",
       cfop_padrao: p.cfop_padrao ?? "5102", csosn: p.csosn ?? "102",
+      origem_mercadoria: String(p.origem_mercadoria ?? 0),
+      icms: p.icms != null && Number(p.icms) > 0 ? String(p.icms) : "",
+      aliquota_credito_sn: p.aliquota_credito_sn != null && Number(p.aliquota_credito_sn) > 0 ? String(p.aliquota_credito_sn) : "",
     });
     setModalProduto(true);
   };
@@ -355,7 +361,13 @@ export function ProdutosEstoqueLotesPage() {
       cest: formProduto.cest.replace(/\D/g, "") || null,
       cfop_padrao: formProduto.cfop_padrao || "5102",
       csosn: formProduto.csosn || "102",
+      origem_mercadoria: parseInt(formProduto.origem_mercadoria) || 0,
+      icms: formProduto.icms === "" ? null : (parseFloat(formProduto.icms.replace(",", ".")) || null),
+      aliquota_credito_sn: formProduto.aliquota_credito_sn === "" ? null : (parseFloat(formProduto.aliquota_credito_sn.replace(",", ".")) || null),
     };
+    // CSOSN que o emissor não monta sem o dado: recusa aqui, não na SEFAZ
+    const faltaTributo = faltaNoTributoDoProduto(payload);
+    if (faltaTributo) { toast.error(faltaTributo); return; }
     try {
       if (editId) {
         await updateProduto.mutateAsync({ id: editId, ...payload });
@@ -880,27 +892,43 @@ export function ProdutosEstoqueLotesPage() {
                     onChange={(e) => setFormProduto({ ...formProduto, cest: e.target.value })} />
                 </div>
                 <div>
-                  <Label>CFOP padrão</Label>
+                  <Label>Origem da mercadoria</Label>
                   <select className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-                    value={formProduto.cfop_padrao}
-                    onChange={(e) => setFormProduto({ ...formProduto, cfop_padrao: e.target.value })}>
-                    <option value="5102">5102 — Venda (dentro do estado)</option>
-                    <option value="5405">5405 — Venda ST (dentro do estado)</option>
-                    <option value="6102">6102 — Venda (fora do estado)</option>
-                    <option value="6404">6404 — Venda ST (fora do estado)</option>
+                    value={formProduto.origem_mercadoria}
+                    onChange={(e) => setFormProduto({ ...formProduto, origem_mercadoria: e.target.value })}>
+                    {ORIGENS_MERCADORIA.map((o) => <option key={o.valor} value={String(o.valor)}>{o.rotulo}</option>)}
                   </select>
                 </div>
                 <div>
-                  <Label>CSOSN (Simples Nacional)</Label>
+                  <Label>CFOP padrão (venda)</Label>
+                  <select className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                    value={formProduto.cfop_padrao}
+                    onChange={(e) => setFormProduto({ ...formProduto, cfop_padrao: e.target.value })}>
+                    {CFOPS.filter((c) => c.grupo === "Venda").map((c) => <option key={c.valor} value={c.valor}>{c.rotulo}</option>)}
+                  </select>
+                </div>
+                <div className="col-span-2">
+                  <Label>Situação tributária — CSOSN (Simples Nacional)</Label>
                   <select className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
                     value={formProduto.csosn}
                     onChange={(e) => setFormProduto({ ...formProduto, csosn: e.target.value })}>
-                    <option value="102">102 — Sem permissão de crédito</option>
-                    <option value="101">101 — Com permissão de crédito</option>
-                    <option value="500">500 — ICMS cobrado por ST</option>
-                    <option value="400">400 — Não tributada pelo Simples</option>
+                    {CSOSNS.map((c) => <option key={c.valor} value={c.valor}>{c.rotulo}</option>)}
                   </select>
                 </div>
+                <div>
+                  <Label>Alíquota do ICMS (%)</Label>
+                  <Input inputMode="decimal" placeholder="Ex.: 20,5" value={formProduto.icms}
+                    onChange={(e) => setFormProduto({ ...formProduto, icms: e.target.value })} />
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">Usada quando a operação destaca ICMS (CSOSN 900, devolução).</p>
+                </div>
+                {formProduto.csosn === "101" && (
+                  <div>
+                    <Label>Alíquota de crédito do Simples (%) *</Label>
+                    <Input inputMode="decimal" placeholder="Ex.: 1,25" value={formProduto.aliquota_credito_sn}
+                      onChange={(e) => setFormProduto({ ...formProduto, aliquota_credito_sn: e.target.value })} />
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">Informada pela contadora (faixa do Simples).</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>

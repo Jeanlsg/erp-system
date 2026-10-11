@@ -247,6 +247,11 @@ Deno.serve(async (req) => {
         cest: i.produto?.cest,
         cfop: cfopDev,
         csosn: i.produto?.csosn ?? "102",
+        // tributos do cadastro (etapa 6, 10/10/2026): antes a nota saía sempre
+        // com origem 0 e um CSOSN 101 não levava o crédito que o schema exige
+        origem: Number(i.produto?.origem_mercadoria ?? 0),
+        aliquota_icms: i.produto?.icms != null ? Number(i.produto.icms) : undefined,
+        aliquota_credito_sn: i.produto?.aliquota_credito_sn != null ? Number(i.produto.aliquota_credito_sn) : undefined,
         unidade: i.produto?.unidade ?? "UN",
         quantidade: Number(i.quantidade),
         valor_unitario: Number(i.preco_unitario ?? i.preco ?? 0),
@@ -343,6 +348,11 @@ Deno.serve(async (req) => {
         cest: i.produto?.cest,
         cfop: interestadual ? "6102" : (i.produto?.cfop_padrao ?? "5102"),
         csosn: i.produto?.csosn ?? "102",
+        // tributos do cadastro (etapa 6, 10/10/2026): antes a nota saía sempre
+        // com origem 0 e um CSOSN 101 não levava o crédito que o schema exige
+        origem: Number(i.produto?.origem_mercadoria ?? 0),
+        aliquota_icms: i.produto?.icms != null ? Number(i.produto.icms) : undefined,
+        aliquota_credito_sn: i.produto?.aliquota_credito_sn != null ? Number(i.produto.aliquota_credito_sn) : undefined,
         unidade: i.produto?.unidade ?? "UN",
         quantidade: Number(i.quantidade),
         valor_unitario: Number(i.preco_unitario ?? i.preco ?? 0),

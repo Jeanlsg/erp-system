@@ -333,6 +333,32 @@ function buildXml(array $req): string {
             $make->tagICMS($std);
         } else {
             $std->CSOSN = (string)($item['csosn'] ?? '102');
+            // Base do ICMS do item = valor do produto − desconto + frete + outras
+            // (os valores já chegam rateados por item, ver rateio.ts na edge).
+            $baseItem = round($vProd - (float)($item['valor_desconto'] ?? 0)
+                + (float)($item['valor_frete'] ?? 0) + (float)($item['valor_outro'] ?? 0), 2);
+            if ($std->CSOSN === '101') {
+                // Com permissão de crédito: o schema exige pCredSN e vCredICMSSN.
+                $pCred = (float)($item['aliquota_credito_sn'] ?? 0);
+                if ($pCred <= 0) {
+                    out(422, ['erro' => "item {$nItem}: CSOSN 101 exige a alíquota de crédito do Simples (cadastre no produto)"]);
+                }
+                $std->pCredSN     = number_format($pCred, 4, '.', '');
+                $std->vCredICMSSN = number_format(round($baseItem * $pCred / 100, 2), 2, '.', '');
+            } elseif ($std->CSOSN === '900') {
+                // Outros, com destaque (ex.: devolução a fornecedor). Base,
+                // alíquota e valor podem vir prontos do item; senão, calcula.
+                $aliq = (float)($item['aliquota_icms'] ?? 0);
+                $bc   = isset($item['valor_bc']) ? (float)$item['valor_bc'] : $baseItem;
+                if ($aliq > 0 && $bc > 0) {
+                    $std->modBC = 3;
+                    $std->vBC   = number_format($bc, 2, '.', '');
+                    $std->pICMS = number_format($aliq, 4, '.', '');
+                    $std->vICMS = number_format(isset($item['valor_icms']) ? (float)$item['valor_icms'] : round($bc * $aliq / 100, 2), 2, '.', '');
+                }
+            } elseif (in_array($std->CSOSN, ['201', '202', '203'], true)) {
+                out(422, ['erro' => "item {$nItem}: CSOSN {$std->CSOSN} (com ST) ainda não é emitido pelo sistema"]);
+            }
             $make->tagICMSSN($std);
         }
 
