@@ -439,7 +439,7 @@ export function ProdutosEstoqueLotesPage() {
       {/* ============== HEADER + BREADCRUMB ============== */}
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-semibold tracking-tight">
-          Cadastro e Estoque de Produtos
+          Estoque Produtos
         </h2>
       </div>
       <div className="text-xs text-muted-foreground flex items-center gap-2">
@@ -618,7 +618,12 @@ export function ProdutosEstoqueLotesPage() {
                           : loteVencido
                             ? "bg-red-50 dark:bg-red-950/10"
                             : "";
-                      const margem = Number(p.preco_custo) > 0
+                      // margem = lucro sobre o PREÇO, como na ficha, na Página Inicial e nos
+                      // relatórios (a lista calculava sobre o custo: 71% aqui, 41,7% na ficha)
+                      const margem = Number(p.preco_venda) > 0
+                        ? ((Number(p.preco_venda) - Number(p.preco_custo)) / Number(p.preco_venda)) * 100
+                        : 0;
+                      const markup = Number(p.preco_custo) > 0
                         ? ((Number(p.preco_venda) - Number(p.preco_custo)) / Number(p.preco_custo)) * 100
                         : 0;
                       return (
@@ -666,7 +671,8 @@ export function ProdutosEstoqueLotesPage() {
                             {brl(p.preco_venda)}
                           </td>
                           <td className="p-2 text-right">
-                            <Badge variant={margem >= 50 ? "default" : margem >= 25 ? "outline" : "destructive"} className="text-[10px]">
+                            <Badge variant={margem >= 33 ? "default" : margem >= 20 ? "outline" : "destructive"} className="text-[10px]"
+                              title={`Lucro de ${margem.toFixed(1)}% sobre o preço de venda (${markup.toFixed(0)}% sobre o custo)`}>
                               {margem.toFixed(0)}%
                             </Badge>
                           </td>

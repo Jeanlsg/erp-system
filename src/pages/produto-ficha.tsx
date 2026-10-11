@@ -132,7 +132,7 @@ export function ProdutoFichaPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <Link to="/produtos-estoque-lotes" className="mb-1 inline-flex items-center text-xs text-muted-foreground hover:text-foreground">
-            <ArrowLeft className="mr-1 h-3 w-3" /> Cadastro e Estoque
+            <ArrowLeft className="mr-1 h-3 w-3" /> Estoque Produtos
           </Link>
           <h1 className="text-2xl font-semibold tracking-tight">{produto.nome}</h1>
           <p className="text-sm text-muted-foreground">

@@ -49,7 +49,7 @@ const A: Record<string, AjudaPagina> = {
     descricao: "Posição de estoque por loja e produto.",
   },
   "produtos-estoque-lotes": {
-    titulo: "Cadastro e Estoque",
+    titulo: "Estoque Produtos",
     descricao: "Cadastro de produtos, categorias, lotes e posição de estoque numa tela só. As ações rápidas incluem reajuste de preços em massa (sobre o filtro atual), etiquetas com código de barras e a lista de produtos desativados para reativação.",
   },
   "estoque/movimentacoes": {

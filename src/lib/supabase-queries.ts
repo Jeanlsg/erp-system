@@ -879,7 +879,8 @@ export function useUpdateProduto() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => invalidarProdutos(qc),
+    // o histórico de preço e custo (ficha do produto) vem da auditoria: recarrega junto
+    onSuccess: () => { invalidarProdutos(qc); qc.invalidateQueries({ queryKey: ['erp_auditoria'] }); },
   });
 }
 
