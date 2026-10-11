@@ -212,6 +212,8 @@ export function DevolucaoFornecedorPage() {
   const [rascunhoItem, setRascunhoItem] = useState<ItemDevolucao | null>(null);
   const [abaTrib, setAbaTrib] = useState<"icms" | "ipi">("icms");
   const [confirmandoGerar, setConfirmandoGerar] = useState(false);
+  // motivo da última recusa da SEFAZ, à vista no formulário até gerar de novo
+  const [recusa, setRecusa] = useState<string | null>(null);
   const arquivoXml = useRef<HTMLInputElement>(null);
 
   const fornecedor = useMemo(() => (fornecedores as any[]).find((f) => f.id === fornecedorId), [fornecedores, fornecedorId]);
@@ -235,7 +237,7 @@ export function DevolucaoFornecedorPage() {
     setEditId(null); setNumeroEntrada(""); setNatureza(NATUREZA_PADRAO); setFinalidade("4"); setEspecie(""); setVolumes("");
     setModalidade("9"); setTransportadora(""); setPlaca(""); setRntc(""); setPesoBruto(""); setPesoLiquido("");
     setRateio("igual"); setFrete(""); setOutras(""); setSeguro(""); setAlterarEntrega(false); setEntrega(ENTREGA_VAZIA);
-    setInfo(""); setChaves([""]); setCasas(2); setItens([]); setLinha(null); setTermoProduto("");
+    setInfo(""); setChaves([""]); setCasas(2); setItens([]); setLinha(null); setTermoProduto(""); setRecusa(null);
   };
 
   const escolherFornecedor = (f: any) => {
@@ -319,8 +321,8 @@ export function DevolucaoFornecedorPage() {
     try {
       const nota = lerXmlNfe(await arquivo.text());
       const doc = soDigitos(fornecedor?.cpf_cnpj);
-      // mesma empresa (raiz do CNPJ): a compra pode ter saído de outra filial do fornecedor
-      if (doc && soDigitos(nota.emitente_cnpj).padStart(14, "0").slice(0, 8) !== doc.padStart(14, "0").slice(0, 8)) {
+      // a SEFAZ exige o CNPJ inteiro: a devolução vai para quem emitiu a compra (1194)
+      if (doc && soDigitos(nota.emitente_cnpj).padStart(14, "0") !== doc.padStart(14, "0")) {
         toast.error(`Este XML é de ${nota.emitente_nome || nota.emitente_cnpj}, não do fornecedor escolhido.`);
         return;
       }
@@ -407,37 +409,44 @@ export function DevolucaoFornecedorPage() {
     } finally { setOcupado(null); }
   };
 
-  const emitir = async (id: string) => {
-    if (!lojaId) return false;
+  /** Emite; devolve null quando autorizada ou o motivo da recusa. */
+  const emitir = async (id: string, avisarRecusa = true): Promise<string | null> => {
+    if (!lojaId) return "escolha a loja";
     setOcupado(`emitir-${id}`);
     try {
       const r = await notaDev.mutateAsync({ devolucaoId: id, lojaId, espelho: false });
       if (r?.autorizada) {
         toast.success(`NF-e de devolução nº ${r.numero} autorizada${r.ambiente !== "producao" ? " (homologação — sem valor fiscal)" : ""}.`, { duration: 10000 });
-        return true;
+        return null;
       }
-      toast.error(`SEFAZ recusou: ${r?.motivo ?? r?.erro ?? "sem motivo"} (cStat ${r?.cstat ?? "?"})`, { duration: 20000 });
-      return false;
+      const motivo = `SEFAZ recusou: ${r?.motivo ?? r?.erro ?? "sem motivo"} (cStat ${r?.cstat ?? "?"})`;
+      if (avisarRecusa) toast.error(motivo, { duration: 20000 });
+      return motivo;
     } catch (e: any) {
-      toast.error(`Não foi possível emitir: ${e.message ?? e}`, { duration: 12000 });
-      return false;
+      const motivo = `Não foi possível emitir: ${e.message ?? e}`;
+      if (avisarRecusa) toast.error(motivo, { duration: 12000 });
+      return motivo;
     } finally { setOcupado(null); }
   };
 
   const gerar = async () => {
     setConfirmandoGerar(false);
+    setRecusa(null);
     const id = await salvar();
     if (!id) return;
     if (!(await espelho(id, false))) return;
     setOcupado(`emitir-${id}`);
     try { await confirmar.mutateAsync(id); }
     catch (e: any) { setOcupado(null); toast.error(`Não foi possível baixar o estoque: ${e.message ?? e}`); return; }
-    if (await emitir(id)) { setAberto(false); limparFormulario(); return; }
+    const motivo = await emitir(id, false);
+    if (!motivo) { setAberto(false); limparFormulario(); return; }
     // recusada: o estoque volta e o formulário continua aberto para corrigir
     try {
       await reabrir.mutateAsync(id);
-      toast.info("O estoque voltou. Corrija o que a SEFAZ apontou e clique em Gerar de novo.", { duration: 12000 });
+      setRecusa(motivo);
+      toast.error(`${motivo}. O estoque voltou: corrija e clique em Gerar de novo.`, { duration: 20000 });
     } catch (e: any) {
+      toast.error(motivo, { duration: 20000 });
       toast.error(`A devolução ficou com o estoque baixado: ${e.message ?? e}. Use "Corrigir" no histórico.`);
       setAberto(false); limparFormulario(); setSoAndamento(true);
     }
@@ -904,6 +913,11 @@ export function DevolucaoFornecedorPage() {
               </div>
             </div>
 
+            {recusa && (
+              <p className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-950/30 dark:text-red-300">
+                <b>{recusa}.</b> Nada foi emitido e o estoque voltou. Corrija e clique em Gerar Nota de Devolução de novo.
+              </p>
+            )}
             {faltas.length > 0 && itens.length > 0 && (
               <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs dark:bg-amber-950/20">
                 Para gerar a nota ainda falta: {faltas.join("; ")}.

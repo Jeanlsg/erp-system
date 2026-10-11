@@ -337,10 +337,10 @@ Deno.serve(async (req) => {
           if (!(Number(i.item_nota_origem) > 0)) faltas.push(`nº do item na nota de entrada de "${i.nome}"`);
         }
         // A chave traz o CNPJ de quem emitiu a compra (posições 7–20). A
-        // SEFAZ recusa (1194) devolução para outra empresa — visto no teste de
-        // 10/10 — mas autorizou para a filial de quem emitiu: compara a raiz.
+        // SEFAZ exige o CNPJ inteiro igual ao do destinatário (1194, visto em
+        // 10/10 e de novo em 11/10 com outra filial do mesmo fornecedor).
         for (const c of chaves) {
-          if (docF && c.slice(6, 14) !== docF.padStart(14, "0").slice(0, 8)) faltas.push(`a nota ${c.slice(25, 34)} é de outra empresa, não deste fornecedor`);
+          if (docF && c.slice(6, 20) !== docF.padStart(14, "0")) faltas.push(`a nota ${c.slice(25, 34)} foi emitida por outro CNPJ: a devolução vai para quem emitiu a nota de compra`);
         }
       }
       if (faltas.length) return json(422, { erro: "faltam dados para a nota de devolução", faltas });

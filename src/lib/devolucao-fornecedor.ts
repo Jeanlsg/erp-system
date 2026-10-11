@@ -198,10 +198,10 @@ export function faltaParaEmitir(d: {
     if (!chaves.length) f.push("número do DANFE (chave de 44 dígitos) da nota de entrada");
     for (const c of chaves) {
       if (c.length !== 44) f.push(`DANFE ${c.slice(0, 8)}… sem os 44 dígitos`);
-      // a chave traz o CNPJ do emitente da compra (posições 7–20). Compara a
-      // raiz (empresa): em homologação a SEFAZ autorizou devolução para a
-      // filial de quem emitiu (10/10); outra empresa, ela recusa (1194)
-      else if (doForn.indexOf("CNPJ") < 0 && c.slice(6, 14) !== doc.slice(0, 8)) f.push(`DANFE ${c.slice(25, 34)} é de outra empresa (CNPJ diferente do fornecedor)`);
+      // a chave traz o CNPJ do emitente da compra (posições 7–20). A SEFAZ
+      // exige o CNPJ INTEIRO igual ao do destinatário da devolução — outra
+      // filial do mesmo fornecedor também é recusada (1194, teste de 11/10)
+      else if (doForn.indexOf("CNPJ") < 0 && c.slice(6, 20) !== doc) f.push(`DANFE ${c.slice(25, 34)} foi emitido por outro CNPJ: a devolução vai para quem emitiu a nota de compra`);
     }
   }
   if (!d.itens.length) f.push("produtos");
