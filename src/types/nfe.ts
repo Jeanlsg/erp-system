@@ -15,6 +15,8 @@ export interface NFeEmitente {
     cidade?: string;
     uf?: string;
     cep?: string;
+    /** código IBGE do município (cMun) */
+    codigo_municipio?: string;
   };
 }
 

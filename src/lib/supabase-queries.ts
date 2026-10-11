@@ -2105,6 +2105,16 @@ export function useImportarNFe() {
 
         if (existente) {
           fId = existente.id;
+          // completa o que faltar no cadastro (IE, endereço, IBGE): a NF-e de
+          // devolução a este fornecedor precisa deles
+          const { data: atual } = await supabase.from('erp_pessoas')
+            .select('inscricao_estadual, endereco, codigo_municipio_ibge, uf').eq('id', existente.id).maybeSingle();
+          const completar: Record<string, unknown> = {};
+          if (!atual?.inscricao_estadual && nfe.emitente.ie) completar.inscricao_estadual = nfe.emitente.ie;
+          if (!atual?.endereco && nfe.emitente.endereco) completar.endereco = nfe.emitente.endereco;
+          if (!atual?.codigo_municipio_ibge && (nfe.emitente.endereco as any)?.codigo_municipio) completar.codigo_municipio_ibge = (nfe.emitente.endereco as any).codigo_municipio;
+          if (!atual?.uf && nfe.emitente.endereco?.uf) completar.uf = nfe.emitente.endereco.uf;
+          if (Object.keys(completar).length) await supabase.from('erp_pessoas').update(completar).eq('id', existente.id);
         } else {
           const { data: novo, error: novoErr } = await supabase
             .from('erp_pessoas')
@@ -2116,6 +2126,10 @@ export function useImportarNFe() {
               email: null,
               telefone: null,
               endereco: nfe.emitente.endereco || null,
+              inscricao_estadual: nfe.emitente.ie || null,
+              uf: nfe.emitente.endereco?.uf || null,
+              codigo_municipio_ibge: (nfe.emitente.endereco as any)?.codigo_municipio || null,
+              eh_fornecedor: true,
               ativo: true,
             })
             .select()
@@ -4987,6 +5001,64 @@ export function useCriarDevolucaoFornecedor() {
       return d;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["erp_devolucoes_fornecedor"] }),
+  });
+}
+
+/** Regrava um rascunho: cabeçalho e itens (os itens são substituídos). */
+export function useAtualizarDevolucaoFornecedor() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, devolucao, itens }: { id: string; devolucao: any; itens: any[] }) => {
+      const { data: atual, error: e0 } = await supabase.from("erp_devolucoes_fornecedor").select("status").eq("id", id).single();
+      if (e0) throw e0;
+      if (atual.status !== "rascunho") throw new Error("Só rascunho pode ser alterado — a mercadoria já saiu do estoque.");
+      const { error } = await supabase.from("erp_devolucoes_fornecedor")
+        .update({ ...devolucao, updated_at: new Date().toISOString() }).eq("id", id);
+      if (error) throw error;
+      const { error: e1 } = await supabase.from("erp_devolucao_fornecedor_itens").delete().eq("devolucao_id", id);
+      if (e1) throw e1;
+      if (itens.length) {
+        const { error: e2 } = await supabase.from("erp_devolucao_fornecedor_itens")
+          .insert(itens.map((i) => ({ ...i, devolucao_id: id })));
+        if (e2) throw e2;
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["erp_devolucoes_fornecedor"] }),
+  });
+}
+
+export function useExcluirDevolucaoFornecedor() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("erp_devolucoes_fornecedor").delete().eq("id", id).eq("status", "rascunho");
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["erp_devolucoes_fornecedor"] }),
+  });
+}
+
+/**
+ * Espelho (prévia) ou emissão da NF-e de devolução a fornecedor pela edge
+ * erp-emitir-nfe. O espelho valida a nota sem enviar, sem gastar número e
+ * sem gravar, e devolve o DANFE de pré-visualização.
+ */
+export function useNotaDevolucaoFornecedor() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ devolucaoId, lojaId, espelho }: { devolucaoId: string; lojaId: string; espelho: boolean }) => {
+      const { data, error } = await supabase.functions.invoke("erp-emitir-nfe", {
+        body: { devolucao_fornecedor_id: devolucaoId, loja_id: lojaId, tipo: "nfe", espelho },
+      });
+      if (error) throw new Error(await erroEdgeFunction(error, espelho ? "falha ao montar o espelho" : "falha ao emitir"));
+      return data as any;
+    },
+    onSuccess: (_d, v) => {
+      if (!v.espelho) {
+        qc.invalidateQueries({ queryKey: ["erp_devolucoes_fornecedor"] });
+        qc.invalidateQueries({ queryKey: ["erp_notas_fiscais"] });
+      }
+    },
   });
 }
 

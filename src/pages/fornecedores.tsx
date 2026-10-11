@@ -13,7 +13,11 @@ import { ImportarPessoasDialog } from "@/components/importar-pessoas";
 import { toast } from "sonner";
 import type { Pessoa } from "@/types/database";
 
-const FORM_VAZIO = { tipo: "juridica" as "fisica" | "juridica", nome_razao: "", nome_fantasia: "", cpf_cnpj: "", email: "", telefone: "" };
+const FORM_VAZIO = {
+  tipo: "juridica" as "fisica" | "juridica", nome_razao: "", nome_fantasia: "", cpf_cnpj: "", email: "", telefone: "",
+  // IE e endereço com IBGE: a NF-e de devolução ao fornecedor não sai sem eles
+  inscricao_estadual: "", cep: "", logradouro: "", numero: "", bairro: "", cidade: "", uf: "", codigo_municipio_ibge: "",
+};
 
 export function FornecedoresPage() {
   const { data: pessoas = [], isLoading } = useFornecedores();
@@ -30,14 +34,38 @@ export function FornecedoresPage() {
   const abrirNovo = () => { setEditando(null); setForm(FORM_VAZIO); setModalAberto(true); };
   const abrirEdicao = (p: Pessoa) => {
     setEditando(p);
-    setForm({ tipo: p.tipo, nome_razao: p.nome_razao, nome_fantasia: p.nome_fantasia ?? "", cpf_cnpj: p.cpf_cnpj ?? "", email: p.email ?? "", telefone: p.telefone ?? "" });
+    const e: any = (p as any).endereco ?? {};
+    setForm({
+      tipo: p.tipo, nome_razao: p.nome_razao, nome_fantasia: p.nome_fantasia ?? "", cpf_cnpj: p.cpf_cnpj ?? "", email: p.email ?? "", telefone: p.telefone ?? "",
+      inscricao_estadual: (p as any).inscricao_estadual ?? "", cep: e.cep ?? "", logradouro: e.logradouro ?? "", numero: e.numero ?? "",
+      bairro: e.bairro ?? "", cidade: e.cidade ?? e.municipio ?? "", uf: e.uf ?? (p as any).uf ?? "",
+      codigo_municipio_ibge: (p as any).codigo_municipio_ibge ?? e.codigo_municipio ?? "",
+    });
     setModalAberto(true);
+  };
+  const buscarCep = async () => {
+    const cep = form.cep.replace(/\D/g, "");
+    if (cep.length !== 8) return;
+    try {
+      const r = await fetch(`https://viacep.com.br/ws/${cep}/json/`).then((x) => x.json());
+      if (r?.erro) { toast.error("CEP não encontrado."); return; }
+      setForm((f) => ({ ...f, logradouro: r.logradouro || f.logradouro, bairro: r.bairro || f.bairro,
+        cidade: r.localidade || f.cidade, uf: r.uf || f.uf, codigo_municipio_ibge: r.ibge || f.codigo_municipio_ibge }));
+    } catch { /* sem a busca, digita à mão */ }
   };
   const handleSalvar = async () => {
     if (!form.nome_razao) return;
     const payload = {
       tipo: form.tipo, nome_razao: form.nome_razao, nome_fantasia: form.nome_fantasia || null,
       cpf_cnpj: form.cpf_cnpj || null, email: form.email || null, telefone: form.telefone || null,
+      inscricao_estadual: form.inscricao_estadual.trim() || null,
+      uf: form.uf.trim().toUpperCase() || null,
+      codigo_municipio_ibge: form.codigo_municipio_ibge.replace(/\D/g, "") || null,
+      endereco: form.logradouro.trim() ? {
+        logradouro: form.logradouro.trim(), numero: form.numero.trim() || null, bairro: form.bairro.trim() || null,
+        cidade: form.cidade.trim() || null, uf: form.uf.trim().toUpperCase() || null, cep: form.cep.replace(/\D/g, "") || null,
+        codigo_municipio: form.codigo_municipio_ibge.replace(/\D/g, "") || null,
+      } : null,
     };
     try {
       if (editando) {
@@ -212,7 +240,7 @@ export function FornecedoresPage() {
       </Card>
 
       <Dialog open={modalAberto} onOpenChange={setModalAberto}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] max-w-xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editando ? "Editar Fornecedor" : "Novo Fornecedor"}</DialogTitle>
             <DialogClose />
@@ -230,6 +258,23 @@ export function FornecedoresPage() {
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Email</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
               <div><Label>Telefone</Label><Input value={form.telefone} onChange={(e) => setForm({ ...form, telefone: e.target.value })} /></div>
+            </div>
+            {form.tipo === "juridica" && (
+              <div><Label>Inscrição Estadual</Label><Input value={form.inscricao_estadual} onChange={(e) => setForm({ ...form, inscricao_estadual: e.target.value })} placeholder="Em branco = isento/não contribuinte" /></div>
+            )}
+            <div className="rounded-md border p-3">
+              <p className="mb-2 text-xs font-medium text-muted-foreground">Endereço (obrigatório para a NF-e de devolução)</p>
+              <div className="grid grid-cols-3 gap-2">
+                <div><Label className="text-xs">CEP</Label><Input value={form.cep} onChange={(e) => setForm({ ...form, cep: e.target.value })} onBlur={() => void buscarCep()} placeholder="00000-000" /></div>
+                <div className="col-span-2"><Label className="text-xs">Rua</Label><Input value={form.logradouro} onChange={(e) => setForm({ ...form, logradouro: e.target.value })} /></div>
+                <div><Label className="text-xs">Número</Label><Input value={form.numero} onChange={(e) => setForm({ ...form, numero: e.target.value })} /></div>
+                <div className="col-span-2"><Label className="text-xs">Bairro</Label><Input value={form.bairro} onChange={(e) => setForm({ ...form, bairro: e.target.value })} /></div>
+                <div className="col-span-2"><Label className="text-xs">Cidade</Label><Input value={form.cidade} onChange={(e) => setForm({ ...form, cidade: e.target.value })} /></div>
+                <div><Label className="text-xs">UF</Label><Input maxLength={2} value={form.uf} onChange={(e) => setForm({ ...form, uf: e.target.value.toUpperCase() })} /></div>
+              </div>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {form.codigo_municipio_ibge ? `Código do município (IBGE): ${form.codigo_municipio_ibge}` : "Digite o CEP para preencher o endereço e o código do município."}
+              </p>
             </div>
           </div>
           <DialogFooter>

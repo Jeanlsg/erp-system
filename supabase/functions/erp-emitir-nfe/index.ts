@@ -17,7 +17,7 @@
 // ============================================================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { ratearValoresDaVenda, totalDaNota, faltaParaEntregaNfce } from "./rateio.ts";
+import { ratear, ratearValoresDaVenda, totalDaNota, faltaParaEntregaNfce } from "./rateio.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -64,13 +64,19 @@ Deno.serve(async (req) => {
       return json(403, { erro: "sem permissão para emitir NF-e (requer admin/gerente)" });
     }
 
-    const { venda_id, remessa_id, loja_id, tipo, devolucao_de } = await req.json();
-    if (!loja_id || (!venda_id && !remessa_id && !devolucao_de)) {
+    const { venda_id, remessa_id, loja_id, tipo, devolucao_de, devolucao_fornecedor_id, espelho } = await req.json();
+    // espelho: monta e valida a nota (dry-run) e devolve o DANFE de
+    // pré-visualização, sem enviar à SEFAZ, sem gastar número e sem gravar
+    const ehEspelho = espelho === true;
+    const isDevolFornecedor = !!devolucao_fornecedor_id;
+    if (!loja_id || (!venda_id && !remessa_id && !devolucao_de && !devolucao_fornecedor_id)) {
       return json(422, { erro: "informe loja_id e venda_id, remessa_id OU devolucao_de" });
     }
 
     // Devolução: NF-e de ENTRADA (finNFe=4) referenciando a nota original.
     const isDevolucao = !!devolucao_de;
+    // campos extras da nota (devolução: saída/entrada, schema PL_010, etc.)
+    let notaExtra: Record<string, unknown> = {};
 
     // NFC-e (modelo 65) é o cupom do varejo presencial: só para venda.
     const tipoDoc: "nfe" | "nfce" = tipo === "nfce" ? "nfce" : "nfe";
@@ -79,6 +85,9 @@ Deno.serve(async (req) => {
     const rotulo = isNFCe ? "NFC-e" : "NF-e";
     if (isNFCe && remessa_id) {
       return json(422, { erro: "remessa não pode ser emitida como NFC-e — use NF-e modelo 55" });
+    }
+    if (isNFCe && isDevolFornecedor) {
+      return json(422, { erro: "devolução a fornecedor exige NF-e modelo 55" });
     }
     if (isNFCe && isDevolucao) {
       return json(422, { erro: "devolução exige NF-e modelo 55 (NFC-e não comporta finalidade 4)" });
@@ -186,7 +195,7 @@ Deno.serve(async (req) => {
     // Entrega da venda (taxa_entrega > 0): NFC-e com endereço vira "entrega a
     // domicílio" (indPres=4) com frete; NF-e leva o frete com a modalidade.
     let presenca: number | undefined;
-    let frete: { modalidade: number } | undefined;
+    let frete: { modalidade: number; [k: string]: unknown } | undefined;
     // Preenchido quando a venda veio da fila offline: a emissão é posterior
     // ao fato e a SEFAZ exige o momento em que a contingência começou.
     let contingenciaDesde: string | null = null;
@@ -258,6 +267,87 @@ Deno.serve(async (req) => {
       }));
       totalNota = Number(original.valor_total ?? vendaOrig.total ?? 0);
       pagamentos = [{ forma: "90", valor: 0 }];
+
+      // NT 2025.002 (VC02-14): devolução referencia a nota original POR ITEM
+      // (DFeReferenciado: chave + nItem NELA). O nItem sai do próprio XML
+      // autorizado, casando pelo código do produto — a ordem dos itens no
+      // banco não é garantida. Sem o XML, fica o refNFe do cabeçalho (legado).
+      if (original.xml_path) {
+        const { data: arq } = await adminPublic.storage.from("fiscal").download(original.xml_path);
+        const xmlOrig = arq ? await arq.text() : "";
+        const mapa = new Map<string, number>();
+        for (const m of xmlOrig.matchAll(/<det nItem="(\d+)">[\s\S]*?<cProd>([^<]*)<\/cProd>/g)) mapa.set(m[2], Number(m[1]));
+        if (mapa.size && itens.every((i: any) => mapa.has(String(i.codigo)))) {
+          itens = itens.map((i: any) => ({ ...i, dfe_referenciado: { chave: chaveReferenciada, n_item: mapa.get(String(i.codigo)) } }));
+          notaExtra = { ...notaExtra, schema: "PL_010_V1.30" };
+        }
+      }
+    } else if (isDevolFornecedor) {
+      // ---- Devolução a fornecedor: NF-e de SAÍDA, finalidade 4 ----
+      const { data: dev } = await admin.from("erp_devolucoes_fornecedor")
+        .select("*, itens:erp_devolucao_fornecedor_itens(*, produto:erp_produtos(sku, codigo_barras, ncm, cest, unidade)), fornecedor:erp_pessoas!erp_devolucoes_fornecedor_fornecedor_id_fkey(*), transportadora:erp_pessoas!erp_devolucoes_fornecedor_transportadora_id_fkey(*)")
+        .eq("id", devolucao_fornecedor_id).maybeSingle();
+      if (!dev) return json(422, { erro: "devolução não encontrada" });
+      if (dev.loja_id !== loja_id) return json(422, { erro: "a devolução é de outra loja" });
+      if (!ehEspelho && dev.status !== "confirmada") {
+        return json(422, { erro: dev.status === "faturada" ? "esta devolução já tem nota" : "confirme a devolução (baixa do estoque) antes de emitir a nota" });
+      }
+      const f = dev.fornecedor ?? {};
+      const endF = f.endereco ?? {};
+      const docF = String(f.cpf_cnpj ?? "").replace(/\D/g, "");
+      const chaveOrig = String(dev.chave_nota_origem ?? "").replace(/\D/g, "");
+      const faltas: string[] = [];
+      if (docF.length !== 14 && docF.length !== 11) faltas.push("CNPJ do fornecedor");
+      if (!endF.logradouro || !(endF.cidade || endF.municipio) || !(endF.uf || f.uf)) faltas.push("endereço do fornecedor");
+      if (chaveOrig.length !== 44) faltas.push("chave de acesso da nota de compra");
+      for (const i of dev.itens ?? []) if (!(Number(i.item_nota_origem) > 0)) faltas.push(`nº do item na nota de compra (${i.nome})`);
+      if (faltas.length) return json(422, { erro: "faltam dados para a nota de devolução", faltas });
+
+      natureza = "DEVOLUCAO DE COMPRA PARA COMERCIALIZACAO";
+      destinatario = {
+        cpf_cnpj: docF, nome: f.nome_razao, ie: f.inscricao_estadual ?? undefined,
+        endereco: {
+          logradouro: endF.logradouro, numero: endF.numero ?? "S/N", bairro: endF.bairro ?? "",
+          municipio: endF.cidade ?? endF.municipio, uf: endF.uf ?? f.uf, cep: endF.cep,
+          codigo_municipio: f.codigo_municipio_ibge ?? endF.codigo_municipio ?? endF.codigo_ibge,
+        },
+      };
+      const itensDev = dev.itens ?? [];
+      const pesos = itensDev.map((i: any) => Number(i.valor_total) || 0);
+      const fretes = ratear(Number(dev.valor_frete) || 0, pesos);
+      const seguros = ratear(Number(dev.valor_seguro) || 0, pesos);
+      const outros = ratear(Number(dev.outras_despesas) || 0, pesos);
+      itens = itensDev.map((i: any, k: number) => ({
+        codigo: i.produto?.sku ?? i.produto_id ?? `ITEM${k + 1}`,
+        descricao: i.nome, ean: i.codigo_ean ?? i.produto?.codigo_barras, ncm: i.ncm ?? i.produto?.ncm,
+        cest: i.produto?.cest, cfop: i.cfop, unidade: i.unidade ?? i.produto?.unidade ?? "UN",
+        quantidade: Number(i.quantidade), valor_unitario: Number(i.valor_unitario),
+        ...(Number(i.valor_desconto) > 0 ? { valor_desconto: Number(i.valor_desconto) } : {}),
+        ...(fretes[k] > 0 ? { valor_frete: fretes[k] } : {}),
+        ...(seguros[k] > 0 ? { valor_seguro: seguros[k] } : {}),
+        ...(outros[k] > 0 ? { valor_outro: outros[k] } : {}),
+        origem: Number(i.icms_origem ?? 0), csosn: i.icms_csosn ?? "102",
+        ...(i.icms_csosn === "900" && Number(i.icms_aliquota) > 0
+          ? { aliquota_icms: Number(i.icms_aliquota), valor_bc: Number(i.icms_base) || undefined, valor_icms: Number(i.icms_valor) || undefined }
+          : {}),
+        dfe_referenciado: { chave: chaveOrig, n_item: Number(i.item_nota_origem) },
+      }));
+      totalNota = Math.round((pesos.reduce((a: number, b: number) => a + b, 0)
+        - itensDev.reduce((a: number, i: any) => a + (Number(i.valor_desconto) || 0), 0)
+        + (Number(dev.valor_frete) || 0) + (Number(dev.valor_seguro) || 0) + (Number(dev.outras_despesas) || 0)) * 100) / 100;
+      pagamentos = [{ forma: "90", valor: 0 }];
+      const tr = dev.transportadora;
+      frete = {
+        modalidade: Number(dev.modalidade_frete ?? 9),
+        ...(tr ? { transportadora: { cpf_cnpj: tr.cpf_cnpj, nome: tr.nome_razao, ie: tr.inscricao_estadual,
+          endereco: [tr.endereco?.logradouro, tr.endereco?.numero].filter(Boolean).join(", "),
+          municipio: tr.endereco?.cidade ?? tr.endereco?.municipio, uf: tr.endereco?.uf ?? tr.uf } } : {}),
+        ...(dev.placa_veiculo ? { veiculo: { placa: dev.placa_veiculo, uf: loja.uf } } : {}),
+        volumes: { quantidade: dev.volumes_qtd, especie: dev.volumes_especie, peso_liquido: dev.peso_liquido, peso_bruto: dev.peso_bruto },
+      } as any;
+      notaExtra = { tipo_operacao: "saida", schema: "PL_010_V1.30", consumidor_final: 0, presenca: 0 };
+      observacoes = [`Devolucao: ${dev.motivo}`, dev.numero_nota_origem ? `Ref. NF-e ${dev.numero_nota_origem}` : null, dev.observacoes]
+        .filter(Boolean).join(" | ");
     } else if (remessa_id) {
       const { data: remessa } = await admin
         .from("erp_remessas")
@@ -423,9 +513,16 @@ Deno.serve(async (req) => {
     }
 
     // ---------------- 5. Numeração (com lock no banco) ----------------
-    const { data: numero, error: numErr } = await admin
-      .rpc("incrementar_numeracao_nfe", { p_loja_id: loja_id, p_tipo: tipoDoc });
-    if (numErr || !numero) return json(500, { erro: `falha na numeração: ${numErr?.message}` });
+    let numero: number;
+    if (ehEspelho) {
+      // espelho mostra o número que a nota VAI ter, sem reservá-lo
+      numero = Number(isNFCe ? sefaz.numeracao_atual_nfce : sefaz.numeracao_atual_nfe ?? 0) + 1;
+    } else {
+      const { data: n, error: numErr } = await admin
+        .rpc("incrementar_numeracao_nfe", { p_loja_id: loja_id, p_tipo: tipoDoc });
+      if (numErr || !n) return json(500, { erro: `falha na numeração: ${numErr?.message}` });
+      numero = n;
+    }
     const serieDoc = (isNFCe ? sefaz.serie_nfce : sefaz.serie_nfe) ?? 1;
 
     // ---------------- 6. Chamar o nfe-service ----------------
@@ -458,8 +555,9 @@ Deno.serve(async (req) => {
       nota: {
         modelo, serie: serieDoc, numero, natureza, observacoes,
         ...(presenca ? { presenca } : {}),
-        finalidade: isDevolucao ? 4 : 1,
+        finalidade: isDevolucao || isDevolFornecedor ? 4 : 1,
         ...(chaveReferenciada ? { chave_referenciada: chaveReferenciada } : {}),
+        ...notaExtra,
         // Venda que subiu da fila offline: a emissão é posterior ao fato, e a
         // SEFAZ trata isso como contingência (tpEmis=9), com o momento da
         // queda declarado em dhCont. Emitir como normal seria informar uma
@@ -474,6 +572,7 @@ Deno.serve(async (req) => {
       },
       itens,
       pagamentos,
+      ...(ehEspelho ? { dry_run: true } : {}),
     };
 
     const controller = new AbortController();
@@ -490,6 +589,22 @@ Deno.serve(async (req) => {
         signal: controller.signal,
       });
       resultado = await resp.json();
+      if (ehEspelho) {
+        // nada é gravado: devolve a nota validada e o DANFE de pré-visualização
+        if (!resp.ok || !resultado?.xml_base64) {
+          return json(422, { erro: resultado?.erro ?? "a nota não passou na validação", detalhe: resultado?.detalhe });
+        }
+        const rd = await fetch(`${integ.config.url}/v1/danfe`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${integ.config.token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ xml_base64: resultado.xml_base64, modelo }),
+        });
+        const danfe = await rd.json().catch(() => ({}));
+        return json(200, {
+          espelho: true, numero_previsto: numero, total: totalNota, ambiente: sefaz.ambiente,
+          xml_base64: resultado.xml_base64, danfe_pdf_base64: danfe?.danfe_pdf_base64 ?? null,
+        });
+      }
       if (!resp.ok) {
         // O número já foi consumido na numeração — registra rastro da rejeição
         const motivoRejeicao =
@@ -562,7 +677,7 @@ Deno.serve(async (req) => {
       tipo: tipoDoc,
       numero,
       serie: serieDoc,
-      finalidade: isDevolucao ? 4 : 1,
+      finalidade: isDevolucao || isDevolFornecedor ? 4 : 1,
       nota_referenciada_id: notaOriginalId,
       chave_acesso: resultado.chave || null,
       protocolo: resultado.protocolo || null,
@@ -589,6 +704,13 @@ Deno.serve(async (req) => {
       danfe_path: danfePath,
     }).select().single();
     if (nfeErr) return json(500, { erro: `nota processada mas falhou ao gravar: ${nfeErr.message}`, resultado });
+
+    // Devolução a fornecedor autorizada: faturada, com a nota ligada
+    if (isDevolFornecedor && resultado.autorizada) {
+      await admin.from("erp_devolucoes_fornecedor")
+        .update({ status: "faturada", nota_fiscal_id: nfe.id, updated_at: new Date().toISOString() })
+        .eq("id", devolucao_fornecedor_id);
+    }
 
     // Vincular à remessa + baixar estoque da ORIGEM (o destino recebe via "Receber Remessa")
     if (remessa_id && resultado.autorizada) {

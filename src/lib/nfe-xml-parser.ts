@@ -71,6 +71,8 @@ export function parseNFeXML(xmlContent: string): NFeParsed {
           cidade: emit.enderEmit.xMun,
           uf: emit.enderEmit.UF,
           cep: emit.enderEmit.CEP ? onlyDigits(emit.enderEmit.CEP) : undefined,
+          // a NF-e de devolução ao fornecedor precisa do código IBGE (cMun)
+          codigo_municipio: emit.enderEmit.cMun ? onlyDigits(emit.enderEmit.cMun) : undefined,
         }
       : undefined,
   };

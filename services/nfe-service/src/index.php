@@ -79,7 +79,9 @@ function makeTools(array $req): Tools {
         'razaosocial' => $emit['razao'] ?? '',
         'cnpj'        => preg_replace('/\D/', '', $emit['cnpj'] ?? ''),
         'siglaUF'     => $emit['uf'] ?? 'BA',
-        'schemes'     => 'PL_009_V4',
+        // PL_010 só para a nota que precisa (devolução com referência por item,
+        // NT 2025.002); o resto segue no schema que já está em produção.
+        'schemes'     => schemaDaNota($req),
         'versao'      => '4.00',
         'tokenIBPT'   => '',
         'CSC'         => $req['csc'] ?? '',
@@ -90,6 +92,12 @@ function makeTools(array $req): Tools {
     // sped-nfe 5.2+ exige int em model() — passar string lança TypeError
     $tools->model((int)($req['nota']['modelo'] ?? 55));
     return $tools;
+}
+
+/** Schema do XML: PL_010 só quando pedido (ex.: devolução com DFeReferenciado). */
+function schemaDaNota(array $req): string {
+    $s = (string)($req['nota']['schema'] ?? 'PL_009_V4');
+    return in_array($s, ['PL_009_V4', 'PL_010_V1.30'], true) ? $s : 'PL_009_V4';
 }
 
 /** Versão do QR Code NFC-e vigente para a UF/ambiente, do storage da lib. */
@@ -123,8 +131,15 @@ function buildXml(array $req): string {
     if ($isDevolucao && $isNFCe) {
         out(422, ['erro' => 'devolução exige NF-e modelo 55 (NFC-e não comporta finalidade 4)']);
     }
-    if ($isDevolucao && empty($nota['chave_referenciada'])) {
-        out(422, ['erro' => 'devolução exige nota.chave_referenciada (chave da NF-e original)']);
+    // Devolução referencia a nota original: por item (DFeReferenciado, exigido
+    // pela regra VC02-14 da NT 2025.002) ou, no legado, pelo cabeçalho.
+    $refPorItem = false;
+    foreach ($itens as $it) { if (!empty($it['dfe_referenciado'])) { $refPorItem = true; break; } }
+    if ($isDevolucao && !$refPorItem && empty($nota['chave_referenciada'])) {
+        out(422, ['erro' => 'devolução exige a referência da NF-e original (por item, em itens[].dfe_referenciado)']);
+    }
+    if ($refPorItem && schemaDaNota($req) !== 'PL_010_V1.30') {
+        out(422, ['erro' => 'referência por item (DFeReferenciado) exige nota.schema = PL_010_V1.30']);
     }
     // CSC: obrigatório onde o QR Code ainda é v2 (hoje, produção BA/PE).
     // Em homologação o QR v3 assina com o certificado e dispensa CSC —
@@ -141,7 +156,7 @@ function buildXml(array $req): string {
     $dhEmi  = date('Y-m-d\TH:i:sP');
     $cNF    = str_pad((string)random_int(0, 99999999), 8, '0', STR_PAD_LEFT);
 
-    $make = new Make();
+    $make = new Make(schemaDaNota($req));
 
     $std = new stdClass();
     $std->versao = '4.00';
@@ -163,7 +178,11 @@ function buildXml(array $req): string {
     $std->nNF      = $numero;
     $std->dhEmi    = $dhEmi;
     // Devolução (finNFe=4) é nota de ENTRADA: a mercadoria volta ao emitente
-    $std->tpNF     = $isDevolucao ? 0 : 1;                // 0=entrada 1=saída
+    // 0=entrada 1=saída. Devolução de CLIENTE é entrada; devolução a
+    // FORNECEDOR é saída — quem chama diz pelo nota.tipo_operacao.
+    $std->tpNF     = isset($nota['tipo_operacao'])
+        ? ($nota['tipo_operacao'] === 'saida' ? 1 : 0)
+        : ($isDevolucao ? 0 : 1);
     // NFC-e é sempre operação interna
     $std->idDest   = $isNFCe ? 1 : (($ufEmit === $ufDest) ? 1 : 2);
     $std->cMunFG   = (int)($emit['endereco']['codigo_municipio'] ?? 0);
@@ -194,7 +213,7 @@ function buildXml(array $req): string {
     $make->tagide($std);
 
     // Devolução referencia a NF-e original (obrigatório para a SEFAZ vincular)
-    if ($isDevolucao) {
+    if ($isDevolucao && !$refPorItem) {
         $std = new stdClass();
         $std->refNFe = preg_replace('/\D/', '', (string)$nota['chave_referenciada']);
         if (strlen($std->refNFe) !== 44) {
@@ -302,7 +321,7 @@ function buildXml(array $req): string {
         // Desconto geral, acréscimo e taxa de entrega da venda chegam já
         // rateados por item (edge erp-emitir-nfe, rateio.ts): a lib soma os
         // totais a partir daqui, e vNF tem de dar o que o cliente pagou.
-        foreach (['valor_desconto' => 'vDesc', 'valor_frete' => 'vFrete', 'valor_outro' => 'vOutro'] as $campo => $tag) {
+        foreach (['valor_desconto' => 'vDesc', 'valor_frete' => 'vFrete', 'valor_seguro' => 'vSeg', 'valor_outro' => 'vOutro'] as $campo => $tag) {
             $v = round((float)($item[$campo] ?? 0), 2);
             if ($v > 0) $std->$tag = number_format($v, 2, '.', '');
         }
@@ -311,6 +330,16 @@ function buildXml(array $req): string {
         }
         $std->indTot    = 1;
         $make->tagprod($std);
+
+        // Devolução: a nota original por item (chave + nº do item NELA)
+        if (!empty($item['dfe_referenciado']['chave'])) {
+            $ref = new stdClass();
+            $ref->item        = $nItem;
+            $ref->chaveAcesso = preg_replace('/\D/', '', (string)$item['dfe_referenciado']['chave']);
+            $ref->nItem       = (int)($item['dfe_referenciado']['n_item'] ?? 0) ?: null;
+            if (strlen($ref->chaveAcesso) !== 44) out(422, ['erro' => "item {$nItem}: chave da nota referenciada deve ter 44 dígitos"]);
+            $make->tagDFeReferenciado($ref);
+        }
 
         if ($std->NCM === '') out(422, ['erro' => "item {$nItem}: NCM obrigatório (cadastre no produto)"]);
 
@@ -386,6 +415,40 @@ function buildXml(array $req): string {
     // 9 = sem frete. NFC-e fora da entrega a domicílio é sempre 9 (rejeição 753).
     $std->modFrete = ($isNFCe && !$entregaNfce) ? 9 : (int)($req['frete']['modalidade'] ?? 9);
     $make->tagtransp($std);
+
+    // Transportadora, veículo e volumes (NF-e; a loja pediu volumes, peso e
+    // transportadora na devolução a fornecedor, como no sistema anterior)
+    if (!$isNFCe) {
+        $tr = $req['frete']['transportadora'] ?? null;
+        if (!empty($tr['nome']) || !empty($tr['cpf_cnpj'])) {
+            $std = new stdClass();
+            $doc = preg_replace('/\D/', '', (string)($tr['cpf_cnpj'] ?? ''));
+            if (strlen($doc) === 14) $std->CNPJ = $doc; elseif (strlen($doc) === 11) $std->CPF = $doc;
+            $std->xNome  = !empty($tr['nome']) ? mb_substr((string)$tr['nome'], 0, 60) : null;
+            $std->IE     = !empty($tr['ie']) ? preg_replace('/\D/', '', (string)$tr['ie']) : null;
+            $std->xEnder = !empty($tr['endereco']) ? mb_substr((string)$tr['endereco'], 0, 60) : null;
+            $std->xMun   = !empty($tr['municipio']) ? mb_substr((string)$tr['municipio'], 0, 60) : null;
+            $std->UF     = !empty($tr['uf']) ? (string)$tr['uf'] : null;
+            $make->tagtransporta($std);
+        }
+        $ve = $req['frete']['veiculo'] ?? null;
+        if (!empty($ve['placa'])) {
+            $std = new stdClass();
+            $std->placa = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', (string)$ve['placa']));
+            $std->UF    = !empty($ve['uf']) ? (string)$ve['uf'] : null;
+            $make->tagveicTransp($std);
+        }
+        $vo = $req['frete']['volumes'] ?? null;
+        if (!empty($vo) && (!empty($vo['quantidade']) || !empty($vo['peso_bruto']) || !empty($vo['peso_liquido']))) {
+            $std = new stdClass();
+            $std->item  = 1;
+            $std->qVol  = !empty($vo['quantidade']) ? (int)$vo['quantidade'] : null;
+            $std->esp   = !empty($vo['especie']) ? mb_substr((string)$vo['especie'], 0, 60) : null;
+            $std->pesoL = !empty($vo['peso_liquido']) ? number_format((float)$vo['peso_liquido'], 3, '.', '') : null;
+            $std->pesoB = !empty($vo['peso_bruto']) ? number_format((float)$vo['peso_bruto'], 3, '.', '') : null;
+            $make->tagvol($std);
+        }
+    }
 
     // --- pagamento ---
     $std = new stdClass();
