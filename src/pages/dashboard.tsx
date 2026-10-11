@@ -38,7 +38,7 @@ import { FiltrosRelatorio, periodoPadrao, type Periodo } from "@/components/rela
 import { sections, type NavItem } from "@/components/app-sidebar";
 import {
   useProdutosComEstoque, useRelatorioVendas, useContasVencidas, useResumoInicio,
-  isSupabaseConfigured,
+  useFeatureFlags, isSupabaseConfigured,
 } from "@/lib/supabase-queries";
 import { useAuth } from "@/lib/store/auth-store";
 import { periodosDoMes, variacao } from "@/lib/comparar-mes";
@@ -141,8 +141,12 @@ export function DashboardPage() {
     gravarPreferencia(CHAVE_FAVORITOS, novo);
     return novo;
   });
-  const podeAbrir = (url: string) => { const p = paginaDoMenu(url); return !!p && (!p.perm || can(p.perm)); };
-  const paginasPermitidas = PAGINAS_DO_MENU.filter((p) => !p.perm || can(p.perm));
+  // mesma regra do menu: permissão do usuário e página ligada em Configurações do Sistema
+  const { data: flags = [] } = useFeatureFlags();
+  const desligadas = useMemo(() => new Set((flags as any[]).filter((f) => !f.ativo).map((f) => f.path)), [flags]);
+  const liberada = (p: NavItem) => (!p.perm || can(p.perm)) && !desligadas.has(p.url);
+  const podeAbrir = (url: string) => { const p = paginaDoMenu(url); return !!p && liberada(p); };
+  const paginasPermitidas = PAGINAS_DO_MENU.filter(liberada);
 
   // ---- alerta de estoque mínimo: esgotados antes, depois os mais abaixo do mínimo ----
   const paraRepor = useMemo(() => {
