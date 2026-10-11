@@ -65,6 +65,9 @@ export function ConfigEmpresarialPage() {
         <Card>
           <CardHeader><CardTitle>Dados da Empresa</CardTitle></CardHeader>
           <CardContent className="space-y-3 max-h-[70vh] overflow-y-auto">
+            <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+              Os dados que saem na <b>nota fiscal</b> (CNPJ, Inscrição Estadual e endereço da filial) ficam em <b>Gestão Empresarial › Lojas</b> → editar a filial.
+            </p>
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Razão Social *</Label><Input value={form.razao_social ?? ""} onChange={(e) => setForm({ ...form, razao_social: e.target.value })} /></div>
               <div><Label>Nome Fantasia</Label><Input value={form.nome_fantasia ?? ""} onChange={(e) => setForm({ ...form, nome_fantasia: e.target.value })} /></div>
