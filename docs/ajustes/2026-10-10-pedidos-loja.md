@@ -193,3 +193,35 @@ Pendências:
 - Juazeiro sem CSC e sem certificado vinculado; contador da NFC-e a acertar na virada para produção.
 - `creditar_estoque_atomico` (reposição na ficha) não confere permissão no banco.
 - NT 2025.002: data de produção da referência por item ainda incerta (05/10, 03/11 ou 16/11/2026).
+
+---
+
+## Segunda rodada (10/10/2026, 22h–22h45) — o que faltava + header
+
+Publicado e testado ao vivo (commits ade392b a 7a87bdb e seguintes; migrations 103 e 104):
+
+- **Tributos (item 8):** CST do ICMS (regime normal: 00, 40, 41, 50, 60, 90) e CST + alíquota de
+  PIS/COFINS no produto; regime da loja (CRT) na Configuração SEFAZ, antes fixo na edge. Produto sem
+  CST sai como antes (49 sem destaque). Dry-run `tests/dryrun-cst-pis.php` (regime normal, PIS/COFINS,
+  recusas) + regressões.
+- **Painel do Contador (item 6):** ligado às notas do mês (mesma consulta do relatório), vendas sem
+  nota e financeiro do mês; os botões "SPED" falsos viraram atalhos para a Escrituração.
+- **XML de cancelamento, CC-e e inutilização** guardados (bucket fiscal) e incluídos no ZIP.
+- **Notas de Venda com abas** (NFC-e, NF-e, Devoluções, Canceladas, Inutilizações) e Inutilização no menu.
+- **Header** preto como o menu, com página, caixa, data/hora e usuário. Os alertas **nunca contaram**:
+  o componente não passava a loja ao hook; contas vencidas buscavam só "pendente"; views sem GRANT.
+- **Datas no fuso local** em 14 arquivos do front (depois das 21h "hoje" virava amanhã).
+- **Diálogos com rolagem** (o cadastro de produto passou da altura da tela).
+
+Teste completo em homologação (SEFAZ-PE), com produto e fornecedor fictícios, tudo apagado depois:
+cadastro do produto com PIS/COFINS → ficha (reposição +10, ajuste −1) → devolução (rascunho →
+confirmar, estoque 9→7 → **NF-e 4 autorizada**) → carta de correção aceita → cancelamento aceito
+(a devolução volta a "confirmada") → inutilização aceita → Painel do Contador → ZIP com nota,
+eventos e inutilização.
+
+Achados no teste e corrigidos: rejeição 1194 (chave de outro CNPJ) agora avisada antes de transmitir;
+cancelar a nota reabre a devolução; detalhe da nota não atualizava depois do cancelamento.
+
+Fica para decidir: **Painel do Contador está desativado por feature flag** desde 10/09 ("fora do uso
+diário") — só o administrador vê. Reativar em Configurações › Feature flags se a loja for usar.
+O regime normal (CST) só foi testado em dry-run: a loja é do Simples.
