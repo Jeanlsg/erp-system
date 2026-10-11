@@ -20,6 +20,11 @@ use NFePHP\Common\Certificate;
 use NFePHP\DA\NFe\Danfe;
 use NFePHP\DA\NFe\Danfce;
 
+// PHP não lê a variável TZ do container (date.timezone padrão = UTC): sem
+// isto o dhEmi de toda nota depois das 21h saía com a data do dia seguinte
+// (no XML e no DANFE). As lojas são PE/BA, ambas UTC-3.
+date_default_timezone_set(getenv('TZ') ?: 'America/Recife');
+
 // ---------------------------------------------------------------------------
 // Infra HTTP mínima
 // ---------------------------------------------------------------------------
