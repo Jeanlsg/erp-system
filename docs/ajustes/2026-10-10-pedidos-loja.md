@@ -239,3 +239,28 @@ ao Jean.
 
 Pendente de decisão (segurança): a política `Authenticated can upload` em `storage.objects` permite a
 qualquer usuário logado subir arquivo em qualquer bucket, inclusive `fiscal` e `certificados`.
+
+## 11/10 — Devolução a fornecedor igual ao Excellent (vídeo de 3 min do grupo)
+
+Tela conferida no próprio Excellent (só leitura, nada gerado lá) e refeita no mesmo desenho:
+lista com período, busca, "Histórico de Notas Em Andamento", "Imprimir Relatório", Ver Nota e
+Enviar E-mail; gerar com escolha do fornecedor (cadastro Completo/Incompleto), todos os campos
+da nota (nº da nota de entrada, natureza, finalidade, volumes, frete, transportadora, placa,
+RNTC, pesos, rateio igual ou por produto, seguro, endereço de entrega, informações adicionais),
+vários DANFEs, produtos pelo estoque / Buscar NF Entrada / Importar XML, desconto em % e R$,
+CFOP da tabela oficial inteira (300 de saída) e "Editar" com ICMS e IPI devolvido.
+
+Commits 785b506, 36337cd, 588a70d, 816b9ca; migrations 108 e 109; erp-emitir-nfe e nfe-service
+(impostoDevol, RNTC, tag entrega, seguro na base do ICMS) publicados.
+
+Testado em homologação com dados de teste (apagados depois):
+- espelho OK pelos dois caminhos (produto do estoque e Importar XML);
+- a SEFAZ exige o **nº do item** da nota de entrada (rejeição 1048), apesar de o leiaute dizer
+  opcional — virou obrigatório (vem sozinho do XML);
+- a SEFAZ exige o **CNPJ inteiro** do destinatário igual ao emitente da nota de compra (1194);
+- recusa da SEFAZ agora devolve o estoque (erp.reabrir_devolucao_fornecedor) e reabre o
+  formulário; o histórico tem "Corrigir".
+- A busca de produto mostrava saldo errado; agora é o da filial e não deixa devolver mais do que tem.
+
+Fora de propósito: "Aplicar alíquota IBPT" (sem tabela IBPT; a lei vale para consumidor final).
+Uma nota de devolução AUTORIZADA ponta a ponta só dá com uma nota de compra real do fornecedor.
