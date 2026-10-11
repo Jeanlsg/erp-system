@@ -151,7 +151,7 @@ export function ComissoesPage() {
           <Banknote className="h-6 w-6" /> Comissões
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Geradas automaticamente a cada venda com vendedor. O % vem do funcionário; produto ou serviço com % próprio sobrepõe.
+          Geradas automaticamente a cada venda com vendedor. O % vem do funcionário; com faixas cadastradas, o total vendido no mês define o % do mês inteiro.
         </p>
       </div>
 
