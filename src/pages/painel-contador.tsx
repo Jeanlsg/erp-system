@@ -149,10 +149,10 @@ export function PainelContadorPage() {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">Financeiro do mês</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Contas pagas e recebidas no mês</CardTitle></CardHeader>
           <CardContent className="space-y-1 text-sm">
-            <div className="flex justify-between border-b py-2"><span>Recebido</span><span className="font-semibold tabular-nums text-green-700">{brl(recebido)}</span></div>
-            <div className="flex justify-between border-b py-2"><span>Pago</span><span className="font-semibold tabular-nums text-red-600">{brl(pago)}</span></div>
+            <div className="flex justify-between border-b py-2"><span>Contas a receber que foram recebidas</span><span className="font-semibold tabular-nums text-green-700">{brl(recebido)}</span></div>
+            <div className="flex justify-between border-b py-2"><span>Contas a pagar que foram pagas</span><span className="font-semibold tabular-nums text-red-600">{brl(pago)}</span></div>
             <div className="flex justify-between py-2"><span>Saldo</span><span className="font-semibold tabular-nums">{brl(recebido - pago)}</span></div>
           </CardContent>
         </Card>
