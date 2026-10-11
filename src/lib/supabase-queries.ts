@@ -4435,6 +4435,40 @@ export function useUpsertConfiguracaoSefaz() {
 // ========================================
 // OCORRNCIAS / PENDNCIAS
 // ========================================
+/**
+ * Contadores da Página Inicial (como os do Excellent): clientes, produtos,
+ * funcionários, ocorrências em aberto e quantos dias faltam para o
+ * certificado da filial vencer. Só contagens (head), nada de linhas inteiras;
+ * do certificado vem só a data — a tabela guarda a senha cifrada.
+ */
+export function useResumoInicio(lojaId?: string) {
+  return useQuery<{ clientes: number; produtos: number; funcionarios: number; ocorrencias: number; certificadoDias: number | null }>({
+    queryKey: ["resumo_inicio", lojaId],
+    enabled: !!lojaId,
+    queryFn: async () => {
+      const vazio = { clientes: 0, produtos: 0, funcionarios: 0, ocorrencias: 0, certificadoDias: null };
+      if (!isSupabaseConfigured() || !lojaId) return vazio;
+      const contar = async (q: any) => { const { count } = await q; return count ?? 0; };
+      const [clientes, produtos, funcionarios, ocorrencias, cert] = await Promise.all([
+        contar(supabase.from("erp_pessoas").select("id, filiais:erp_pessoa_lojas!inner(loja_id)", { count: "exact", head: true })
+          .eq("ativo", true).eq("eh_cliente", true).eq("filiais.loja_id", lojaId)),
+        contar(supabase.from("erp_produtos").select("id", { count: "exact", head: true }).eq("ativo", true)),
+        // RLS: só gestão lê erp_funcionarios; para os demais a conta dá 0
+        contar(supabase.from("erp_funcionarios").select("id", { count: "exact", head: true }).is("data_demissao", null)),
+        contar(supabase.from("erp_ocorrencias").select("id", { count: "exact", head: true })
+          .eq("loja_id", lojaId).not("status", "in", "(resolvido,fechado)")),
+        supabase.from("erp_certificados_digitais").select("data_validade")
+          .eq("loja_id", lojaId).eq("ativo", true).order("data_validade", { ascending: false }).limit(1).maybeSingle(),
+      ]);
+      const validade = (cert as any)?.data?.data_validade as string | undefined;
+      const certificadoDias = validade
+        ? Math.floor((new Date(validade).getTime() - Date.now()) / 86_400_000)
+        : null;
+      return { clientes, produtos, funcionarios, ocorrencias, certificadoDias };
+    },
+  });
+}
+
 export function useOcorrencias(lojaId?: string) {
   return useQuery<any[]>({
     queryKey: ['erp_ocorrencias', lojaId],
