@@ -15,8 +15,8 @@ export interface AjudaPagina {
 
 const A: Record<string, AjudaPagina> = {
   "": {
-    titulo: "Dashboard",
-    descricao: "Resumo do dia: vendas, caixa e alertas das lojas. É o ponto de partida — os números daqui vêm das mesmas tabelas das telas detalhadas.",
+    titulo: "Página Inicial",
+    descricao: "Como está a loja no mês: clientes, produtos, vendas, custos e lucro comparados com os mesmos dias do mês anterior, seus favoritos, o alerta de estoque mínimo e a validade do certificado. \"Ocultar informações\" esconde os valores da tela; a análise por período fica no fim.",
   },
   "visao-geral": {
     titulo: "Visão Geral",

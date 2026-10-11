@@ -38,7 +38,7 @@ export function AvisoAmbienteHomologacao({ lojaId, oQueNaoFunciona }: Props) {
             <p className="font-medium text-destructive">Esta loja não tem configuração SEFAZ.</p>
             <p className="text-muted-foreground">
               Sem ambiente, UF e certificado cadastrados, nada nesta tela conversa com a SEFAZ.
-              Cadastre em <b>Gestão › Fiscal › Configurações SEFAZ</b>.
+              Cadastre em <b>Configurações › Configurações SEFAZ</b>.
             </p>
           </div>
         </CardContent>
@@ -63,7 +63,7 @@ export function AvisoAmbienteHomologacao({ lojaId, oQueNaoFunciona }: Props) {
           </p>
           <p className="text-muted-foreground">
             Para valer de verdade: cadastre o CSC de produção e troque o ambiente para
-            <b> produção</b> em <b>Gestão › Fiscal › Configurações SEFAZ</b>.
+            <b> produção</b> em <b>Configurações › Configurações SEFAZ</b>.
           </p>
         </div>
       </CardContent>
