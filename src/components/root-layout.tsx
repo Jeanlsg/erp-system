@@ -30,7 +30,7 @@ import {
 import { useAuth, roleLabels, logout, podeSair, ehOperadorDeBalcao } from "@/lib/store/auth-store";
 import { ajudaDaRota } from "@/lib/ajuda-paginas";
 import { useLojaAtualStore } from "@/lib/store/loja-atual";
-import { useLojas, useCaixaAberto, isSupabaseConfigured } from "@/lib/supabase-queries";
+import { useLojas, useCaixasAbertosDoUsuario, isSupabaseConfigured } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { alternaFiliais } from "@/lib/lojas-permitidas";
 
@@ -76,8 +76,12 @@ export function RootLayout() {
   // guardada no navegador quando ela deixa de ser do usuário.
   const { lojaId: currentLojaId, lojas, semFilial } = useAutoSelectLoja();
   const setCurrentLojaId = useLojaAtualStore((s) => s.setCurrentLojaId);
-  // mesma queryKey do PDV: o header não faz requisição a mais
-  const { data: caixaAberto } = useCaixaAberto(user?.id);
+  // mesma queryKey do PDV: o header não faz requisição a mais. O caixa é o
+  // da filial escolhida no topo — antes aparecia "Caixa 1 aberto" com
+  // Juazeiro selecionado e o caixa aberto em Petrolina (11/10/2026).
+  const { data: caixasAbertos = [] } = useCaixasAbertosDoUsuario(user?.id);
+  const caixaAberto = (caixasAbertos as any[]).find((c) => c.loja_id === currentLojaId) ?? null;
+  const caixaEmOutraLoja = caixaAberto ? null : (caixasAbertos as any[])[0] ?? null;
   const [agora, setAgora] = useState(() => new Date());
   useEffect(() => {
     const t = setInterval(() => setAgora(new Date()), 30_000);
@@ -232,14 +236,21 @@ export function RootLayout() {
                 );
               })()}
 
-              {/* Caixa do usuário: quem está no balcão vê de relance se abriu */}
+              {/* Caixa do usuário NESTA filial: quem está no balcão vê de relance se abriu */}
               {isSupabaseConfigured() && (
                 <Link to="/caixa"
                   className={`hidden items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium sm:flex ${
-                    caixaAberto ? "bg-green-600 text-white hover:bg-green-700" : "bg-white/10 text-neutral-300 hover:bg-white/15"}`}
-                  title={caixaAberto ? `Aberto desde ${new Date(caixaAberto.data_abertura ?? Date.now()).toLocaleString("pt-BR")}` : "Nenhum caixa aberto por você"}>
-                  <span className={`h-2 w-2 rounded-full ${caixaAberto ? "bg-white" : "bg-neutral-500"}`} />
-                  {caixaAberto ? `Caixa ${(caixaAberto as any).numero_caixa ?? ""} aberto`.replace("  ", " ") : "Caixa fechado"}
+                    caixaAberto ? "bg-green-600 text-white hover:bg-green-700"
+                      : caixaEmOutraLoja ? "border border-amber-400/60 text-amber-300 hover:bg-white/10"
+                      : "bg-white/10 text-neutral-300 hover:bg-white/15"}`}
+                  title={caixaAberto ? `Aberto desde ${new Date(caixaAberto.data_abertura ?? Date.now()).toLocaleString("pt-BR")}`
+                    : caixaEmOutraLoja ? "Você tem um caixa aberto em outra filial. Troque a filial no topo para vê-lo."
+                    : "Nenhum caixa aberto por você nesta filial"}>
+                  <span className={`h-2 w-2 rounded-full ${caixaAberto ? "bg-white" : caixaEmOutraLoja ? "bg-amber-400" : "bg-neutral-500"}`} />
+                  {caixaAberto ? `Caixa ${caixaAberto.numero_caixa ?? ""} aberto`.replace("  ", " ")
+                    : caixaEmOutraLoja ? `Caixa ${caixaEmOutraLoja.numero_caixa ?? ""} aberto em ${
+                        ((lojas as any[]).find((l) => l.id === caixaEmOutraLoja.loja_id)?.apelido) ?? "outra filial"}`.replace("  ", " ")
+                    : "Caixa fechado"}
                 </Link>
               )}
 

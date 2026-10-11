@@ -22,7 +22,7 @@ import {
   useCaixaPorId, useSangrias, useEntradasExtras,
   useVendas, useVendedores,
 } from "@/lib/supabase-queries";
-import { imprimirComprovante } from "@/lib/comprovante-fechamento";
+import { imprimirComprovante, abrirJanelaDoComprovante } from "@/lib/comprovante-fechamento";
 import { montarDadosFechamento } from "@/lib/dados-fechamento";
 import { brl, dateTime } from "@/lib/format";
 
@@ -81,14 +81,16 @@ export function DetalhesCaixaDialog({
   const reimprimir = async () => {
     if (!caixaId) return;
     setImprimindo(true);
+    const janela = abrirJanelaDoComprovante();   // no clique, antes do await
     try {
       // MESMA função do fechamento: o papel de hoje e o de amanhã têm de
       // sair iguais, senão conferir depois não prova nada
       const dados = await montarDadosFechamento(caixaId);
-      if (!imprimirComprovante(dados)) {
+      if (!imprimirComprovante(dados, janela)) {
         toast.error("O comprovante não abriu — libere pop-ups deste site.");
       }
     } catch (e: any) {
+      janela?.close();
       toast.error(`Não foi possível montar o comprovante: ${e.message ?? e}`);
     } finally {
       setImprimindo(false);

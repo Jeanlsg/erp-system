@@ -33,7 +33,7 @@ import {
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { useAuth, useAuthStore } from "@/lib/store/auth-store";
 import { usePdvModo } from "@/lib/store/pdv-modo";
-import { imprimirComprovante } from "@/lib/comprovante-fechamento";
+import { imprimirComprovante, abrirJanelaDoComprovante } from "@/lib/comprovante-fechamento";
 import { montarDadosFechamento } from "@/lib/dados-fechamento";
 import { supabase } from "@/lib/supabase";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
@@ -719,6 +719,8 @@ export function PDVPage() {
       toast.error("Informe o valor contado em gaveta para fechar o caixa.");
       return;
     }
+    // a janela do comprovante abre aqui, ainda no clique (ver comprovante-fechamento.ts)
+    const janela = abrirJanelaDoComprovante();
     try {
       await fecharCaixa.mutateAsync({
         caixaId: caixaAberto.id,
@@ -738,8 +740,9 @@ export function PDVPage() {
           fechamentoEm: new Date().toISOString(),
           operadorFechamento: user?.nome,
         });
-        saiu = imprimirComprovante(dados);
+        saiu = imprimirComprovante(dados, janela);
       } catch (e: any) {
+        janela?.close();
         // o caixa JÁ fechou; falha no papel não desfaz isso
         toast.warning(`Caixa fechado, mas o comprovante falhou: ${e.message ?? e}. Reimprima em Caixa › histórico.`,
           { duration: 12000 });
@@ -756,6 +759,7 @@ export function PDVPage() {
         { duration: saiu ? 4000 : 10000 },
       );
     } catch (err: any) {
+      janela?.close();
       toast.error(`Erro ao fechar caixa: ${err?.message ?? "erro desconhecido"}`);
     }
   };

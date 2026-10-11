@@ -144,10 +144,24 @@ export function montarComprovante(d: DadosFechamento): string {
 </body></html>`;
 }
 
-/** Abre a janela de impressão com o comprovante já montado. */
-export function imprimirComprovante(d: DadosFechamento) {
+/**
+ * Abre a janela do comprovante JÁ no clique, antes de ir ao banco. Aberta
+ * depois de um await, o navegador a tratava como pop-up e bloqueava (o
+ * fechamento de caixa avisava "libere pop-ups" — 11/10/2026).
+ */
+export function abrirJanelaDoComprovante(): Window | null {
   const w = window.open("", "_blank", "width=420,height=820");
-  if (!w) return false;   // bloqueador de pop-up
+  if (w) {
+    w.document.write("<p style=\"font-family:sans-serif;padding:16px\">Gerando o comprovante…</p>");
+  }
+  return w;
+}
+
+/** Escreve o comprovante na janela (aberta no clique) e manda imprimir. */
+export function imprimirComprovante(d: DadosFechamento, janela?: Window | null) {
+  const w = janela ?? window.open("", "_blank", "width=420,height=820");
+  if (!w || w.closed) return false;   // bloqueador de pop-up
+  w.document.open();
   w.document.write(montarComprovante(d));
   w.document.close();
   return true;
