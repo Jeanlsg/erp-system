@@ -26,7 +26,7 @@ import {
 import {
   Package, Search, Loader2, Save, Plus,
   Edit, Trash2, Boxes, Calendar, Barcode,
-  Tag, AlertCircle, Clock, FileSpreadsheet,
+  Tag, AlertCircle, Clock, FileSpreadsheet, History,
   TrendingUp,
   ChevronLeft, ChevronRight, ArrowDownToLine, SlidersHorizontal,
 } from "lucide-react";
@@ -612,7 +612,11 @@ export function ProdutosEstoqueLotesPage() {
                                 : "—"}
                           </td>
                           <td className="p-2">
-                            <div className="font-medium">{p.nome}</div>
+                            {/* clicar no produto abre a ficha: custo, preço, estoque e movimentação */}
+                            <button type="button" className="text-left font-medium hover:text-red-600 hover:underline"
+                              onClick={() => navigate(`/produtos-estoque-lotes/ficha/${p.produto_id}`)} title="Abrir a ficha do produto">
+                              {p.nome}
+                            </button>
                             <div className="text-xs text-muted-foreground">
                               {p.marca && <span>{p.marca} · </span>}
                               <span className="font-mono">{p.sku}</span>
@@ -669,6 +673,15 @@ export function ProdutosEstoqueLotesPage() {
                           </td>
                           <td className="p-2 text-center">
                             <div className="flex items-center justify-center gap-1">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 w-7 p-0"
+                                onClick={() => navigate(`/produtos-estoque-lotes/ficha/${p.produto_id}`)}
+                                title="Ficha e histórico do produto"
+                              >
+                                <History className="h-3 w-3" />
+                              </Button>
                               <Button
                                 size="sm"
                                 variant="ghost"

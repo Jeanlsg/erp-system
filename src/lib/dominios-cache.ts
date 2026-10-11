@@ -35,6 +35,7 @@ export const DOMINIOS = {
     "erp_estoque_negativo", "erp_estoque_parado", "erp_lotes", "erp_lotes-vencendo",
     "erp_lotes_produto", "erp_sugestao_compra", "erp_produtos", "erp_produto_completo",
     "erp_produto_total", "erp_produtos-com-estoque", "erp_dashboard-stats",
+    "erp_ficha_produto", "erp_movimentos_produto",
   ],
   /** Contas a pagar/receber e o que sai delas: crediário, fluxo de caixa, DRE. */
   contas: [

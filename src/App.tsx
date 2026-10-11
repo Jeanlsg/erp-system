@@ -19,6 +19,7 @@ import { AgendaPage } from "@/pages/agenda";
 // Páginas principais implementadas
 import { FuncionariosPage } from "@/pages/funcionarios";
 import { ProdutosEstoqueLotesPage } from "@/pages/produtos-estoque-lotes";
+import { ProdutoFichaPage } from "@/pages/produto-ficha";
 import { ExclusaoInformacoesPage } from "@/pages/lgpd";
 import { EstoqueMovimentacoesPage } from "@/pages/estoque-movimentacoes";
 import { InventarioPage } from "@/pages/inventario";
@@ -234,6 +235,7 @@ export default function App() {
         <Route path="gestao/lotes" element={<ProdutosEstoqueLotesPage />} />
         <Route path="produtos" element={<ProdutosEstoqueLotesPage />} />
         <Route path="produtos-estoque-lotes" element={<ProdutosEstoqueLotesPage />} />
+        <Route path="produtos-estoque-lotes/ficha/:id" element={<ProdutoFichaPage />} />
         <Route path="gestao/cadastro-produtos" element={<ProdutosEstoqueLotesPage />} />
         <Route path="estoque" element={<ProdutosEstoqueLotesPage />} />
         <Route path="estoque/movimentacoes" element={<EstoqueMovimentacoesPage />} />

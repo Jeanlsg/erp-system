@@ -5407,6 +5407,69 @@ export function useAjustarEstoque() {
 }
 
 // ========================================
+// FICHA DO PRODUTO (etapa 4 dos pedidos da loja, 10/10/2026)
+// ========================================
+
+/** Produto + posição de estoque NA LOJA (quantidade e custo médio). */
+export function useFichaProduto(produtoId?: string, lojaId?: string | null) {
+  return useQuery<{ produto: any; estoque: any | null } | null>({
+    queryKey: ["erp_ficha_produto", produtoId, lojaId],
+    enabled: !!produtoId,
+    queryFn: async () => {
+      if (!isSupabaseConfigured() || !produtoId) return null;
+      const { data: produto, error } = await supabase.from("erp_produtos").select("*").eq("id", produtoId).maybeSingle();
+      if (error) throw error;
+      let estoque = null;
+      if (lojaId) {
+        const r = await supabase.from("erp_estoque").select("quantidade, custo_medio, updated_at")
+          .eq("produto_id", produtoId).eq("loja_id", lojaId).maybeSingle();
+        if (r.error) throw r.error;
+        estoque = r.data;
+      }
+      return { produto, estoque };
+    },
+  });
+}
+
+/** Toda a movimentação do produto na loja no período — sem o corte de 1000 linhas. */
+export function useMovimentosDoProduto(produtoId?: string, lojaId?: string | null, de?: string, ate?: string) {
+  return useQuery<any[]>({
+    queryKey: ["erp_movimentos_produto", produtoId, lojaId, de, ate],
+    enabled: !!produtoId && !!lojaId,
+    queryFn: async () => {
+      if (!isSupabaseConfigured() || !produtoId || !lojaId) return [];
+      return lerTudo(() => {
+        let q = supabase.from("erp_estoque_movimentacoes").select("*")
+          .eq("produto_id", produtoId).eq("loja_id", lojaId);
+        if (de) q = q.gte("created_at", `${de}T00:00:00`);
+        if (ate) q = q.lte("created_at", `${ate}T23:59:59.999`);
+        return q.order("created_at", { ascending: false }).order("id");
+      });
+    },
+  });
+}
+
+/**
+ * Reposição: entrada de mercadoria com custo, pelo Kardex. O custo médio da
+ * loja se move pelo custo informado (creditar_estoque_atomico).
+ */
+export function useReporEstoque() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ lojaId, produtoId, quantidade, custo }: { lojaId: string; produtoId: string; quantidade: number; custo?: number | null }) => {
+      const { error } = await supabase.schema("erp").rpc("creditar_estoque_atomico", {
+        p_loja_id: lojaId,
+        p_itens: [{ produto_id: produtoId, quantidade, ...(custo != null && custo > 0 ? { custo_unitario: custo } : {}) }],
+        p_origem: "reposicao",
+        p_documento_id: null,
+      });
+      if (error) throw new Error(`Falha na reposição: ${error.message}`);
+    },
+    onSuccess: () => invalidarDominios(qc, "estoque"),
+  });
+}
+
+// ========================================
 // INVENTÁRIO / BALANÇO
 // ========================================
 export function useInventarios(lojaId?: string) {

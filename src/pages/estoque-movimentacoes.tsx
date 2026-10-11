@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ORIGENS_MOVIMENTO } from "@/lib/ficha-produto";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { ArrowDownCircle, ArrowUpCircle, ClipboardCheck, Loader2, Settings2, PackageOpen } from "lucide-react";
 
@@ -21,14 +22,9 @@ const TIPOS: Record<string, { label: string; cor: string; Icone: typeof ArrowDow
   saldo_inicial: { label: "Saldo inicial", cor: "text-muted-foreground", Icone: PackageOpen },
 };
 
-const ORIGENS: Record<string, string> = {
-  venda: "Venda",
-  remessa: "Remessa",
-  nfe_entrada: "NF-e de entrada",
-  entrada: "Entrada",
-  manual: "Manual",
-  migracao: "Migração",
-};
+// Um só dicionário com a Ficha do produto (antes faltavam origens e
+// "devolucao_fornecedor" aparecia cru na tabela).
+const ORIGENS: Record<string, string> = ORIGENS_MOVIMENTO;
 
 function moeda(v: number | null | undefined) {
   return (Number(v) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
