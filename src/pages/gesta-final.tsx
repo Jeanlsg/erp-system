@@ -577,8 +577,8 @@ export function DinheiroPage() {
   const { lojaId } = useAutoSelectLoja();
   const hoje = new Date();
   const primeiroDia = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-  const [dataInicio, setDataInicio] = useState(primeiroDia.toISOString().slice(0, 10));
-  const [dataFim, setDataFim] = useState(hoje.toISOString().slice(0, 10));
+  const [dataInicio, setDataInicio] = useState(primeiroDia.toLocaleDateString("sv-SE"));
+  const [dataFim, setDataFim] = useState(hoje.toLocaleDateString("sv-SE"));
 
   const { data: sangrias = [] } = useSangriasPorPeriodo(lojaId ?? undefined, dataInicio, dataFim);
   const { data: entradas = [] } = useEntradasExtrasPorPeriodo(lojaId ?? undefined, dataInicio, dataFim);

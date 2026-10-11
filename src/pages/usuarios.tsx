@@ -366,7 +366,7 @@ export function UsuariosPage() {
     definirSenha: false,
     // funcionário: criado/atualizado junto com o usuário
     funcionario: false, cargo: "", departamento: "", cpf: "",
-    data_admissao: new Date().toISOString().slice(0, 10), funcionarioAtivo: true,
+    data_admissao: new Date().toLocaleDateString("sv-SE"), funcionarioAtivo: true,
   });
   const [showPasswordUsuario, setShowPasswordUsuario] = useState(false);
   const [permissoesCustom, setPermissoesCustom] = useState<Record<string, boolean>>({});
@@ -426,7 +426,7 @@ export function UsuariosPage() {
       // compartilhada). Quem já tem login no CRM entra por "Importar do CRM".
       definirSenha: true,
       funcionario: false, cargo: "", departamento: "", cpf: "",
-      data_admissao: new Date().toISOString().slice(0, 10), funcionarioAtivo: true,
+      data_admissao: new Date().toLocaleDateString("sv-SE"), funcionarioAtivo: true,
     });
     setShowPasswordUsuario(false);
     setModalUsuario(true);
@@ -448,7 +448,7 @@ export function UsuariosPage() {
       cargo: funcionarioDe(u.id)?.cargo ?? "",
       departamento: funcionarioDe(u.id)?.departamento ?? "",
       cpf: funcionarioDe(u.id)?.cpf ?? u.cpf ?? "",
-      data_admissao: funcionarioDe(u.id)?.data_admissao ?? new Date().toISOString().slice(0, 10),
+      data_admissao: funcionarioDe(u.id)?.data_admissao ?? new Date().toLocaleDateString("sv-SE"),
       funcionarioAtivo: !funcionarioDe(u.id)?.data_demissao,
     });
     setShowPasswordUsuario(false);
@@ -462,7 +462,7 @@ export function UsuariosPage() {
    */
   const sincronizarFuncionario = async (userId: string) => {
     if (!formUsuario.funcionario) return;
-    const hoje = new Date().toISOString().slice(0, 10);
+    const hoje = new Date().toLocaleDateString("sv-SE");
     const cpf = formUsuario.cpf.replace(/\D/g, "") || null;
     const existente = funcionarioDe(userId);
     if (existente) {

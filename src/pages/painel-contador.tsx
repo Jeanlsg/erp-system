@@ -67,7 +67,7 @@ export function PainelContadorPage() {
   const { data: contas = [] } = useContas({
     lojaId: lojaId ?? undefined, status: "paga", campoData: "pagamento",
     dataInicio: de ? de.slice(0, 10) : undefined,
-    dataFim: ate ? new Date(new Date(ate).getTime() - 1).toISOString().slice(0, 10) : undefined,
+    dataFim: ate ? new Date(new Date(ate).getTime() - 1).toLocaleDateString("sv-SE") : undefined,
   });
 
   const notas = useMemo(() => notasDoRelatorio(data?.notas ?? [], incluirHomologacao), [data, incluirHomologacao]);

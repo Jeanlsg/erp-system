@@ -61,6 +61,6 @@ export function baixarCSV(conteudo: string, nomeArquivo: string) {
 
 /** Nome com data, para não sobrescrever o download anterior. */
 export function nomeArquivoRelatorio(base: string, de?: string, ate?: string): string {
-  const periodo = de && ate ? `_${de}_a_${ate}` : `_${new Date().toISOString().slice(0, 10)}`;
+  const periodo = de && ate ? `_${de}_a_${ate}` : `_${new Date().toLocaleDateString("sv-SE")}`;
   return `${base.toLowerCase().replace(/[^a-z0-9]+/g, "-")}${periodo}.csv`;
 }

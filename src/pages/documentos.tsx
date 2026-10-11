@@ -28,7 +28,7 @@ export function DocumentosPage() {
     tipo: "contrato",
     extensao: "pdf",
     tags: "",
-    data_documento: new Date().toISOString().slice(0, 10),
+    data_documento: new Date().toLocaleDateString("sv-SE"),
   });
 
   if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="Documentos" />;
@@ -64,7 +64,7 @@ export function DocumentosPage() {
       publico: false,
     });
     setModalAberto(false);
-    setForm({ nome: "", descricao: "", tipo: "contrato", extensao: "pdf", tags: "", data_documento: new Date().toISOString().slice(0, 10) });
+    setForm({ nome: "", descricao: "", tipo: "contrato", extensao: "pdf", tags: "", data_documento: new Date().toLocaleDateString("sv-SE") });
   };
 
   return (

@@ -19,7 +19,8 @@ import { cn } from "@/lib/utils";
 
 export type Periodo = { de: string; ate: string };
 
-const iso = (d: Date) => d.toISOString().slice(0, 10);
+// data LOCAL (aaaa-mm-dd): em UTC, depois das 21h "hoje" virava amanhã
+const iso = (d: Date) => d.toLocaleDateString("sv-SE");
 
 export function periodoPadrao(dias = 30): Periodo {
   const ate = new Date();

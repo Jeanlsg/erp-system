@@ -62,7 +62,7 @@ export function FuncionariosPage() {
     cargo: "",
     departamento: "",
     salario: "",
-    data_admissao: new Date().toISOString().slice(0, 10),
+    data_admissao: new Date().toLocaleDateString("sv-SE"),
     email: "",
     telefone: "",
     comissao: "0", usuario_id: "",
@@ -75,7 +75,7 @@ export function FuncionariosPage() {
   });
   const FORM_VAZIO = {
     nome: "", cpf: "", cargo: "", departamento: "", salario: "",
-    data_admissao: new Date().toISOString().slice(0, 10), email: "", telefone: "",
+    data_admissao: new Date().toLocaleDateString("sv-SE"), email: "", telefone: "",
     comissao: "0", usuario_id: "",
     nome_pai: "", nome_mae: "", naturalidade: "", nacionalidade: "Brasileira",
     estado_civil: "", grau_instrucao: "", quantidade_filhos: "",
@@ -126,7 +126,7 @@ export function FuncionariosPage() {
       cargo: f.cargo ?? "",
       departamento: f.departamento ?? "",
       salario: f.salario != null ? String(f.salario) : "",
-      data_admissao: f.data_admissao ?? new Date().toISOString().slice(0, 10),
+      data_admissao: f.data_admissao ?? new Date().toLocaleDateString("sv-SE"),
       email: f.pessoa?.email ?? "",
       telefone: f.pessoa?.telefone ?? "",
       comissao: String(f.comissao_percentual ?? 0),
@@ -248,7 +248,7 @@ export function FuncionariosPage() {
   };
 
   const handleDemitir = async (f: any) => {
-    const hoje = new Date().toISOString().slice(0, 10);
+    const hoje = new Date().toLocaleDateString("sv-SE");
     const data = prompt(
       `Registrar demissão de "${f.pessoa?.nome_razao ?? "funcionário"}".\n\n` +
       "Data da demissão (aaaa-mm-dd). O cadastro e o histórico de comissões são preservados;\n" +

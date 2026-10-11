@@ -169,7 +169,7 @@ export function ImportarContasDialog({ open, onOpenChange, tipo, lojas, lojaIdIn
           chaveConta(c.descricao ?? "", c.data_vencimento, Number(c.valor), c.pessoa_id)),
       );
 
-      const hoje = new Date().toISOString().slice(0, 10);
+      const hoje = new Date().toLocaleDateString("sv-SE");
       const notas: string[] = [];
       const paraInserir: any[] = [];
       const vistas = new Set<string>();
@@ -330,7 +330,7 @@ export function ImportarContasDialog({ open, onOpenChange, tipo, lojas, lojaIdIn
                 <tbody>
                   {validos.slice(0, 50).map((i) => {
                     const venc = parseDataBR(i.dados.data_vencimento!)!;
-                    const atrasada = venc < new Date().toISOString().slice(0, 10);
+                    const atrasada = venc < new Date().toLocaleDateString("sv-SE");
                     return (
                       <tr key={i.linha} className="border-b">
                         <td className="p-2">{i.dados.pessoa ?? "—"}</td>

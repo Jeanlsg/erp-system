@@ -116,7 +116,7 @@ export function PromissoriaPage() {
     if (!lojaId) { toast.error("Selecione a loja."); return; }
     setSalvando(true);
     try {
-      const numero = `PN-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${String(promissorias.length + 1).padStart(3, "0")}`;
+      const numero = `PN-${new Date().toLocaleDateString("sv-SE").replace(/-/g, "")}-${String(promissorias.length + 1).padStart(3, "0")}`;
       const { data, error } = await supabase.from("erp_promissorias").insert({
         loja_id: lojaId,
         pessoa_id: pessoaId,
@@ -124,7 +124,7 @@ export function PromissoriaPage() {
         numero,
         valor: v,
         valor_extenso: valorPorExtenso(v),
-        data_emissao: new Date().toISOString().slice(0, 10),
+        data_emissao: new Date().toLocaleDateString("sv-SE"),
         data_vencimento: vencimento,
         status: "pendente",
         observacoes: obs || null,
@@ -144,7 +144,7 @@ export function PromissoriaPage() {
 
   const quitar = async (p: any) => {
     const { error } = await supabase.from("erp_promissorias")
-      .update({ status: "paga", data_pagamento: new Date().toISOString().slice(0, 10) })
+      .update({ status: "paga", data_pagamento: new Date().toLocaleDateString("sv-SE") })
       .eq("id", p.id);
     if (error) { toast.error(`Erro: ${error.message}`); return; }
     toast.success(`Promissória ${p.numero ?? ""} baixada como paga.`);

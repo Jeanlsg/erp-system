@@ -744,7 +744,7 @@ export function useContasVencidas(lojaId?: string) {
     queryKey: ["erp_contas-vencidas", lojaId],
     queryFn: async () => {
       if (!isSupabaseConfigured()) return [];
-      const hoje = new Date().toISOString().slice(0, 10);
+      const hoje = new Date().toLocaleDateString("sv-SE");
       let query = supabase
         .from("erp_contas")
         .select("*")
@@ -781,7 +781,7 @@ export function useDashboardStats(lojaId: string | undefined) {
 
       const hoje = new Date();
       hoje.setHours(0, 0, 0, 0);
-      const hojeStr = hoje.toISOString().slice(0, 10);
+      const hojeStr = hoje.toLocaleDateString("sv-SE");
 
       const { data: vendasHoje } = await supabase
         .from("erp_vendas")
@@ -2647,7 +2647,7 @@ export function useVendasPorDiaView(lojaId?: string, dias: number = 7) {
       let query = supabase
         .from('v_erp_vendas_por_dia')
         .select('*')
-        .gte('dia', desde.toISOString().slice(0, 10))
+        .gte('dia', desde.toLocaleDateString("sv-SE"))
         .order('dia', { ascending: true });
       if (lojaId) query = query.eq('loja_id', lojaId);
       const { data, error } = await query;
@@ -4003,7 +4003,7 @@ export function useDesnegativar() {
     mutationFn: async ({ id, motivo }: { id: string; motivo: string }) => {
       const { data, error } = await supabase.from('erp_negativacoes').update({
         status: 'desnegativado',
-        desnegativacao_data: new Date().toISOString().slice(0, 10),
+        desnegativacao_data: new Date().toLocaleDateString("sv-SE"),
         desnegativacao_motivo: motivo,
       }).eq('id', id).select().single();
       if (error) throw error;
@@ -4215,7 +4215,7 @@ export function useSituacaoFaixaServico(funcionarioId?: string | null, referenci
       if (!isSupabaseConfigured() || !funcionarioId) return null;
       const { data, error } = await supabase.schema("erp").rpc("situacao_faixa_servico", {
         p_funcionario: funcionarioId,
-        p_ref: referencia ?? new Date().toISOString().slice(0, 10),
+        p_ref: referencia ?? new Date().toLocaleDateString("sv-SE"),
       });
       if (error) throw error;
       return (data as any[])?.[0] ?? null;

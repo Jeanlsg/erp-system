@@ -66,8 +66,8 @@ export function FinanceiroPage() {
   // Filtro Período (default = mês atual)
   const hoje = new Date();
   const primeiroDia = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-  const [dataInicio, setDataInicio] = useState(primeiroDia.toISOString().slice(0, 10));
-  const [dataFim, setDataFim] = useState(hoje.toISOString().slice(0, 10));
+  const [dataInicio, setDataInicio] = useState(primeiroDia.toLocaleDateString("sv-SE"));
+  const [dataFim, setDataFim] = useState(hoje.toLocaleDateString("sv-SE"));
   // Importação do saldo em aberto vindo do sistema anterior. O tipo segue a
   // aba: em "À Pagar" importa contas a pagar, em "À Receber" contas a receber.
   const [importarContas, setImportarContas] = useState<"receber" | "pagar" | null>(null);
@@ -191,7 +191,7 @@ export function FinanceiroPage() {
    * nunca se limpava.
    */
   const handleBaixar = async (c: any) => {
-    const hoje = new Date().toISOString().slice(0, 10);
+    const hoje = new Date().toLocaleDateString("sv-SE");
     const valorTxt = prompt(
       `Dar baixa em "${c.descricao}"\n\n` +
       `Valor da conta: ${brl(c.valor)}\n` +
@@ -246,7 +246,7 @@ export function FinanceiroPage() {
    * quando vence, ou dar baixa.
    */
   const TabelaContas = ({ titulo, contas, total, cor = "text-foreground", emAberto = false }: any) => {
-    const hoje = new Date().toISOString().slice(0, 10);
+    const hoje = new Date().toLocaleDateString("sv-SE");
     return (
       <div className="overflow-x-auto">
         <table className="w-full">

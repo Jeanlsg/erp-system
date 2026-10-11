@@ -30,8 +30,8 @@ export function ComissoesPage() {
   const { data: funcionarios = [] } = useFuncionarios(lojaId ?? undefined);
 
   const hoje = new Date();
-  const [ini, setIni] = useState(new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().slice(0, 10));
-  const [fim, setFim] = useState(hoje.toISOString().slice(0, 10));
+  const [ini, setIni] = useState(new Date(hoje.getFullYear(), hoje.getMonth(), 1).toLocaleDateString("sv-SE"));
+  const [fim, setFim] = useState(hoje.toLocaleDateString("sv-SE"));
   const [funcionarioId, setFuncionarioId] = useState("");
   const [status, setStatus] = useState<Status>("todas");
   const [marcadas, setMarcadas] = useState<Set<string>>(new Set());
@@ -51,7 +51,7 @@ export function ComissoesPage() {
   const excluirMeta = useExcluirMeta();
   const [novaMeta, setNovaMeta] = useState({ funcionarioId: "", tipo: "valor", valor: "" });
   const [vencimento, setVencimento] = useState(
-    new Date(hoje.getFullYear(), hoje.getMonth() + 1, 5).toISOString().slice(0, 10));
+    new Date(hoje.getFullYear(), hoje.getMonth() + 1, 5).toLocaleDateString("sv-SE"));
 
   const { data: comissoes = [], isLoading } = useQuery<any[]>({
     queryKey: ["erp_comissoes", lojaId, ini, fim, funcionarioId, status],
@@ -131,7 +131,7 @@ export function ComissoesPage() {
     if (!confirm(`Marcar ${ids.length} comissão(ões) como paga(s) hoje?`)) return;
     setPagando(true);
     const { error } = await supabase.from("erp_comissoes")
-      .update({ status: "paga", data_pagamento: new Date().toISOString().slice(0, 10) })
+      .update({ status: "paga", data_pagamento: new Date().toLocaleDateString("sv-SE") })
       .in("id", ids).eq("status", "pendente");
     setPagando(false);
     if (error) { toast.error(`Não foi possível pagar: ${error.message}`); return; }

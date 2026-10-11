@@ -34,10 +34,10 @@ function diasAte(iso: string): number {
 function somaDias(baseIso: string, dias: number): string {
   const d = new Date(baseIso + "T12:00:00");
   d.setDate(d.getDate() + dias);
-  return d.toISOString().slice(0, 10);
+  return d.toLocaleDateString("sv-SE");
 }
 
-const hojeIso = () => new Date().toISOString().slice(0, 10);
+const hojeIso = () => new Date().toLocaleDateString("sv-SE");
 
 interface Props {
   open: boolean;

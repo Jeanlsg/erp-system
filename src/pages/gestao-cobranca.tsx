@@ -45,7 +45,7 @@ export function ConsultaChequePage() {
   const [filtroStatus, setFiltroStatus] = useState("");
   const [form, setForm] = useState({
     tipo: "recebido", pessoa_id: "", banco: "", agencia: "", conta: "",
-    numero_cheque: "", valor: "", data_emissao: new Date().toISOString().slice(0, 10),
+    numero_cheque: "", valor: "", data_emissao: new Date().toLocaleDateString("sv-SE"),
     data_vencimento: "", observacoes: "",
   });
 
@@ -66,7 +66,7 @@ export function ConsultaChequePage() {
       status: "em_carteira",
     });
     setModal(false);
-    setForm({ tipo: "recebido", pessoa_id: "", banco: "", agencia: "", conta: "", numero_cheque: "", valor: "", data_emissao: new Date().toISOString().slice(0, 10), data_vencimento: "", observacoes: "" });
+    setForm({ tipo: "recebido", pessoa_id: "", banco: "", agencia: "", conta: "", numero_cheque: "", valor: "", data_emissao: new Date().toLocaleDateString("sv-SE"), data_vencimento: "", observacoes: "" });
   };
 
   return (
@@ -130,7 +130,7 @@ export function ConsultaChequePage() {
                     <td className="p-3 text-center">
                       <div className="flex gap-1 justify-center">
                         {c.status === "em_carteira" && (
-                          <Button size="sm" variant="outline" onClick={() => update.mutate({ id: c.id, status: "compensado", data_compensacao: new Date().toISOString().slice(0, 10) })}>
+                          <Button size="sm" variant="outline" onClick={() => update.mutate({ id: c.id, status: "compensado", data_compensacao: new Date().toLocaleDateString("sv-SE") })}>
                             <CheckCircle className="h-3 w-3" />
                           </Button>
                         )}
@@ -208,7 +208,7 @@ export function NegativarDevedoresPage() {
   const [form, setForm] = useState({
     pessoa_id: "",
     valor_total: "",
-    data_negativacao: new Date().toISOString().slice(0, 10),
+    data_negativacao: new Date().toLocaleDateString("sv-SE"),
     motivo: "",
   });
 
@@ -229,7 +229,7 @@ export function NegativarDevedoresPage() {
       status: "ativo",
     });
     setModal(false);
-    setForm({ pessoa_id: "", valor_total: "", data_negativacao: new Date().toISOString().slice(0, 10), motivo: "" });
+    setForm({ pessoa_id: "", valor_total: "", data_negativacao: new Date().toLocaleDateString("sv-SE"), motivo: "" });
   };
 
   const handleDesnegativar = async () => {
@@ -371,7 +371,7 @@ export function ParcelarDebitosPage() {
     valor_total: "",
     juros_mensal: "0",
     numero_parcelas: "3",
-    data_contrato: new Date().toISOString().slice(0, 10),
+    data_contrato: new Date().toLocaleDateString("sv-SE"),
     data_primeira_parcela: "",
     observacoes: "",
   });
@@ -397,7 +397,7 @@ export function ParcelarDebitosPage() {
       status: "ativo",
     });
     setModal(false);
-    setForm({ pessoa_id: "", divida_original: "", valor_entrada: "0", valor_total: "", juros_mensal: "0", numero_parcelas: "3", data_contrato: new Date().toISOString().slice(0, 10), data_primeira_parcela: "", observacoes: "" });
+    setForm({ pessoa_id: "", divida_original: "", valor_entrada: "0", valor_total: "", juros_mensal: "0", numero_parcelas: "3", data_contrato: new Date().toLocaleDateString("sv-SE"), data_primeira_parcela: "", observacoes: "" });
   };
 
   return (
@@ -499,7 +499,7 @@ export function EncaminharProtestoPage() {
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState({
     pessoa_id: "", tipo_titulo: "cheque", titulo_id: "",
-    valor: "", data_protesto: new Date().toISOString().slice(0, 10),
+    valor: "", data_protesto: new Date().toLocaleDateString("sv-SE"),
     cartorio: "", numero_protocolo: "", custo_protesto: "",
   });
 
@@ -523,7 +523,7 @@ export function EncaminharProtestoPage() {
       status: "protestado",
     });
     setModal(false);
-    setForm({ pessoa_id: "", tipo_titulo: "cheque", titulo_id: "", valor: "", data_protesto: new Date().toISOString().slice(0, 10), cartorio: "", numero_protocolo: "", custo_protesto: "" });
+    setForm({ pessoa_id: "", tipo_titulo: "cheque", titulo_id: "", valor: "", data_protesto: new Date().toLocaleDateString("sv-SE"), cartorio: "", numero_protocolo: "", custo_protesto: "" });
   };
 
   return (
