@@ -409,9 +409,11 @@ function SidebarLeaf({
       <item.icon className={cn("h-4 w-4 shrink-0", active && "text-primary")} strokeWidth={active ? 2.4 : 2} />
       {!globalCollapsed && <span className="flex-1 truncate">{item.title}</span>}
       {!globalCollapsed && flagMap[item.url]?.is_protegida && (
+        // só o escudo: a pílula rosa parecia um contador vazio ("0") e, no
+        // item ativo (fundo claro), uma bolinha sem nada dentro
         <span title="Página protegida — sempre ativa no sistema"
-          className="flex items-center gap-0.5 rounded-full bg-red-500/20 px-1.5 py-0.5 text-[9px] font-bold uppercase text-red-200">
-          <Shield className="h-2.5 w-2.5" />
+          className={cn("flex items-center", active ? "text-red-600" : "text-neutral-500")}>
+          <Shield className="h-3 w-3" />
         </span>
       )}
       {!globalCollapsed && item.badge && (

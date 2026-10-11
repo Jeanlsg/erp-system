@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useNotificacoesHeader, type NotificacaoItem } from "@/lib/hooks/use-notificacoes-header";
+import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 
 type NotifKey = "estoque_baixo" | "aniversariantes" | "contas_vencidas" | "lotes_vencendo" | "cert_vencendo" | "ocorrencias";
 
@@ -102,7 +103,10 @@ const ICONS: IconConfig[] = [
 
 export function NotificationIcons() {
   const navigate = useNavigate();
-  const { data, isLoading } = useNotificacoesHeader();
+  // Sem a loja o hook fica desligado (enabled: !!lojaId) — os ícones nunca
+  // contaram nada até 10/10/2026. A filial é a do seletor do topo.
+  const { lojaId } = useAutoSelectLoja();
+  const { data, isLoading } = useNotificacoesHeader(lojaId);
   const [openKey, setOpenKey] = useState<string | null>(null);
 
   // Tooltip customizado por tipo
