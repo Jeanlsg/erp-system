@@ -111,6 +111,9 @@ export function NotasFiscaisPage() {
       } else if (tipo === "cancelar") {
         await cancelar.mutateAsync({ nota_id: nota.id, justificativa: textoEvento.trim() });
         toast.success("Nota cancelada na SEFAZ.");
+        // o detalhe aberto é uma cópia da nota: sem isto continuava
+        // "autorizada" e com o botão de cancelar depois do cancelamento
+        setModalDetalhes((m: any) => (m?.id === nota.id ? { ...m, status: "cancelada" } : m));
       } else {
         const r = await cce.mutateAsync({ nota_id: nota.id, correcao: textoEvento.trim() });
         toast.success(`Carta de correção nº ${r.sequencia} registrada na SEFAZ.`);
