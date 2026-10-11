@@ -18,9 +18,20 @@ export function pct(value: number | null | undefined, digits = 1): string {
   return `${(value * 100).toFixed(digits)}%`;
 }
 
+/**
+ * "aaaa-mm-dd" (coluna date, sem hora) é o dia do calendário: new Date()
+ * lê como meia-noite UTC e, no Brasil (UTC-3), mostrava o DIA ANTERIOR —
+ * validade do certificado 08/05 aparecia 07/05, vencimento de conta um dia
+ * antes (11/10/2026). Datas sem hora são lidas no fuso local.
+ */
+export function dataDoTexto(value: string): Date {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(value);
+}
+
 export function date(value: string | Date | null | undefined): string {
   if (!value) return "—";
-  const d = typeof value === "string" ? new Date(value) : value;
+  const d = typeof value === "string" ? dataDoTexto(value) : value;
   return d.toLocaleDateString("pt-BR");
 }
 
