@@ -8,6 +8,7 @@ import { useVendas, isSupabaseConfigured } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { brl, date } from "@/lib/format";
+import { NOME_FORMA } from "@/lib/dados-fechamento";
 import { Badge } from "@/components/ui/badge";
 
 export function VendasPage() {
@@ -57,7 +58,7 @@ export function VendasPage() {
                     <td className="p-3 text-sm">{v.data_venda ? date(v.data_venda) : "—"}</td>
                     <td className="p-3 text-sm">{v.cliente?.nome_razao ?? "Consumidor"}</td>
                     <td className="p-3 text-right tabular-nums font-semibold">{brl(v.total)}</td>
-                    <td className="p-3 text-center"><Badge variant="outline">{v.forma_pagamento}</Badge></td>
+                    <td className="p-3 text-center"><Badge variant="outline">{NOME_FORMA[v.forma_pagamento] ?? v.forma_pagamento}</Badge></td>
                     <td className="p-3 text-center">
                       <Badge variant={STATUS_VARIANT[v.status] ?? "outline"}>{v.status}</Badge>
                       {v.status === "cancelada" && v.motivo_cancelamento && (

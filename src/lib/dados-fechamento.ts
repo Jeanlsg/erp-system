@@ -42,7 +42,7 @@ export interface DadosFechamento {
   observacoes?: string | null;
 }
 
-const NOME_FORMA: Record<string, string> = {
+export const NOME_FORMA: Record<string, string> = {
   dinheiro: "Dinheiro", pix: "PIX",
   cartao_credito: "Cartão de crédito", cartao_debito: "Cartão de débito",
   crediario: "Crediário", boleto: "Boleto", promissoria: "Promissória",
