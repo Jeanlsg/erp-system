@@ -225,3 +225,17 @@ cancelar a nota reabre a devolução; detalhe da nota não atualizava depois do 
 Fica para decidir: **Painel do Contador está desativado por feature flag** desde 10/09 ("fora do uso
 diário") — só o administrador vê. Reativar em Configurações › Feature flags se a loja for usar.
 O regime normal (CST) só foi testado em dry-run: a loja é do Simples.
+
+---
+
+## Revisão final e guia para a loja (10/10/2026, 23h)
+
+Pedidos do grupo relidos (texto e os 6 vídeos): os 9 prontos. Corrigido na revisão: percentuais do
+Financeiro (lucro "4613%"), abas cortadas e botões sem cor; forma de pagamento legível em Vendas;
+barra do PDV preta; bloco financeiro do Painel do Contador renomeado.
+
+Guia para a loja (linguagem simples, o que mudou e como usar, com prints): PDF de 17 páginas enviado
+ao Jean.
+
+Pendente de decisão (segurança): a política `Authenticated can upload` em `storage.objects` permite a
+qualquer usuário logado subir arquivo em qualquer bucket, inclusive `fiscal` e `certificados`.
