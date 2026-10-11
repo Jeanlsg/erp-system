@@ -68,9 +68,12 @@ export function useNotificacoesHeader(lojaId?: string | null) {
             // Antes o slice(0,5) vinha antes e o contador dizia "5" mesmo com
             // quarenta produtos no mínimo — quem confia no número compra errado.
             const abaixo = (estoqueBaixo as any[])
+              // esgotado conta mesmo sem mínimo cadastrado — o dashboard já
+              // contava, e o header dizia "nenhum produto abaixo do mínimo"
               .filter((e) => {
                 const min = Number(e.produto?.estoque_minimo ?? 0);
-                return min > 0 && Number(e.quantidade) <= min;
+                const q = Number(e.quantidade);
+                return q <= 0 || (min > 0 && q <= min);
               })
               // o mais crítico primeiro: quem está mais longe do mínimo
               .sort((a, b) =>
@@ -79,7 +82,7 @@ export function useNotificacoesHeader(lojaId?: string | null) {
             const itens = abaixo.slice(0, 5).map((e, idx) => ({
               id: `${e.produto?.id ?? idx}`,
               titulo: e.produto?.nome ?? "Produto",
-              subtitulo: `Mín: ${e.produto?.estoque_minimo ?? 0}`,
+              subtitulo: Number(e.quantidade) <= 0 ? "Esgotado" : `Mín: ${e.produto?.estoque_minimo ?? 0}`,
               valor: `${e.quantidade} ${e.produto?.sku ? "· " + e.produto.sku : ""}`,
               link: "/produtos-estoque-lotes",
             }));
@@ -140,8 +143,11 @@ export function useNotificacoesHeader(lojaId?: string | null) {
             .from("erp_contas")
             .select("id, descricao, valor, data_vencimento, tipo, status")
             .eq("loja_id", lojaId)
-            .eq("status", "pendente")
-            .lt("data_vencimento", new Date().toISOString().slice(0, 10))
+            // conta vencida ganha status próprio ("vencido"); só "pendente"
+            // deixava o ícone apagado com conta vencida no dashboard
+            .in("status", ["pendente", "vencido"])
+            // data local: em UTC, depois das 21h a conta de hoje já contava como vencida
+            .lt("data_vencimento", new Date().toLocaleDateString("sv-SE"))
             .limit(50);
 
           if (!contasErr && contas) {

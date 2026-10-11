@@ -30,7 +30,7 @@ import {
 import { useAuth, roleLabels, logout, podeSair, ehOperadorDeBalcao } from "@/lib/store/auth-store";
 import { ajudaDaRota } from "@/lib/ajuda-paginas";
 import { useLojaAtualStore } from "@/lib/store/loja-atual";
-import { useLojas, isSupabaseConfigured } from "@/lib/supabase-queries";
+import { useLojas, useCaixaAberto, isSupabaseConfigured } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { alternaFiliais } from "@/lib/lojas-permitidas";
 
@@ -59,6 +59,12 @@ export const ROTAS_DA_EMPRESA = [
   "/gestao/configuracoes-gerais", "/config/sistema", "/configuracoes",
 ];
 
+/** "Xlife Tecnologia" → "XT" (avatar do header). */
+function iniciais(nome?: string | null): string {
+  const partes = String(nome ?? "").trim().split(/\s+/).filter(Boolean);
+  return ((partes[0]?.[0] ?? "") + (partes.length > 1 ? partes[partes.length - 1][0] : "")).toUpperCase();
+}
+
 export function RootLayout() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -70,6 +76,13 @@ export function RootLayout() {
   // guardada no navegador quando ela deixa de ser do usuário.
   const { lojaId: currentLojaId, lojas, semFilial } = useAutoSelectLoja();
   const setCurrentLojaId = useLojaAtualStore((s) => s.setCurrentLojaId);
+  // mesma queryKey do PDV: o header não faz requisição a mais
+  const { data: caixaAberto } = useCaixaAberto(user?.id);
+  const [agora, setAgora] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setAgora(new Date()), 30_000);
+    return () => clearInterval(t);
+  }, []);
 
   const dadoDaEmpresa = ROTAS_DA_EMPRESA.includes(location.pathname);
 
@@ -129,14 +142,18 @@ export function RootLayout() {
   }
 
   const lojaAtual = (lojas as any[]).find((l) => l.id === currentLojaId);
+  const tituloDaPagina = ajudaDaRota(location.pathname)?.titulo ?? null;
 
   return (
     <div className="flex min-h-screen w-full bg-background">
       <AppSidebar />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-10 flex h-14 items-center justify-between gap-3 border-b-2 border-b-red-600 bg-background/95 px-4 backdrop-blur">
-          <div className="flex items-center gap-3">
+        {/* Header preto como o menu (pedido da loja, 10/10/2026: "muito branco",
+            alertas sem destaque). `dark` faz os componentes de dentro usarem a
+            paleta escura sem mudar o tema do resto da tela. */}
+        <header className="dark sticky top-0 z-10 flex h-14 items-center justify-between gap-3 border-b-2 border-b-red-600 bg-[#121212] px-4 text-foreground">
+          <div className="flex min-w-0 items-center gap-3">
             {/* Seletor só para quem trabalha em mais de uma filial (ou o dono). */}
             {isSupabaseConfigured() && alternaFiliais(lojas) ? (
               <Select value={currentLojaId ?? ""} onValueChange={setCurrentLojaId}>
@@ -158,8 +175,14 @@ export function RootLayout() {
                 {lojaAtual?.apelido ?? "Sistema"}
               </div>
             )}
+            {tituloDaPagina && (
+              <div className="hidden min-w-0 items-center gap-2 md:flex">
+                <span className="h-5 w-px bg-white/15" aria-hidden="true" />
+                <span className="truncate text-sm font-semibold text-white">{tituloDaPagina}</span>
+              </div>
+            )}
             {dadoDaEmpresa && lojas.length > 1 && (
-              <span className="hidden text-xs text-muted-foreground sm:inline"
+              <span className="hidden rounded bg-white/10 px-1.5 py-0.5 text-[11px] text-neutral-300 lg:inline"
                 title="Este cadastro é da empresa, não da filial: é o mesmo nas duas lojas.">
                 cadastro comum às filiais
               </span>
@@ -209,6 +232,21 @@ export function RootLayout() {
                 );
               })()}
 
+              {/* Caixa do usuário: quem está no balcão vê de relance se abriu */}
+              {isSupabaseConfigured() && (
+                <Link to="/caixa"
+                  className={`hidden items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium sm:flex ${
+                    caixaAberto ? "bg-green-600 text-white hover:bg-green-700" : "bg-white/10 text-neutral-300 hover:bg-white/15"}`}
+                  title={caixaAberto ? `Aberto desde ${new Date(caixaAberto.data_abertura ?? Date.now()).toLocaleString("pt-BR")}` : "Nenhum caixa aberto por você"}>
+                  <span className={`h-2 w-2 rounded-full ${caixaAberto ? "bg-white" : "bg-neutral-500"}`} />
+                  {caixaAberto ? `Caixa ${(caixaAberto as any).numero_caixa ?? ""} aberto`.replace("  ", " ") : "Caixa fechado"}
+                </Link>
+              )}
+
+              <span className="hidden text-xs tabular-nums text-neutral-300 xl:inline" title="Data e hora">
+                {agora.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" })} · {agora.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+              </span>
+
               {/* Ícones de notificação no header */}
               {isSupabaseConfigured() && <NotificationIcons />}
 
@@ -222,9 +260,13 @@ export function RootLayout() {
                 <TooltipTrigger asChild>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="rounded-full">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                          <UserIcon className="h-4 w-4" />
+                      <Button variant="ghost" className="h-10 gap-2 rounded-full px-1.5 hover:bg-white/10 md:pr-3">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-red-600 text-xs font-bold text-white">
+                          {iniciais(user?.nome) || <UserIcon className="h-4 w-4" />}
+                        </div>
+                        <div className="hidden text-left leading-tight md:block">
+                          <p className="max-w-[140px] truncate text-xs font-semibold text-white">{user?.nome ?? "Usuário"}</p>
+                          <p className="text-[10px] uppercase tracking-wide text-neutral-400">{user ? roleLabels[user.role] : ""}</p>
                         </div>
                       </Button>
                     </DropdownMenuTrigger>
