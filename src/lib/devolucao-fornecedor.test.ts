@@ -78,7 +78,7 @@ describe("faltasDoFornecedor e faltaParaEmitir", () => {
   it("acusa o que falta no cadastro, como o 'Incompleto' do Excellent", () => {
     expect(faltasDoFornecedor({ cpf_cnpj: "123", endereco: {} })).toEqual(["CNPJ", "rua", "cidade", "UF", "código IBGE da cidade"]);
   });
-  const item = { nome: "WHEY", cfop: "5202", quantidade: 1, chave_nota_origem: CHAVE, ncm: "21069030" };
+  const item = { nome: "WHEY", cfop: "5202", quantidade: 1, chave_nota_origem: CHAVE, ncm: "21069030", item_nota_origem: 1 };
   it("tudo certo: lista vazia", () => {
     expect(faltaParaEmitir({ chaves: [CHAVE], fornecedor, itens: [item] })).toEqual([]);
   });
@@ -92,6 +92,9 @@ describe("faltasDoFornecedor e faltaParaEmitir", () => {
   it("compra emitida por outra filial do mesmo fornecedor (mesma raiz de CNPJ) passa", () => {
     const filial = CHAVE.slice(0, 6) + CNPJ.slice(0, 8) + "000262" + CHAVE.slice(20);
     expect(faltaParaEmitir({ chaves: [filial], fornecedor, itens: [{ ...item, chave_nota_origem: filial }] })).toEqual([]);
+  });
+  it("sem o nº do item na nota de entrada não emite (a SEFAZ recusa: 1048)", () => {
+    expect(faltaParaEmitir({ chaves: [CHAVE], fornecedor, itens: [{ ...item, item_nota_origem: null }] }).join()).toMatch(/nº do item/);
   });
   it("nota normal (finalidade 1) não exige DANFE", () => {
     expect(faltaParaEmitir({ finalidade: 1, chaves: [], fornecedor, itens: [{ ...item, chave_nota_origem: null }] })).toEqual([]);

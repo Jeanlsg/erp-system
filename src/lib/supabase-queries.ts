@@ -5107,6 +5107,27 @@ export function useNotaDevolucaoFornecedor() {
   });
 }
 
+/**
+ * Devolve ao estoque o que a confirmação tirou e volta a devolução para
+ * rascunho — para corrigir e gerar de novo depois que a SEFAZ recusou.
+ */
+export function useReabrirDevolucaoFornecedor() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase.schema("erp")
+        .rpc("reabrir_devolucao_fornecedor", { p_devolucao_id: id });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["erp_devolucoes_fornecedor"] });
+      qc.invalidateQueries({ queryKey: ["erp_estoque"] });
+      invalidarProdutos(qc);
+    },
+  });
+}
+
 export function useConfirmarDevolucaoFornecedor() {
   const qc = useQueryClient();
   return useMutation({

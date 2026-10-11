@@ -15,8 +15,9 @@
 //   (tributação) → Espelho de Nota (Prévia) → Gerar Nota de Devolução.
 //
 // "Gerar" faz tudo de uma vez: grava, valida no espelho, baixa o estoque
-// (Kardex) e emite a NF-e. Se a SEFAZ recusar, a devolução fica em
-// "andamento" e a emissão pode ser refeita pelo histórico.
+// (Kardex) e emite a NF-e. Se a SEFAZ recusar, o estoque volta
+// (erp.reabrir_devolucao_fornecedor) e o formulário fica aberto para
+// corrigir; pelo histórico também dá para "Corrigir" depois.
 //
 // Fora do Excellent de propósito: "Aplicar alíquota IBPT" (o sistema não
 // tem a tabela do IBPT, e a lei de transparência vale para venda ao
@@ -41,9 +42,9 @@ import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { supabase } from "@/lib/supabase";
 import {
   useDevolucoesFornecedor, useNotasEntradaFornecedor, useCriarDevolucaoFornecedor,
-  useConfirmarDevolucaoFornecedor, useFornecedores, useProdutos, useTransportadoras,
+  useConfirmarDevolucaoFornecedor, useFornecedores, useProdutosComEstoque, useTransportadoras,
   useAtualizarDevolucaoFornecedor, useExcluirDevolucaoFornecedor, useNotaDevolucaoFornecedor,
-  useAmbienteSefaz, isSupabaseConfigured,
+  useReabrirDevolucaoFornecedor, useAmbienteSefaz, isSupabaseConfigured,
 } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { brl, num } from "@/lib/format";
@@ -130,13 +131,16 @@ export function DevolucaoFornecedorPage() {
   const loja = (lojas as any[]).find((l) => l.id === lojaId) ?? null;
   const { data: devolucoes = [], isLoading } = useDevolucoesFornecedor(lojaId ?? undefined);
   const { data: fornecedores = [] } = useFornecedores();
-  const { data: produtos = [] } = useProdutos({ lojaId: lojaId ?? undefined });
+  // saldo da filial do topo (estoque_por_loja); a coluna estoque_atual do produto não é a da loja
+  const { data: produtos = [] } = useProdutosComEstoque(lojaId ?? undefined);
+  const saldo = (p: any) => Number(p.estoque_por_loja?.[lojaId ?? ""] ?? 0);
   const { data: transportadoras = [] } = useTransportadoras();
   const { data: ambiente } = useAmbienteSefaz(lojaId ?? undefined);
   const criar = useCriarDevolucaoFornecedor();
   const atualizar = useAtualizarDevolucaoFornecedor();
   const excluir = useExcluirDevolucaoFornecedor();
   const confirmar = useConfirmarDevolucaoFornecedor();
+  const reabrir = useReabrirDevolucaoFornecedor();
   const notaDev = useNotaDevolucaoFornecedor();
 
   // ---------- lista ----------
@@ -278,6 +282,15 @@ export function DevolucaoFornecedorPage() {
   const adicionarLinha = () => {
     if (!linha) return;
     if (!(linha.quantidade > 0)) { toast.error("Informe a quantidade."); return; }
+    // como no Excellent: não devolve o que não tem (o que já está na lista conta)
+    if (linha.produto_id) {
+      const p = (produtos as any[]).find((x) => x.id === linha.produto_id);
+      const jaNaLista = itens.filter((i) => i.produto_id === linha.produto_id).reduce((s, i) => s + i.quantidade, 0);
+      if (p && linha.quantidade + jaNaLista > saldo(p)) {
+        toast.error(`Estoque insuficiente de "${linha.nome}" em ${loja?.apelido ?? "esta filial"}: saldo ${num(saldo(p))}${jaNaLista ? `, ${num(jaNaLista)} já na lista` : ""}.`);
+        return;
+      }
+    }
     setItens((c) => [...c, linha]);
     setLinha(null); setTermoProduto("");
   };
@@ -403,7 +416,7 @@ export function DevolucaoFornecedorPage() {
         toast.success(`NF-e de devolução nº ${r.numero} autorizada${r.ambiente !== "producao" ? " (homologação — sem valor fiscal)" : ""}.`, { duration: 10000 });
         return true;
       }
-      toast.error(`SEFAZ recusou: ${r?.motivo ?? r?.erro ?? "sem motivo"} (cStat ${r?.cstat ?? "?"}). A devolução ficou em "Histórico de Notas Em Andamento".`, { duration: 15000 });
+      toast.error(`SEFAZ recusou: ${r?.motivo ?? r?.erro ?? "sem motivo"} (cStat ${r?.cstat ?? "?"})`, { duration: 20000 });
       return false;
     } catch (e: any) {
       toast.error(`Não foi possível emitir: ${e.message ?? e}`, { duration: 12000 });
@@ -419,8 +432,27 @@ export function DevolucaoFornecedorPage() {
     setOcupado(`emitir-${id}`);
     try { await confirmar.mutateAsync(id); }
     catch (e: any) { setOcupado(null); toast.error(`Não foi possível baixar o estoque: ${e.message ?? e}`); return; }
-    if (await emitir(id)) { setAberto(false); limparFormulario(); }
-    else { setAberto(false); limparFormulario(); setSoAndamento(true); }
+    if (await emitir(id)) { setAberto(false); limparFormulario(); return; }
+    // recusada: o estoque volta e o formulário continua aberto para corrigir
+    try {
+      await reabrir.mutateAsync(id);
+      toast.info("O estoque voltou. Corrija o que a SEFAZ apontou e clique em Gerar de novo.", { duration: 12000 });
+    } catch (e: any) {
+      toast.error(`A devolução ficou com o estoque baixado: ${e.message ?? e}. Use "Corrigir" no histórico.`);
+      setAberto(false); limparFormulario(); setSoAndamento(true);
+    }
+  };
+
+  /** Histórico: devolução com estoque baixado e nota recusada → estoque volta e abre para corrigir. */
+  const corrigir = async (d: any) => {
+    setOcupado(`corrigir-${d.id}`);
+    try {
+      await reabrir.mutateAsync(d.id);
+      editar({ ...d, status: "rascunho" });
+      toast.info("O estoque voltou. Corrija e clique em Gerar Nota de Devolução.");
+    } catch (e: any) {
+      toast.error(`Não foi possível reabrir: ${e.message ?? e}`);
+    } finally { setOcupado(null); }
   };
 
   const enviarEmail = async () => {
@@ -548,6 +580,12 @@ export function DevolucaoFornecedorPage() {
                               <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => editar(d)} title="Continuar"><Pencil className="mr-1 h-3.5 w-3.5" /> Continuar</Button>
                               <Button size="sm" variant="outline" className="h-7 px-2 text-destructive" title="Excluir" onClick={() => setExcluindo(d)}><Trash2 className="h-3.5 w-3.5" /></Button>
                             </>
+                          )}
+                          {d.status === "confirmada" && (
+                            <Button size="sm" variant="outline" className="h-7 px-2" disabled={!!ocupado} onClick={() => void corrigir(d)}
+                              title="Devolve o estoque e abre para corrigir">
+                              {ocupado === `corrigir-${d.id}` ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Pencil className="mr-1 h-3.5 w-3.5" />} Corrigir
+                            </Button>
                           )}
                           {d.status === "confirmada" && (
                             <Button size="sm" className="h-7 bg-green-600 px-2 hover:bg-green-700" disabled={!!ocupado} onClick={() => void emitir(d.id)}
@@ -821,6 +859,7 @@ export function DevolucaoFornecedorPage() {
                       <tr><td colSpan={8} className="p-4 text-center text-muted-foreground">Busque o produto no estoque, use "Buscar NF Entrada" ou "Importar XML".</td></tr>
                     ) : itens.map((i, idx) => {
                       const semNota = finalidade === "4" && !chavesValidas.includes(soDigitos(i.chave_nota_origem));
+                      const semItem = finalidade === "4" && !semNota && !(Number(i.item_nota_origem) > 0);
                       return (
                         <tr key={idx} className="border-t">
                           <td className="p-2">{i.nome}
@@ -830,6 +869,7 @@ export function DevolucaoFornecedorPage() {
                               {i.item_nota_origem ? ` · item ${i.item_nota_origem}` : ""}{!i.produto_id ? " · sem cadastro no estoque" : ""}
                             </span>
                             {semNota && <span className="block text-[10px] font-semibold text-red-600">Escolha a nota de entrada deste produto em "Editar"</span>}
+                            {semItem && <span className="block text-[10px] font-semibold text-red-600">Informe em "Editar" o nº do item (a linha do produto no DANFE de compra)</span>}
                           </td>
                           <td className="p-2 tabular-nums">{i.codigo_ean ?? "—"}</td>
                           <td className="p-2 text-right tabular-nums">{num(i.quantidade)}</td>
@@ -902,7 +942,7 @@ export function DevolucaoFornecedorPage() {
                   <tr key={p.id} className="cursor-pointer border-t hover:bg-accent" onClick={() => escolherProduto(p)}>
                     <td className="p-2">{p.nome}</td>
                     <td className="p-2 text-right tabular-nums">{brl(Number(p.preco_custo ?? 0))}</td>
-                    <td className={`p-2 text-right tabular-nums ${Number(p.estoque_atual ?? 0) <= 0 ? "text-red-600" : ""}`}>{num(Number(p.estoque_atual ?? 0))}</td>
+                    <td className={`p-2 text-right tabular-nums ${saldo(p) <= 0 ? "text-red-600" : ""}`}>{num(saldo(p))}</td>
                     <td className="p-2 tabular-nums">{p.codigo_barras ?? "—"}</td>
                   </tr>
                 ))}
@@ -986,9 +1026,10 @@ export function DevolucaoFornecedorPage() {
                     </select>
                     {!chavesValidas.length && <p className="mt-0.5 text-[10px] text-red-600">Digite antes o número do DANFE da nota de entrada.</p>}
                   </div>
-                  <div><Label className="text-xs">Nº do item na nota (opcional)</Label>
-                    <Input className="mt-1" inputMode="numeric" value={itemEdit.item_nota_origem ?? ""}
-                      onChange={(e) => setRascunhoItem({ ...itemEdit, item_nota_origem: e.target.value ? Number(soDigitos(e.target.value)) : null })} /></div>
+                  <div><Label className="text-xs">Nº do item na nota *</Label>
+                    <Input className={`mt-1 ${itemEdit.item_nota_origem ? "" : "border-red-500"}`} inputMode="numeric" value={itemEdit.item_nota_origem ?? ""}
+                      onChange={(e) => setRascunhoItem({ ...itemEdit, item_nota_origem: e.target.value ? Number(soDigitos(e.target.value)) : null })} />
+                    <p className="mt-0.5 text-[10px] text-muted-foreground">A linha do produto no DANFE de compra (1, 2, 3…). A SEFAZ exige.</p></div>
                 </div>
               )}
 

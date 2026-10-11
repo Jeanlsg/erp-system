@@ -8,10 +8,12 @@
 // devolvido), VÁRIAS notas de entrada ("Adicionar outro DANFE"), importar o
 // XML da compra e o espelho antes de subir para a Receita.
 //
-// Cada item diz de qual nota de entrada veio: a NF-e de devolução
-// referencia a origem por item (DFeReferenciado — refNFe no cabeçalho está
-// proibido desde 05/10/2026, NT 2025.002 regra VC02-14). O nº do item na
-// nota de origem é opcional no leiaute; vai quando o XML é conhecido.
+// Cada item diz de qual nota de entrada veio e em que linha dela: a NF-e de
+// devolução referencia a origem por item (DFeReferenciado — refNFe no
+// cabeçalho está proibido desde 05/10/2026, NT 2025.002 regra VC02-14). O
+// leiaute diz que o nItem é opcional, mas a SEFAZ recusa sem ele (rejeição
+// 1048, vista no teste de 11/10). Vem sozinho do XML e da nota importada;
+// com o produto buscado no estoque, é a linha do produto no DANFE.
 // ============================================================
 
 import { calcularIcms, cfopParaUf } from "@/lib/tabelas-fiscais";
@@ -44,7 +46,7 @@ export interface ItemDevolucao {
   ipi_devolvido_valor: number;
   /** chave (44 dígitos) da nota de entrada de onde o item veio */
   chave_nota_origem: string | null;
-  /** nItem do produto na nota de entrada (opcional no leiaute) */
+  /** nItem: a linha do produto na nota de entrada (a SEFAZ exige — rejeição 1048) */
   item_nota_origem: number | null;
   /** quanto veio na nota de origem — o teto do que se pode devolver */
   maximo?: number;
@@ -184,7 +186,7 @@ export function faltaParaEmitir(d: {
   finalidade?: number;
   chaves: string[];
   fornecedor?: any;
-  itens: Pick<ItemDevolucao, "nome" | "cfop" | "quantidade" | "chave_nota_origem" | "ncm">[];
+  itens: Pick<ItemDevolucao, "nome" | "cfop" | "quantidade" | "chave_nota_origem" | "ncm" | "item_nota_origem">[];
 }): string[] {
   const f: string[] = [];
   const doForn = faltasDoFornecedor(d.fornecedor);
@@ -208,6 +210,7 @@ export function faltaParaEmitir(d: {
     if (!/^[567]\d{3}$/.test(i.cfop)) f.push(`CFOP de saída em "${i.nome}"`);
     if (soDigitos(i.ncm).length !== 8) f.push(`NCM de "${i.nome}"`);
     if (devolucao && !chaves.includes(soDigitos(i.chave_nota_origem))) f.push(`nota de entrada de "${i.nome}"`);
+    else if (devolucao && !(Number(i.item_nota_origem) > 0)) f.push(`nº do item na nota de entrada de "${i.nome}" (a linha dele no DANFE)`);
   }
   return f;
 }

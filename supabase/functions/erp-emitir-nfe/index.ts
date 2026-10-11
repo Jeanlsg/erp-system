@@ -333,6 +333,8 @@ Deno.serve(async (req) => {
           const c = chaveDoItem(i);
           if (c.length !== 44) faltas.push(`nota de entrada (chave de 44 dígitos) de "${i.nome}"`);
           else chaves.add(c);
+          // o leiaute aceita sem, mas a SEFAZ recusa (1048) — visto em 11/10
+          if (!(Number(i.item_nota_origem) > 0)) faltas.push(`nº do item na nota de entrada de "${i.nome}"`);
         }
         // A chave traz o CNPJ de quem emitiu a compra (posições 7–20). A
         // SEFAZ recusa (1194) devolução para outra empresa — visto no teste de
@@ -380,7 +382,7 @@ Deno.serve(async (req) => {
           ? { ipi_devolvido: { percentual: Number(i.ipi_devolvido_percentual) || 100, valor: Number(i.ipi_devolvido_valor) } }
           : {}),
         ...(finalidadeNota === 4
-          ? { dfe_referenciado: { chave: chaveDoItem(i), ...(Number(i.item_nota_origem) > 0 ? { n_item: Number(i.item_nota_origem) } : {}) } }
+          ? { dfe_referenciado: { chave: chaveDoItem(i), n_item: Number(i.item_nota_origem) } }
           : {}),
       }));
       const soma = (xs: number[]) => xs.reduce((a, b) => a + (Number(b) || 0), 0);
