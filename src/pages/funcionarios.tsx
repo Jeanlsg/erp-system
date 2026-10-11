@@ -19,7 +19,7 @@ import { type Role, ROLES, roleLabels, papelPrincipal } from "@/lib/store/auth-s
 import { invalidarDominios } from "@/lib/dominios-cache";
 
 export function FuncionariosPage() {
-  const { lojaId } = useAutoSelectLoja();
+  const { lojaId, lojas } = useAutoSelectLoja();
   const { data: funcionarios = [], isLoading } = useFuncionarios(lojaId ?? undefined);
   const create = useCreateFuncionario();
   const update = useUpdateFuncionario();
@@ -71,7 +71,7 @@ export function FuncionariosPage() {
     banco: "", agencia: "", conta: "", tipo_conta_bancaria: "", chave_pix: "",
     comissao_servico: "",
     // acesso ao sistema: criado junto com o funcionário
-    acesso: false, senha: "", papeis: ["caixa"] as Role[],
+    acesso: false, senha: "", papeis: ["caixa"] as Role[], filiais: [] as string[],
   });
   const FORM_VAZIO = {
     nome: "", cpf: "", cargo: "", departamento: "", salario: "",
@@ -81,7 +81,7 @@ export function FuncionariosPage() {
     estado_civil: "", grau_instrucao: "", quantidade_filhos: "",
     banco: "", agencia: "", conta: "", tipo_conta_bancaria: "", chave_pix: "",
     comissao_servico: "",
-    acesso: false, senha: "", papeis: ["caixa"] as Role[],
+    acesso: false, senha: "", papeis: ["caixa"] as Role[], filiais: [] as string[],
   };
 
   if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="Funcionários" />;
@@ -147,6 +147,7 @@ export function FuncionariosPage() {
       acesso: !!f.usuario_id,
       senha: "",
       papeis: papeisDe(usuarios.find((u: any) => u.id === f.usuario_id)),
+      filiais: [],
     });
     setModalAberto(true);
   };
@@ -169,8 +170,11 @@ export function FuncionariosPage() {
       const atual = usuarios.find((u: any) => u.id === form.usuario_id);
       const mudou = JSON.stringify([...papeisDe(atual)].sort()) !== JSON.stringify([...papeis].sort());
       if (mudou) {
-        const { error } = await supabase.from("erp_usuarios").update({ role, papeis }).eq("id", form.usuario_id);
+        // sem .select() o RLS (só admin altera) afetava 0 linhas calado e a
+        // tela dizia "atualizado"
+        const { data: alterado, error } = await supabase.from("erp_usuarios").update({ role, papeis }).eq("id", form.usuario_id).select("id");
         if (error) throw new Error(`papéis: ${error.message}`);
+        if (!alterado?.length) throw new Error("só um administrador altera os papéis de um login");
       }
       return form.usuario_id;
     }
@@ -180,7 +184,9 @@ export function FuncionariosPage() {
     // 1) cria login + perfil no ERP
     const { data, error } = await supabase.functions.invoke<{ success: boolean; user_id?: string; error?: string }>(
       "erp-create-user",
-      { body: { email, nome: form.nome, role, papeis, senha: form.senha || null, telefone: form.telefone || null, send_invite: false } },
+      { body: { email, nome: form.nome, role, papeis, senha: form.senha || null, telefone: form.telefone || null, send_invite: false,
+          // filiais: sem elas o login não abre caixa ("não está cadastrado nesta filial")
+          lojas: form.filiais.length ? form.filiais : (lojaId ? [lojaId] : []), loja_default_id: lojaId || null } },
     );
     if (data?.success && data.user_id) return data.user_id;
 
@@ -193,18 +199,12 @@ export function FuncionariosPage() {
     }
     if (!motivo) motivo = error?.message ?? "falha desconhecida";
 
-    // 2) e-mail já tem login (CRM): aproveita, com a mesma senha
+    // 2) e-mail já tem login: NÃO aproveita sozinho. Antes a tela ligava o
+    // funcionário ao login existente (outra pessoa, se o e-mail foi digitado
+    // errado) e descartava a senha digitada. Quem tem login no CRM entra por
+    // "Importar do CRM", que mostra nome e e-mail para conferir.
     if (/já existe|already/i.test(motivo)) {
-      const { data: crm, error: eCrm } = await supabase.rpc("usuarios_crm_disponiveis");
-      if (eCrm) throw new Error(eCrm.message);
-      const achado = ((crm ?? []) as any[]).find((u) => String(u.email).toLowerCase() === email);
-      if (!achado) throw new Error("Este e-mail já tem login e já está no ERP como outro usuário.");
-      const { error: eI } = await supabase.from("erp_usuarios").insert({
-        id: achado.id, email, nome: form.nome, role, papeis, ativo: true, telefone: form.telefone || null,
-      });
-      if (eI) throw new Error(eI.message);
-      toast.info("Este e-mail já tinha login no CRM — aproveitado, com a mesma senha.");
-      return achado.id;
+      throw new Error("este e-mail já tem login. Confira o e-mail; se for a mesma pessoa, dê acesso em Usuários e Permissões › Importar do CRM.");
     }
     throw new Error(motivo);
   };
@@ -262,6 +262,19 @@ export function FuncionariosPage() {
     }
     try {
       await update.mutateAsync({ id: f.id, data_demissao: data.trim() });
+      // demitido não entra mais: antes só gravava a data e o login seguia vendendo
+      if (f.usuario_id) {
+        const { data: r, error } = await supabase.functions.invoke<{ success: boolean; error?: string }>(
+          "erp-delete-user", { body: { user_id: f.usuario_id, hard_delete: false } });
+        const motivo = r?.error ?? (error && (error as any).context?.json ? (await (error as any).context.json().catch(() => null))?.error : error?.message);
+        if (error || !r?.success) {
+          toast.warning(`Demissão registrada, mas o acesso ao sistema continua ativo: ${motivo ?? "falha"}. Desative em Usuários e Permissões.`, { duration: 12000 });
+          return;
+        }
+        void qc.invalidateQueries({ queryKey: ["erp_usuarios"] });
+        toast.success("Demissão registrada e acesso ao sistema desativado.");
+        return;
+      }
       toast.success("Demissão registrada.");
     } catch (e: any) {
       toast.error(`Não foi possível registrar: ${e.message ?? e}`);
@@ -272,7 +285,9 @@ export function FuncionariosPage() {
     if (!confirm(`Reverter a demissão de "${f.pessoa?.nome_razao ?? "funcionário"}"?`)) return;
     try {
       await update.mutateAsync({ id: f.id, data_demissao: null });
-      toast.success("Demissão revertida — funcionário ativo novamente.");
+      toast.success(f.usuario_id
+        ? "Demissão revertida. O acesso ao sistema continua desativado: reative em Usuários e Permissões, se for o caso."
+        : "Demissão revertida — funcionário ativo novamente.");
     } catch (e: any) {
       toast.error(`Não foi possível reverter: ${e.message ?? e}`);
     }
@@ -305,7 +320,9 @@ export function FuncionariosPage() {
     // falhava com o erro cru do Postgres.
     const pessoaInsert: any = {
       tipo: "fisica",
-      cpf_cnpj: form.cpf.trim() || null,
+      // só dígitos, como em Usuários: a mesma pessoa não pode ter o CPF
+      // gravado de dois jeitos (a busca falhava e dava "CPF já existe")
+      cpf_cnpj: form.cpf.replace(/\D/g, "") || null,
       nome_razao: form.nome,
       email: form.email || null,
       telefone: form.telefone || null,
@@ -685,6 +702,27 @@ export function FuncionariosPage() {
                       </div>
                     </div>
                   )}
+                  {!form.usuario_id && (lojas as any[]).length > 1 && (
+                    <div>
+                      <Label>Filiais em que trabalha</Label>
+                      <div className="mt-1 flex flex-wrap gap-3">
+                        {(lojas as any[]).map((l) => {
+                          const marcadas = form.filiais.length ? form.filiais : (lojaId ? [lojaId] : []);
+                          return (
+                            <label key={l.id} className="flex cursor-pointer items-center gap-1.5 text-sm">
+                              <input type="checkbox" className="h-4 w-4" checked={marcadas.includes(l.id)}
+                                onChange={(e) => {
+                                  const novas = e.target.checked ? [...marcadas, l.id] : marcadas.filter((x) => x !== l.id);
+                                  setForm({ ...form, filiais: novas.length ? novas : marcadas });
+                                }} />
+                              {l.apelido ?? l.nome}
+                            </label>
+                          );
+                        })}
+                      </div>
+                      <p className="mt-1 text-[11px] text-muted-foreground">O login só abre caixa e vê dados das filiais marcadas.</p>
+                    </div>
+                  )}
                   <div>
                     <Label>Papéis</Label>
                     <div className="mt-1 flex flex-wrap gap-3">
@@ -701,7 +739,7 @@ export function FuncionariosPage() {
                     </div>
                     <p className="mt-1 text-[11px] text-muted-foreground">
                       Vê a união dos papéis; acesso ao banco pelo principal: <b>{roleLabels[papelPrincipal(form.papeis)]}</b>.
-                      {!form.usuario_id && " Se o e-mail já tiver login no CRM, ele é aproveitado com a mesma senha."}
+                      {!form.usuario_id && " Se o e-mail já tiver login, use Usuários e Permissões › Importar do CRM."}
                     </p>
                   </div>
                   {form.usuario_id && (

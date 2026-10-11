@@ -220,7 +220,7 @@ export async function login(
     // O id do erp_usuarios == auth.users.id (FK direta)
     const { data: perfil, error: perfilError } = await supabase
       .from("erp_usuarios")
-      .select("id, email, nome, role, papeis, ativo, admin_principal, permissoes, loja_default_id")
+      .select("id, email, nome, role, papeis, ativo, bloqueado, admin_principal, permissoes, loja_default_id")
       .eq("id", data.user.id)
       .single();
 
@@ -232,6 +232,10 @@ export async function login(
     if (perfil.ativo === false) {
       await supabase.auth.signOut();
       return { ok: false, error: "Usuário desativado" };
+    }
+    if ((perfil as any).bloqueado === true) {
+      await supabase.auth.signOut();
+      return { ok: false, error: "Usuário bloqueado. Peça ao administrador para desbloquear." };
     }
 
     // ⚠️ Nada lido como o usuário anterior pode sobreviver a este login: a RLS
@@ -293,6 +297,24 @@ export function vigiarSessao() {
         useAuthStore.getState().logout();
       }
     });
+
+    // Desativado ou bloqueado com o sistema aberto: o RLS já cortava os
+    // dados, mas a pessoa seguia "logada" vendo listas vazias (revisão de
+    // 10/10/2026). Confere a própria linha de tempos em tempos e ao voltar
+    // para a janela; sem internet não faz nada (o PDV funciona offline).
+    const conferir = async () => {
+      const atual = useAuthStore.getState().user;
+      if (!atual || !navigator.onLine) return;
+      const { data, error } = await client.from("erp_usuarios").select("ativo, bloqueado").eq("id", atual.id).maybeSingle();
+      if (error || !data) return;
+      if (data.ativo === false || data.bloqueado === true) {
+        const { toast } = await import("sonner");
+        toast.error(data.ativo === false ? "Seu usuário foi desativado." : "Seu usuário foi bloqueado.", { duration: 10000 });
+        await logout();
+      }
+    };
+    window.setInterval(() => void conferir(), 3 * 60_000);
+    window.addEventListener("focus", () => void conferir());
   });
 }
 

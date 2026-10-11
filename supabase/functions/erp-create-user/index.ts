@@ -15,7 +15,7 @@
 //     }
 //   })
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { clienteAdmin, corsHeaders, exigirAdminAtivo, jsonResponse } from "../_shared/erp-admin.ts";
 
 type Role = "admin" | "gerente" | "caixa" | "estoquista";
 
@@ -26,6 +26,8 @@ interface CreateUserPayload {
   /** todos os papéis; `role` é o principal (o mais alto) */
   papeis?: Role[];
   loja_default_id?: string | null;
+  /** filiais em que o usuário trabalha (obrigatório: sem filial ele não abre caixa) */
+  lojas?: string[];
   telefone?: string | null;
   senha?: string | null;
   send_invite?: boolean;
@@ -41,20 +43,6 @@ interface CreateUserResponse {
   invite_error?: string;
 }
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-function jsonResponse(body: any, status: number): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
-
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
@@ -66,40 +54,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   try {
-    // 1. Pegar o usuário autenticado (via JWT)
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return jsonResponse({ success: false, error: "Não autenticado" }, 401);
-    }
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-
-    // 2. Cliente com JWT do usuário (representa quem está chamando)
-    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-      db: { schema: "erp" },
-    });
-
-    const { data: userData, error: userError } = await userClient.auth.getUser();
-    if (userError || !userData.user) {
-      return jsonResponse({ success: false, error: "Token inválido" }, 401);
-    }
-
-    // 3. Verificar se é admin
-    const { data: callerProfile } = await userClient
-      .from("erp_usuarios")
-      .select("id, role")
-      .eq("id", userData.user.id)
-      .single();
-
-    if (!callerProfile || callerProfile.role !== "admin") {
-      return jsonResponse(
-        { success: false, error: "Apenas administradores podem criar usuários" },
-        403
-      );
-    }
+    // 1. Quem chama: admin ativo do ERP (ver _shared/erp-admin.ts)
+    const adminClient = clienteAdmin();
+    const chamador = await exigirAdminAtivo(req, adminClient, "criar usuários");
+    if (chamador instanceof Response) return chamador;
 
     // 4. Validar payload
     const body: CreateUserPayload = await req.json();
@@ -146,11 +104,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
     if (!papeis.includes(role)) papeis.push(role);
 
-    // 5. Cliente Admin (com service_role)
-    const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-      db: { schema: "erp" },
-    });
+    // Filiais: obrigatórias. Logins criados sem filial não abriam caixa
+    // ("não está cadastrado nesta filial") — revisão de 10/10/2026.
+    const lojas = [...new Set((Array.isArray(body.lojas) && body.lojas.length ? body.lojas
+      : (body.loja_default_id ? [body.loja_default_id] : [])).filter(Boolean))];
+    if (!lojas.length) {
+      return jsonResponse({ success: false, error: "Escolha ao menos uma filial para o usuário" }, 400);
+    }
+    const { data: lojasOk } = await adminClient.from("erp_lojas").select("id").in("id", lojas);
+    if ((lojasOk ?? []).length !== lojas.length) {
+      return jsonResponse({ success: false, error: "Filial inválida" }, 400);
+    }
+    const lojaPadrao = body.loja_default_id && lojas.includes(body.loja_default_id) ? body.loja_default_id : lojas[0];
 
     // 6. Verificar duplicação (consulta direta a erp_usuarios por email)
     const { data: existingErpUser, error: dupCheckError } = await adminClient
@@ -225,16 +190,19 @@ Deno.serve(async (req: Request): Promise<Response> => {
           nome: body.nome,
           role,
           papeis,
-          loja_default_id: body.loja_default_id || null,
+          loja_default_id: lojaPadrao,
           telefone: body.telefone || null,
         }, { onConflict: "id" });
-      if (updateError) {
+      const { error: lojasError } = updateError ? { error: null } : await adminClient
+        .from("erp_usuario_lojas")
+        .insert(lojas.map((loja_id) => ({ usuario_id: newUser.user!.id, loja_id })));
+      if (updateError || lojasError) {
+        // Desfaz o login: sem isto ficava um usuário no Auth sem perfil no
+        // ERP, e toda nova tentativa com o mesmo e-mail dava "já existe".
+        await adminClient.from("erp_usuarios").delete().eq("id", newUser.user.id);
+        await adminClient.auth.admin.deleteUser(newUser.user.id);
         return jsonResponse(
-          {
-            success: false,
-            error: `Usuário criado no Auth, mas falhou ao gravar o perfil no ERP: ${updateError.message}`,
-            user_id: newUser.user.id,
-          },
+          { success: false, error: `Não foi possível gravar o usuário no ERP: ${(updateError ?? lojasError)!.message}` },
           500
         );
       }

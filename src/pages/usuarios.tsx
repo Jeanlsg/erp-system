@@ -215,99 +215,129 @@ function PapeisPanel({ isAdmin, userId }: { isAdmin: boolean; userId?: string })
 // ============================================================
 type UsuarioCrm = { id: string; email: string; nome: string; criado_em: string };
 
-function ImportarDoCrmDialog({ open, onOpenChange, onImportado }: {
-  open: boolean; onOpenChange: (v: boolean) => void; onImportado: () => void;
+/**
+ * Corpo da resposta de uma edge, mesmo em erro: o supabase-js esconde o
+ * motivo atrás de "Edge Function returned a non-2xx status code" e o admin
+ * não via "Já existe um usuário com este email" nem "tem histórico".
+ */
+async function corpoDaEdge(data: any, error: any): Promise<{ success?: boolean; error?: string; [k: string]: any }> {
+  if (data) return data;
+  const corpo = error?.context?.json ? await error.context.json().catch(() => null) : null;
+  return corpo ?? { success: false, error: error?.message ?? "falha desconhecida" };
+}
+
+function ImportarDoCrmDialog({ open, onOpenChange, onImportado, lojas }: {
+  open: boolean; onOpenChange: (v: boolean) => void; onImportado: () => void; lojas: any[];
 }) {
-  const [lista, setLista] = useState<UsuarioCrm[]>([]);
-  const [carregando, setCarregando] = useState(false);
-  const [busca, setBusca] = useState("");
-  const [papeisPor, setPapeisPor] = useState<Record<string, Role[]>>({});
-  const [salvando, setSalvando] = useState<string | null>(null);
+  // Busca pelo e-mail exato: antes a tela listava todos os logins do
+  // auth.users (que é dividido com o CRM) — nome e e-mail de quem não é da loja.
+  const [email, setEmail] = useState("");
+  const [achado, setAchado] = useState<UsuarioCrm | null | undefined>(undefined);
+  const [buscando, setBuscando] = useState(false);
+  const [papeis, setPapeis] = useState<Role[]>(["caixa"]);
+  const [filiais, setFiliais] = useState<string[]>([]);
+  const [salvando, setSalvando] = useState(false);
 
   useEffect(() => {
     if (!open) return;
-    setCarregando(true);
-    supabase.rpc("usuarios_crm_disponiveis").then(({ data, error }) => {
-      if (error) toast.error(`Não foi possível listar os logins do CRM: ${error.message}`);
-      setLista((data ?? []) as UsuarioCrm[]);
-      setCarregando(false);
-    });
-  }, [open]);
+    setEmail(""); setAchado(undefined); setPapeis(["caixa"]);
+    setFiliais(lojas.length === 1 ? [lojas[0].id] : []);
+  }, [open, lojas]);
 
-  const papeisDe = (id: string): Role[] => papeisPor[id] ?? ["caixa"];
-  const alternar = (id: string, p: Role) => {
-    const atual = papeisDe(id);
-    const novo = atual.includes(p) ? atual.filter((x) => x !== p) : [...atual, p];
-    setPapeisPor((prev) => ({ ...prev, [id]: novo.length ? novo : atual }));
+  const buscar = async () => {
+    if (!email.includes("@")) { toast.error("Digite o e-mail completo do login."); return; }
+    setBuscando(true);
+    const { data, error } = await supabase.rpc("usuario_crm_por_email", { p_email: email });
+    setBuscando(false);
+    if (error) { toast.error(`Não foi possível buscar: ${error.message}`); return; }
+    setAchado(((data ?? []) as UsuarioCrm[])[0] ?? null);
   };
 
-  const importar = async (u: UsuarioCrm) => {
-    const papeis = papeisDe(u.id);
-    setSalvando(u.id);
+  const importar = async () => {
+    if (!achado) return;
+    if (!filiais.length) { toast.error("Marque ao menos uma filial."); return; }
+    setSalvando(true);
     try {
       const { error } = await supabase.from("erp_usuarios").insert({
-        id: u.id, email: u.email, nome: u.nome,
-        role: papelPrincipal(papeis), papeis, ativo: true,
+        id: achado.id, email: achado.email, nome: achado.nome,
+        role: papelPrincipal(papeis), papeis, ativo: true, loja_default_id: filiais[0],
       });
       if (error) throw error;
-      toast.success(`${u.nome} agora entra no ERP como ${papeis.map((p) => roleLabels[p]).join(", ")}.`);
-      setLista((prev) => prev.filter((x) => x.id !== u.id));
+      // sem filial o login não abre caixa nem vê dados
+      const { error: eL } = await supabase.from("erp_usuario_lojas")
+        .insert(filiais.map((loja_id) => ({ usuario_id: achado.id, loja_id })));
+      if (eL) throw new Error(`perfil criado, mas as filiais não: ${eL.message}`);
+      toast.success(`${achado.nome} agora entra no ERP como ${papeis.map((p) => roleLabels[p]).join(", ")}.`);
       onImportado();
+      onOpenChange(false);
     } catch (e: any) {
       toast.error(`Falha ao importar: ${e.message ?? e}`);
     } finally {
-      setSalvando(null);
+      setSalvando(false);
     }
   };
 
-  const visiveis = lista.filter((u) => {
-    const s = busca.toLowerCase();
-    return !s || u.nome.toLowerCase().includes(s) || u.email.toLowerCase().includes(s);
-  });
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh]">
+      <DialogContent className="max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><Users className="h-5 w-5" /> Importar usuário do CRM</DialogTitle>
           <DialogClose />
         </DialogHeader>
         <p className="text-xs text-muted-foreground">
-          Logins que já existem no CRM e ainda não têm perfil no ERP. A senha é a mesma do CRM —
-          nenhum e-mail é enviado.
+          Para quem já tem login no CRM: digite o e-mail dele. A senha continua a mesma do CRM — nenhum e-mail é enviado.
         </p>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Nome ou e-mail..." className="pl-9" value={busca} onChange={(e) => setBusca(e.target.value)} />
+        <div className="flex gap-2">
+          <Input placeholder="email@exemplo.com" value={email} onChange={(e) => { setEmail(e.target.value); setAchado(undefined); }}
+            onKeyDown={(e) => { if (e.key === "Enter") void buscar(); }} />
+          <Button variant="outline" onClick={() => void buscar()} disabled={buscando}>
+            {buscando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="mr-1 h-4 w-4" />} Buscar
+          </Button>
         </div>
-        <div className="max-h-[55vh] overflow-y-auto space-y-2 pr-1">
-          {carregando ? (
-            <div className="p-6 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>
-          ) : visiveis.length === 0 ? (
-            <p className="p-6 text-center text-sm text-muted-foreground">
-              {lista.length === 0 ? "Todo login do CRM já tem perfil no ERP." : "Ninguém com esse nome ou e-mail."}
-            </p>
-          ) : visiveis.map((u) => (
-            <div key={u.id} className="flex flex-wrap items-center gap-3 rounded-md border p-3">
-              <div className="min-w-[180px] flex-1">
-                <p className="font-medium text-sm">{u.nome}</p>
-                <p className="text-xs text-muted-foreground">{u.email}</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
+        {achado === null && (
+          <p className="rounded-md border p-3 text-sm text-muted-foreground">
+            Nenhum login do CRM com esse e-mail sem perfil no ERP. Confira o e-mail ou crie o usuário em "Novo Usuário".
+          </p>
+        )}
+        {achado && (
+          <div className="space-y-3 rounded-md border p-3">
+            <div>
+              <p className="text-sm font-medium">{achado.nome}</p>
+              <p className="text-xs text-muted-foreground">{achado.email} · login criado em {new Date(achado.criado_em).toLocaleDateString("pt-BR")}</p>
+              <p className="mt-1 text-[11px] text-amber-700">Confira se é a pessoa certa antes de adicionar.</p>
+            </div>
+            <div>
+              <Label className="text-xs">Papéis</Label>
+              <div className="mt-1 flex flex-wrap gap-3">
                 {ROLES.map((p) => (
-                  <label key={p} className="flex items-center gap-1 text-xs cursor-pointer">
-                    <input type="checkbox" className="h-3.5 w-3.5" checked={papeisDe(u.id).includes(p)} onChange={() => alternar(u.id, p)} />
+                  <label key={p} className="flex cursor-pointer items-center gap-1 text-xs">
+                    <input type="checkbox" className="h-3.5 w-3.5" checked={papeis.includes(p)}
+                      onChange={() => {
+                        const novo = papeis.includes(p) ? papeis.filter((x) => x !== p) : [...papeis, p];
+                        setPapeis(novo.length ? novo : papeis);
+                      }} />
                     {roleLabels[p]}
                   </label>
                 ))}
               </div>
-              <Button size="sm" onClick={() => importar(u)} disabled={salvando === u.id}>
-                {salvando === u.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />}
-                Adicionar ao ERP
-              </Button>
             </div>
-          ))}
-        </div>
+            <div>
+              <Label className="text-xs">Filiais em que trabalha</Label>
+              <div className="mt-1 flex flex-wrap gap-3">
+                {lojas.map((l: any) => (
+                  <label key={l.id} className="flex cursor-pointer items-center gap-1 text-xs">
+                    <input type="checkbox" className="h-3.5 w-3.5" checked={filiais.includes(l.id)}
+                      onChange={(e) => setFiliais(e.target.checked ? [...filiais, l.id] : filiais.filter((x) => x !== l.id))} />
+                    {l.apelido ?? l.nome}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <Button size="sm" onClick={() => void importar()} disabled={salvando}>
+              {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="mr-1 h-4 w-4" />} Adicionar ao ERP
+            </Button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -373,6 +403,15 @@ export function UsuariosPage() {
   const [usarPermissoesCustom, setUsarPermissoesCustom] = useState(false);
 
   const isAdmin = currentUser?.role === "admin";
+  // O banco recusa (migration 106): ninguém muda o próprio papel/situação,
+  // e só o dono mexe na conta do dono. A tela trava antes, para não deixar
+  // marcar e só ver o erro depois.
+  const travaAcessoDe = (alvo: any): string | null => {
+    if (!alvo) return null;
+    if (alvo.id === currentUser?.id) return "Ninguém altera o próprio papel ou situação";
+    if (alvo.admin_principal && !currentUser?.admin_principal) return "Só o administrador principal altera a conta dele";
+    return null;
+  };
 
   const lojaMap = Object.fromEntries(lojas.map((l) => [l.id, l.apelido || l.nome]));
   // Em quais filiais cada usuário trabalha. Fora o dono, ninguém alterna
@@ -509,7 +548,7 @@ export function UsuariosPage() {
       return;
     }
     // Validação de senha apenas na criação (e se o usuário marcou para definir agora)
-    if (!editId && formUsuario.senha.length < 6) {
+    if ((!editId || formUsuario.senha) && formUsuario.senha.length < 6) {
       toast.error("A senha deve ter pelo menos 6 caracteres");
       return;
     }
@@ -539,19 +578,15 @@ export function UsuariosPage() {
           await definirFiliais.mutateAsync({ usuarioId: editId, lojas: formUsuario.filiais });
         }
 
-        // Se admin pediu para trocar a senha do usuário
-        if (formUsuario.definirSenha && formUsuario.senha.length >= 6) {
-          await supabase.functions.invoke<{
-            success: boolean;
-            error?: string;
-          }>("erp-reset-password", {
-            body: { user_id: editId },
+        // Senha nova digitada: troca na hora (antes só prometia um e-mail,
+        // que nem era enviado, e o link cairia na tela do CRM)
+        if (formUsuario.senha) {
+          const { data, error } = await supabase.functions.invoke("erp-reset-password", {
+            body: { user_id: editId, nova_senha: formUsuario.senha },
           });
-          // O reset-password apenas envia email; vamos chamar admin API em um próximo passo
-          // Por enquanto, apenas avisamos que o usuário deve redefinir via email
-          toast.success(
-            `Usuário atualizado. Email de redefinição de senha será enviado para ${formUsuario.email}.`
-          );
+          const r = await corpoDaEdge(data, error);
+          if (!r.success) throw new Error(`usuário salvo, mas a senha não foi trocada: ${r.error}`);
+          toast.success("Usuário atualizado e senha trocada.");
         } else {
           toast.success("Usuário atualizado");
         }
@@ -575,19 +610,19 @@ export function UsuariosPage() {
             telefone: formUsuario.telefone || null,
             senha: formUsuario.senha,
             send_invite: false,
+            // filiais gravadas pela própria edge: o login não nasce sem filial
+            lojas: formUsuario.filiais,
           },
         });
-        if (error) throw error;
-        if (data?.error) throw new Error(data.error);
-        if (!data?.success) throw new Error("Erro desconhecido ao criar usuário");
+        const r = await corpoDaEdge(data, error);
+        if (!r.success) throw new Error(r.error ?? "Erro desconhecido ao criar usuário");
         toast.success(`Usuário criado. Já pode entrar com ${formUsuario.email} e a senha definida.`);
-        if (data.user_id) {
-          try { await definirFiliais.mutateAsync({ usuarioId: data.user_id, lojas: formUsuario.filiais }); }
-          catch (e: any) { toast.warning(`Usuário criado, mas as filiais não: ${e.message ?? e}`, { duration: 10000 }); }
-          try { await sincronizarFuncionario(data.user_id); }
+        if (r.user_id) {
+          try { await sincronizarFuncionario(r.user_id); }
           catch (e: any) { toast.warning(`Usuário criado, mas o funcionário não: ${e.message ?? e}`, { duration: 10000 }); }
         }
       }
+      void qc.invalidateQueries({ queryKey: ["erp_usuario_lojas"] });
       setModalUsuario(false);
       refetch();
     } catch (err: any) {
@@ -602,10 +637,11 @@ export function UsuariosPage() {
         success: boolean;
         error?: string;
       }>("erp-reset-password", {
-        body: { user_id: id },
+        // o link vem para o ERP (SITE_URL do servidor é a do CRM)
+        body: { user_id: id, redirect_base: window.location.origin },
       });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      const r = await corpoDaEdge(data, error);
+      if (!r.success) throw new Error(r.error);
       toast.success(`Email de redefinição enviado para ${email}`);
       refetch();
     } catch (err: any) {
@@ -626,8 +662,14 @@ export function UsuariosPage() {
       }>("erp-delete-user", {
         body: { user_id: u.id, hard_delete: true },
       });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      const r = await corpoDaEdge(data, error);
+      if (!r.success) {
+        if (r.tem_historico && u.ativo && confirm(`${r.error}\n\nDesativar "${u.nome}" agora?`)) {
+          await toggleAtivo(u);
+          return;
+        }
+        throw new Error(r.error);
+      }
       toast.success("Usuário excluído");
       refetch();
     } catch (err: any) {
@@ -997,8 +1039,8 @@ export function UsuariosPage() {
                               variant="ghost"
                               className={`h-7 w-7 p-0 ${u.ativo ? "text-orange-600" : "text-green-600"}`}
                               onClick={() => toggleAtivo(u)}
-                              title={u.ativo ? "Desativar" : "Ativar"}
-                              disabled={!isAdmin || isCurrentUser}
+                              title={travaAcessoDe(u) ?? (u.ativo ? "Desativar" : "Ativar")}
+                              disabled={!isAdmin || !!travaAcessoDe(u)}
                             >
                               {u.ativo ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
                             </Button>
@@ -1007,8 +1049,8 @@ export function UsuariosPage() {
                               variant="ghost"
                               className="h-7 w-7 p-0 text-destructive"
                               onClick={() => excluirUsuario(u)}
-                              title="Excluir usuário"
-                              disabled={!isAdmin || isCurrentUser}
+                              title={(u as any).admin_principal ? "O administrador principal não pode ser excluído" : "Excluir usuário"}
+                              disabled={!isAdmin || isCurrentUser || !!(u as any).admin_principal}
                             >
                               <Trash2 className="h-3 w-3" />
                             </Button>
@@ -1030,7 +1072,7 @@ export function UsuariosPage() {
       </TabsContent>
       </Tabs>
 
-      <ImportarDoCrmDialog open={modalImportarCrm} onOpenChange={setModalImportarCrm} onImportado={() => refetch()} />
+      <ImportarDoCrmDialog open={modalImportarCrm} onOpenChange={setModalImportarCrm} onImportado={() => refetch()} lojas={lojas as any[]} />
 
       {/* Modal: Editar Usuário */}
       <Dialog open={modalUsuario} onOpenChange={setModalUsuario}>
@@ -1065,6 +1107,8 @@ export function UsuariosPage() {
                   {ROLES.map((p) => (
                     <label key={p} className="flex items-center gap-2 text-sm cursor-pointer">
                       <input type="checkbox" className="h-4 w-4"
+                        disabled={!!travaAcessoDe(editId ? usuarios.find((x: any) => x.id === editId) : null)}
+                        title={travaAcessoDe(editId ? usuarios.find((x: any) => x.id === editId) : null) ?? undefined}
                         checked={formUsuario.papeis.includes(p)}
                         onChange={(e) => {
                           const papeis = e.target.checked
@@ -1146,6 +1190,7 @@ export function UsuariosPage() {
                   <input
                     type="checkbox"
                     id="ativo"
+                    disabled={!!travaAcessoDe(editId ? usuarios.find((x: any) => x.id === editId) : null)}
                     checked={formUsuario.ativo}
                     onChange={(e) => setFormUsuario({ ...formUsuario, ativo: e.target.checked })}
                     className="h-4 w-4"
@@ -1197,11 +1242,11 @@ export function UsuariosPage() {
             {/* Senha — obrigatória na criação. Não há convite por e-mail: o
                 link cairia na tela do CRM. Quem já tem login no CRM entra por
                 "Importar do CRM". */}
-            {!editId && (
+            {(!editId || !travaAcessoDe(usuarios.find((x: any) => x.id === editId)) || editId === currentUser?.id) && (
               <div className="space-y-2 border rounded-md p-3 bg-muted/30">
                 {(
                   <div>
-                    <Label>Senha (mínimo 6 caracteres)</Label>
+                    <Label>{editId ? "Nova senha (deixe em branco para manter a atual)" : "Senha (mínimo 6 caracteres)"}</Label>
                     <div className="relative">
                       <Input
                         type={showPasswordUsuario ? "text" : "password"}
@@ -1209,9 +1254,9 @@ export function UsuariosPage() {
                         onChange={(e) =>
                           setFormUsuario({ ...formUsuario, senha: e.target.value })
                         }
-                        placeholder="Digite a senha"
+                        placeholder={editId ? "Só se for trocar" : "Digite a senha"}
                         minLength={6}
-                        required
+                        required={!editId}
                       />
                       <button
                         type="button"

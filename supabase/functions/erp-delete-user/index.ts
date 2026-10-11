@@ -1,34 +1,29 @@
 // Edge Function: erp-delete-user
-// Exclui (ou desativa) um usuário do Supabase Auth
-// APENAS admins podem chamar esta função
+// Exclui (ou desativa) um usuário do ERP
+// APENAS admins ativos podem chamar esta função
 //
 // Chamada via:
-//   supabase.functions.invoke('delete-user', {
+//   supabase.functions.invoke('erp-delete-user', {
 //     body: {
 //       user_id: 'uuid-do-usuario',
-//       hard_delete?: boolean  // true = exclui do Auth; false = apenas desativa (padrão)
+//       hard_delete?: boolean  // true = exclui perfil e login; false = apenas desativa (padrão)
 //     }
 //   })
+//
+// Revisão de 10/10/2026:
+//   - o alvo tem de ser usuário do ERP (antes apagava qualquer login do
+//     auth.users, que é dividido com o CRM);
+//   - a conta do admin principal só o próprio principal mexe, e não é excluída;
+//   - a exclusão do perfil é uma transação (erp.excluir_usuario_erp): com
+//     histórico (vendas, caixas…) volta "desative em vez de excluir", e o
+//     login só é apagado depois que o perfil saiu.
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { alvoDoErp, clienteAdmin, corsHeaders, exigirAdminAtivo, jsonResponse } from "../_shared/erp-admin.ts";
 
 interface DeleteUserPayload {
   user_id: string;
   hard_delete?: boolean;
 }
-
-interface DeleteUserResponse {
-  success: boolean;
-  message?: string;
-  error?: string;
-}
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -36,121 +31,51 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // 1. Autenticação
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return jsonResponse({ success: false, error: "Não autenticado" }, 401);
-    }
+    const admin = clienteAdmin();
+    const chamador = await exigirAdminAtivo(req, admin, "excluir usuários");
+    if (chamador instanceof Response) return chamador;
 
-    const userClient = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-      {
-        global: { headers: { Authorization: authHeader } },
-        db: { schema: "erp" },
-      }
-    );
-
-    const { data: userData } = await userClient.auth.getUser();
-    if (!userData.user) {
-      return jsonResponse({ success: false, error: "Token inválido" }, 401);
-    }
-
-    // 2. Verifica se é admin
-    const { data: callerProfile } = await userClient
-      .from("erp_usuarios")
-      .select("role")
-      .eq("id", userData.user.id)
-      .single();
-
-    if (!callerProfile || callerProfile.role !== "admin") {
-      return jsonResponse(
-        { success: false, error: "Apenas administradores podem excluir usuários" },
-        403
-      );
-    }
-
-    // 3. Validação
     const body: DeleteUserPayload = await req.json();
     if (!body.user_id) {
-      return jsonResponse(
-        { success: false, error: "user_id é obrigatório" },
-        400
-      );
+      return jsonResponse({ success: false, error: "user_id é obrigatório" }, 400);
+    }
+    if (body.user_id === chamador.id) {
+      return jsonResponse({ success: false, error: "Você não pode excluir nem desativar o próprio usuário" }, 400);
     }
 
-    // Impede que admin exclua a si mesmo
-    if (body.user_id === userData.user.id) {
-      return jsonResponse(
-        { success: false, error: "Você não pode excluir seu próprio usuário" },
-        400
-      );
+    const alvo = await alvoDoErp(admin, chamador, body.user_id);
+    if (alvo instanceof Response) return alvo;
+    if (alvo.admin_principal) {
+      return jsonResponse({ success: false, error: "O administrador principal não pode ser excluído nem desativado" }, 403);
     }
-
-    // 4. Cliente Admin
-    const adminClient = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-      {
-        auth: { autoRefreshToken: false, persistSession: false },
-        db: { schema: "erp" },
-      }
-    );
 
     if (body.hard_delete) {
-      // Hard delete: remove do Auth + cascata remove de erp_usuarios (FK ON DELETE CASCADE)
-      const { error: deleteError } = await adminClient.auth.admin.deleteUser(
-        body.user_id
-      );
+      const { error: rpcError } = await admin.rpc("excluir_usuario_erp", { p_usuario: alvo.id });
+      if (rpcError) {
+        const temHistorico = rpcError.code === "23503";
+        return jsonResponse(
+          { success: false, error: rpcError.message, ...(temHistorico ? { tem_historico: true } : {}) },
+          temHistorico ? 409 : 500,
+        );
+      }
+      const { error: deleteError } = await admin.auth.admin.deleteUser(alvo.id);
       if (deleteError) {
-        return jsonResponse(
-          {
-            success: false,
-            error: `Erro ao excluir: ${deleteError.message}`,
-          },
-          500
-        );
+        // o perfil do ERP já saiu: sem ele o login não entra no ERP
+        console.error(`perfil ${alvo.id} excluído, login não: ${deleteError.message}`);
+        return jsonResponse({ success: true, message: "Usuário excluído do ERP (o login ficou no Auth e não entra mais no ERP)" }, 200);
       }
-      return jsonResponse({
-        success: true,
-        message: "Usuário excluído permanentemente",
-      });
-    } else {
-      // Soft delete: apenas desativa
-      const { error: updateError } = await adminClient
-        .from("erp_usuarios")
-        .update({ ativo: false })
-        .eq("id", body.user_id);
-
-      if (updateError) {
-        return jsonResponse(
-          {
-            success: false,
-            error: `Erro ao desativar: ${updateError.message}`,
-          },
-          500
-        );
-      }
-      return jsonResponse({
-        success: true,
-        message: "Usuário desativado com sucesso",
-      });
+      return jsonResponse({ success: true, message: "Usuário excluído" }, 200);
     }
+
+    // Desativar: o RLS corta os dados na hora (current_erp_user_id exige
+    // ativo) e o front desloga quem foi desativado (auth-store).
+    const { error: updateError } = await admin.from("erp_usuarios").update({ ativo: false }).eq("id", alvo.id);
+    if (updateError) {
+      return jsonResponse({ success: false, error: `Erro ao desativar: ${updateError.message}` }, 500);
+    }
+    return jsonResponse({ success: true, message: "Usuário desativado" }, 200);
   } catch (err) {
     console.error("Erro inesperado:", err);
-    return jsonResponse(
-      {
-        success: false,
-        error: err instanceof Error ? err.message : "Erro interno do servidor",
-      },
-      500
-    );
+    return jsonResponse({ success: false, error: err instanceof Error ? err.message : "Erro interno do servidor" }, 500);
   }
 });
-
-function jsonResponse(body: any, status: number) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}

@@ -277,7 +277,7 @@ export const sections: NavSection[] = [
           { title: "Relatório da Contadora", url: "/fiscal/relatorio-contadora", icon: FileArchive, perm: "fiscal.emitir" },
           { title: "Escrituração (SPED)", url: "/fiscal/escrituracao", icon: Calculator, perm: "fiscal.emitir" },
           { title: "Painel do Contador", url: "/gestao/painel-contador", icon: Calculator, perm: "fiscal.emitir" },
-          { title: "Certificado Digital", url: "/gestao/nfe-certificado", icon: Lock, perm: "fiscal.emitir" },
+          { title: "Certificado Digital", url: "/gestao/nfe-certificado", icon: Lock, perm: "config.editar" },
           { title: "Configurações SEFAZ", url: "/gestao/configuracoes-sefaz", icon: Settings, perm: "fiscal.emitir" },
           { title: "Documentos Demonstrativos", url: "/gestao/documentos-demonstrativos", icon: LineChart, perm: "fiscal.emitir" },
         ],

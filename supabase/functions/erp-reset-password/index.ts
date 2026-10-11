@@ -1,30 +1,28 @@
 // Edge Function: erp-reset-password
-// Envia email de redefinição de senha para um usuário (via Resend SMTP)
-// APENAS admins podem chamar esta função
+// Troca a senha de um usuário do ERP, ou envia o e-mail de redefinição.
+// APENAS admins ativos podem chamar esta função
 //
 // Chamada via:
-//   supabase.functions.invoke('reset-password', {
-//     body: { user_id: 'uuid-do-usuario' }
+//   supabase.functions.invoke('erp-reset-password', {
+//     body: {
+//       user_id: 'uuid-do-usuario',
+//       nova_senha?: string,     // define a senha na hora (mín. 6)
+//       redirect_base?: string,  // sem nova_senha: origem do ERP para o link do e-mail
+//     }
 //   })
+//
+// Revisão de 10/10/2026: não havia como trocar uma senha esquecida — a tela
+// prometia e-mail, e o link do e-mail usava SITE_URL (a do CRM) e caía na
+// tela do CRM. Agora o admin define a senha nova, ou o link vem para o ERP.
+// Também desbloqueia e zera as tentativas de login.
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { alvoDoErp, clienteAdmin, corsHeaders, exigirAdminAtivo, jsonResponse } from "../_shared/erp-admin.ts";
 
 interface ResetPasswordPayload {
   user_id: string;
+  nova_senha?: string;
+  redirect_base?: string;
 }
-
-interface ResetPasswordResponse {
-  success: boolean;
-  email?: string;
-  error?: string;
-}
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -32,111 +30,36 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // 1. Autenticação
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return jsonResponse({ success: false, error: "Não autenticado" }, 401);
-    }
+    const admin = clienteAdmin();
+    const chamador = await exigirAdminAtivo(req, admin, "trocar senhas");
+    if (chamador instanceof Response) return chamador;
 
-    const userClient = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-      {
-        global: { headers: { Authorization: authHeader } },
-        db: { schema: "erp" },
-      }
-    );
-
-    const { data: userData, error: userError } = await userClient.auth.getUser();
-    if (userError || !userData.user) {
-      return jsonResponse({ success: false, error: "Token inválido" }, 401);
-    }
-
-    // 2. Verifica se caller é admin
-    const { data: callerProfile } = await userClient
-      .from("erp_usuarios")
-      .select("role")
-      .eq("id", userData.user.id)
-      .single();
-
-    if (!callerProfile || callerProfile.role !== "admin") {
-      return jsonResponse(
-        { success: false, error: "Apenas administradores podem resetar senhas" },
-        403
-      );
-    }
-
-    // 3. Validação
     const body: ResetPasswordPayload = await req.json();
-    if (!body.user_id) {
-      return jsonResponse(
-        { success: false, error: "user_id é obrigatório" },
-        400
-      );
-    }
+    if (!body.user_id) return jsonResponse({ success: false, error: "user_id é obrigatório" }, 400);
 
-    // 4. Busca o email do usuário alvo
-    const { data: targetUser } = await userClient
-      .from("erp_usuarios")
-      .select("email")
-      .eq("id", body.user_id)
-      .single();
+    const alvo = await alvoDoErp(admin, chamador, body.user_id);
+    if (alvo instanceof Response) return alvo;
 
-    if (!targetUser?.email) {
-      return jsonResponse(
-        { success: false, error: "Usuário não encontrado" },
-        404
-      );
-    }
-
-    // 5. Envia email de redefinição (via Resend SMTP configurado no Supabase)
-    const siteUrl =
-      Deno.env.get("SITE_URL") || "http://localhost:3000";
-    const { error: resetError } = await userClient.auth.resetPasswordForEmail(
-      targetUser.email,
-      {
-        redirectTo: `${siteUrl}/auth/redefinir-senha`,
+    if (body.nova_senha !== undefined && body.nova_senha !== null && body.nova_senha !== "") {
+      if (String(body.nova_senha).length < 6) {
+        return jsonResponse({ success: false, error: "A senha deve ter pelo menos 6 caracteres" }, 400);
       }
-    );
-
-    if (resetError) {
-      return jsonResponse(
-        {
-          success: false,
-          error: `Erro ao enviar email: ${resetError.message}`,
-        },
-        500
-      );
+      const { error } = await admin.auth.admin.updateUserById(alvo.id, { password: String(body.nova_senha) });
+      if (error) return jsonResponse({ success: false, error: `Erro ao trocar a senha: ${error.message}` }, 500);
+    } else {
+      // O destino vem do próprio front do ERP: SITE_URL é a do CRM.
+      const base = String(body.redirect_base ?? "").replace(/\/+$/, "");
+      if (!/^https?:\/\//.test(base)) {
+        return jsonResponse({ success: false, error: "redirect_base inválido" }, 400);
+      }
+      const { error } = await admin.auth.resetPasswordForEmail(alvo.email, { redirectTo: `${base}/auth/redefinir-senha` });
+      if (error) return jsonResponse({ success: false, error: `Erro ao enviar e-mail: ${error.message}` }, 500);
     }
 
-    // 6. Reseta tentativas de login e desbloqueia (caso esteja bloqueado)
-    await userClient
-      .from("erp_usuarios")
-      .update({ tentativas_login: 0, bloqueado: false })
-      .eq("id", body.user_id);
-
-    return jsonResponse(
-      {
-        success: true,
-        email: targetUser.email,
-      },
-      200
-    );
+    await admin.from("erp_usuarios").update({ tentativas_login: 0, bloqueado: false }).eq("id", alvo.id);
+    return jsonResponse({ success: true, email: alvo.email, senha_trocada: !!body.nova_senha }, 200);
   } catch (err) {
     console.error("Erro inesperado:", err);
-    return jsonResponse(
-      {
-        success: false,
-        error: err instanceof Error ? err.message : "Erro interno do servidor",
-      },
-      500
-    );
+    return jsonResponse({ success: false, error: err instanceof Error ? err.message : "Erro interno do servidor" }, 500);
   }
 });
-
-function jsonResponse(body: any, status: number) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
