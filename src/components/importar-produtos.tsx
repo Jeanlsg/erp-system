@@ -41,6 +41,9 @@ const ALIASES: Record<string, string> = {
   categoria: "categoria", grupo: "categoria",
   preco_custo: "preco_custo", custo: "preco_custo", "preco de custo": "preco_custo",
   preco_venda: "preco_venda", venda: "preco_venda", "preco de venda": "preco_venda", preco: "preco_venda",
+  preco_atacado: "preco_atacado", atacado: "preco_atacado", "preco de atacado": "preco_atacado",
+  "preco atacado": "preco_atacado", "valor de atacado": "preco_atacado", "valor atacado": "preco_atacado",
+  valor_atacado: "preco_atacado",
   estoque: "estoque", quantidade: "estoque", qtd: "estoque", saldo: "estoque",
   estoque_minimo: "estoque_minimo", minimo: "estoque_minimo", "estoque minimo": "estoque_minimo",
   ncm: "ncm", cest: "cest", csosn: "csosn", cfop: "cfop_padrao", cfop_padrao: "cfop_padrao",
@@ -53,13 +56,18 @@ function validar(d: Record<string, string>): string[] {
   if (!d.nome) erros.push("sem nome");
   const venda = parseNumeroBR(d.preco_venda ?? "");
   if (venda === null || venda <= 0) erros.push("preço de venda ausente ou inválido");
+  // atacado é opcional (célula vazia nem chega aqui); preenchido, tem de ser número ≥ 0
+  if (d.preco_atacado !== undefined) {
+    const atacado = parseNumeroBR(d.preco_atacado);
+    if (atacado === null || atacado < 0) erros.push("valor de atacado inválido");
+  }
   return erros;
 }
 
 const MODELO_CSV =
-  "nome;sku;codigo_barras;categoria;preco_custo;preco_venda;estoque;estoque_minimo;ncm;cest;csosn;unidade;marca;validade_dias\n" +
-  "Whey Protein 900g Chocolate;WHEY-900-CHOC;7891234567890;Proteinas;89,90;149,90;10;3;21061000;1706200;102;UN;Marca X;540\n" +
-  "Creatina 300g;CREAT-300;7899876543210;Creatinas;45,00;119,90;15;5;21069090;1706200;102;UN;Marca Y;720\n";
+  "nome;sku;codigo_barras;categoria;preco_custo;preco_venda;preco_atacado;estoque;estoque_minimo;ncm;cest;csosn;unidade;marca;validade_dias\n" +
+  "Whey Protein 900g Chocolate;WHEY-900-CHOC;7891234567890;Proteinas;89,90;149,90;129,90;10;3;21061000;1706200;102;UN;Marca X;540\n" +
+  "Creatina 300g;CREAT-300;7899876543210;Creatinas;45,00;119,90;;15;5;21069090;1706200;102;UN;Marca Y;720\n";
 
 // ---------- componente ----------
 
@@ -83,6 +91,9 @@ export function ImportarProdutosDialog({ open, onOpenChange, lojas, lojaIdInicia
   const validos = useMemo(() => itens.filter((i) => i.erros.length === 0), [itens]);
   const invalidos = useMemo(() => itens.filter((i) => i.erros.length > 0), [itens]);
   const temEstoque = useMemo(() => validos.some((i) => i.dados.estoque), [validos]);
+  // Só manda a coluna de atacado quando a planilha traz algum: sem ela, a
+  // importação não depende da migration 115 e o banco grava nulo sozinho.
+  const temAtacado = useMemo(() => validos.some((i) => i.dados.preco_atacado), [validos]);
 
   const lerArquivo = async (arquivo: File) => {
     setResultado(null);
@@ -147,6 +158,8 @@ export function ImportarProdutosDialog({ open, onOpenChange, lojas, lojaIdInicia
           categoria_id: d.categoria ? catPorNome.get(semAcento(d.categoria)) ?? null : null,
           preco_custo: parseNumeroBR(d.preco_custo ?? "") ?? 0,
           preco_venda: parseNumeroBR(d.preco_venda!) ?? 0,
+          // todas as linhas com a mesma chave: vazio = sem atacado (nulo)
+          ...(temAtacado ? { preco_atacado: parseNumeroBR(d.preco_atacado ?? "") } : {}),
           estoque_minimo: parseNumeroBR(d.estoque_minimo ?? "") ?? 0,
           ncm: d.ncm ?? null,
           cest: d.cest ?? null,

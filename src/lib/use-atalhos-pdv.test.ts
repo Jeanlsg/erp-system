@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { combinacao } from "./use-atalhos-pdv";
+import { combinacao, engoleTeclaDesligada } from "./use-atalhos-pdv";
 
 const ev = (key: string, mod: { ctrl?: boolean; meta?: boolean; shift?: boolean } = {}) =>
   ({ key, ctrlKey: !!mod.ctrl, metaKey: !!mod.meta, shiftKey: !!mod.shift });
@@ -29,5 +29,18 @@ describe("combinacao", () => {
     // "Shift+A" e "A" como atalhos diferentes para a mesma tecla
     expect(combinacao(ev("A", { shift: true }))).toBe("A");
     expect(combinacao(ev("Tab", { shift: true }))).toBe("Shift+Tab");
+  });
+});
+
+describe("engoleTeclaDesligada", () => {
+  it("segura F6 e Ctrl+E desligados: no navegador eles levam o foco para a barra de endereço", () => {
+    expect(engoleTeclaDesligada("F6")).toBe(true);
+    expect(engoleTeclaDesligada("Ctrl+E")).toBe(true);
+    expect(engoleTeclaDesligada("Ctrl+D")).toBe(true);
+  });
+
+  it("deixa a edição de texto com o navegador", () => {
+    expect(engoleTeclaDesligada("Ctrl+A")).toBe(false);
+    expect(engoleTeclaDesligada("Ctrl+X")).toBe(false);
   });
 });

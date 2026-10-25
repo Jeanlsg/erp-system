@@ -72,7 +72,11 @@ export function PdvLayout() {
       {mostrarMenu && <AppSidebar />}
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-      {/* preto com borda vermelha, igual ao header do sistema (10/10/2026) */}
+      {/* preto com borda vermelha, igual ao header do sistema (10/10/2026).
+          Com a venda aberta ele sai: a frente de caixa tem o topo do sistema
+          anterior (abas, caixa, usuário, SAIR F12). Filial e logout ficam na
+          seleção de caixa, a um SAIR de distância. */}
+      {!vendendo && (
       <header className="dark flex shrink-0 items-center justify-between gap-3 border-b-2 border-b-red-600 bg-[#121212] px-4 py-2 text-foreground">
         <div className="flex items-center gap-3 min-w-0">
           <span className="font-semibold tracking-tight text-white">Frente de caixa</span>
@@ -128,6 +132,7 @@ export function PdvLayout() {
           </Button>
         </div>
       </header>
+      )}
 
       {/* overflow-hidden: o PDV controla o próprio scroll (catálogo e carrinho
           rolam separados) */}

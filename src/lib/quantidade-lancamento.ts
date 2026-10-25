@@ -49,6 +49,40 @@ export function quantidadeParaLancar(bruto: string | null | undefined): QtdValid
         + "Confira se um código de barras não foi bipado no campo de quantidade.",
     };
   }
-  // três casas bastam para peso; mais que isso é ruído de ponto flutuante
-  return { ok: true, qtd: Math.round(n * 1000) / 1000 };
+  // O estoque é contado em unidades inteiras (erp_estoque, movimentações,
+  // lotes e kits são integer; registrar_venda_pdv converte a quantidade com
+  // ::integer — conferido no banco em 25/10/2026). Uma fração passava daqui
+  // e a venda morria no servidor com "invalid input syntax for type
+  // integer"; na fila offline ela ficava bloqueada com a mercadoria já
+  // entregue. Recusar aqui, com o cliente na frente, é o lugar certo.
+  if (!Number.isInteger(n)) {
+    return { ok: false, erro: "A quantidade tem de ser um número inteiro: o estoque é controlado por unidade." };
+  }
+  return { ok: true, qtd: n };
+}
+
+/**
+ * "Quantidade em Dinheiro" (Ctrl+R), como no sistema anterior: o cliente diz
+ * quanto quer gastar e o campo de quantidade passa a receber o VALOR. Como o
+ * estoque é por unidade inteira, a quantidade é quantas unidades o valor
+ * compra (para baixo: R$ 10 de um item de R$ 3 = 3), com o mesmo teto do
+ * lançamento comum.
+ */
+export function quantidadePorValor(
+  bruto: string | null | undefined,
+  precoUnitario: number,
+): QtdValida | QtdInvalida {
+  const v = Number(String(bruto ?? "").trim().replace(",", "."));
+  if (!Number.isFinite(v) || v <= 0) {
+    return { ok: false, erro: "Informe o valor em dinheiro, maior que zero." };
+  }
+  if (!(precoUnitario > 0)) {
+    return { ok: false, erro: "Produto sem preço de venda: não dá para calcular a quantidade pelo valor." };
+  }
+  // centavos antes de dividir: 0,1 + 0,2 não pode virar 0,30000000000000004
+  const qtd = Math.floor(Math.round(v * 100) / Math.round(precoUnitario * 100) + 1e-9);
+  if (qtd < 1) {
+    return { ok: false, erro: "O valor informado não compra nem uma unidade deste produto." };
+  }
+  return quantidadeParaLancar(String(qtd));
 }

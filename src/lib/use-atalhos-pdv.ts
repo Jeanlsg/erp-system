@@ -31,6 +31,25 @@ export function combinacao(e: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" 
   return partes.join("+");
 }
 
+/**
+ * Combinações de edição de texto que o navegador tem de continuar fazendo
+ * quando o atalho do PDV está desligado (Ctrl+A seleciona, Ctrl+X recorta).
+ */
+const EDICAO_DE_TEXTO = new Set(["Ctrl+A", "Ctrl+C", "Ctrl+V", "Ctrl+X", "Ctrl+Z"]);
+
+/**
+ * Atalho DESLIGADO engole a tecla? Sim, menos as de edição de texto.
+ *
+ * Antes a tecla desligada seguia para o navegador: F6 e Ctrl+E levam o foco
+ * para a barra de endereço, o próximo bipe do leitor USB era digitado lá e o
+ * Enter navegava para fora — o cupom, que só existe na tela, se perdia
+ * (revisão de 25/10/2026, com as travas por permissão do vendedor).
+ * Exportada para teste.
+ */
+export function engoleTeclaDesligada(combo: string): boolean {
+  return !EDICAO_DE_TEXTO.has(combo);
+}
+
 export function useAtalhosPdv(atalhos: Atalho[], ativo = true) {
   const ref = useRef(atalhos);
   ref.current = atalhos;
@@ -40,7 +59,7 @@ export function useAtalhosPdv(atalhos: Atalho[], ativo = true) {
     const aoTeclar = (e: KeyboardEvent) => {
       const combo = combinacao(e);
       const atalho = ref.current.find((a) => a.tecla === combo);
-      if (!atalho || atalho.ativo === false) return;
+      if (!atalho) return;
 
       // Teclas de função e Ctrl+ valem em qualquer lugar; letra solta, não —
       // senão digitar no campo de busca viraria comando.
@@ -50,6 +69,11 @@ export function useAtalhosPdv(atalhos: Atalho[], ativo = true) {
         alvo.tagName === "INPUT" || alvo.tagName === "TEXTAREA" || alvo.isContentEditable
       );
       if (emCampo && !ehGlobal) return;
+
+      if (atalho.ativo === false) {
+        if (ehGlobal && engoleTeclaDesligada(combo)) { e.preventDefault(); e.stopPropagation(); }
+        return;
+      }
 
       e.preventDefault();
       e.stopPropagation();

@@ -169,7 +169,8 @@ export function RootLayout() {
                 <SelectContent>
                   {lojas.map((l) => (
                     <SelectItem key={l.id} value={l.id}>
-                      {l.apelido} {l.matriz && "★"}
+                      {/* ★ marca a matriz; desde a migration 114 o apelido já é "Matriz", e "Matriz ★" repetiria */}
+                      {l.apelido}{l.matriz && !/matriz/i.test(l.apelido ?? "") && " ★"}
                     </SelectItem>
                   ))}
                 </SelectContent>

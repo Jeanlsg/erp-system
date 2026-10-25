@@ -51,7 +51,9 @@ export function RelatorioContadoraPage() {
   const homologacaoNoMes = (data?.notas ?? []).filter((n) => n.ambiente !== "producao" && (n.status === "autorizada" || n.status === "cancelada")).length;
 
   const html = () => htmlRelatorioContadora({
-    mes, loja: loja?.apelido ?? loja?.nome ?? "", cnpj: loja?.cnpj, notas, entradas, inutilizacoes, homologacao: incluirHomologacao,
+    // o relatório vai para a contadora: nome comercial, não o apelido da tela
+    // ("Matriz"/"Filial" desde 10/2026 não diz qual CNPJ é qual)
+    mes, loja: loja?.nome ?? loja?.apelido ?? "", cnpj: loja?.cnpj, notas, entradas, inutilizacoes, homologacao: incluirHomologacao,
   });
 
   const imprimir = () => {
@@ -100,7 +102,7 @@ export function RelatorioContadoraPage() {
       const zip = zipSync(arquivos, { level: 6 });
       const url = URL.createObjectURL(new Blob([zip], { type: "application/zip" }));
       const a = document.createElement("a");
-      a.href = url; a.download = nomeDoZip(mes, loja?.apelido ?? "loja"); a.click();
+      a.href = url; a.download = nomeDoZip(mes, loja?.nome ?? loja?.apelido ?? "loja"); a.click();
       setTimeout(() => URL.revokeObjectURL(url), 10_000);
       toast.success(`ZIP pronto: ${Object.keys(arquivos).length - 1} XML + relatório.`);
       if (faltando.length) toast.warning(`Sem XML guardado: ${faltando.join(", ")}`, { duration: 12000 });
@@ -118,7 +120,7 @@ export function RelatorioContadoraPage() {
       <div>
         <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight"><Calculator className="h-6 w-6" /> Relatório da Contadora</h1>
         <p className="text-sm text-muted-foreground">
-          As notas do mês desta filial ({loja?.apelido ?? "—"}{loja?.cnpj ? ` · CNPJ ${loja.cnpj}` : ""}): imprimir e baixar todos os XML num ZIP.
+          As notas do mês desta loja ({loja?.apelido ?? "—"}{loja?.cnpj ? ` · CNPJ ${loja.cnpj}` : ""}): imprimir e baixar todos os XML num ZIP.
         </p>
       </div>
 

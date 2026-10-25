@@ -85,21 +85,35 @@ export interface LinhaAuditoria {
 export interface AlteracaoPreco {
   data: string;
   usuario_id: string | null;
-  campo: "preco_custo" | "preco_venda";
+  campo: "preco_custo" | "preco_venda" | "preco_atacado";
   antes: number | null;
   depois: number | null;
 }
 
-/** O que mudou em custo e preço de venda, do mais recente para o mais antigo. */
+export const ROTULO_CAMPO_PRECO: Record<AlteracaoPreco["campo"], string> = {
+  preco_venda: "Preço de venda",
+  preco_atacado: "Valor de atacado",
+  preco_custo: "Preço de custo",
+};
+
+/**
+ * O que mudou em custo, venda e atacado, do mais recente para o mais antigo.
+ * Atacado é o único que pode ser nulo (sem atacado, migration 115): nulo e
+ * zero são valores diferentes, e Number(null) é 0 — por isso a comparação
+ * trata o nulo antes de converter. Auditoria anterior à 115 não tem a chave
+ * (undefined) e não vira alteração.
+ */
 export function alteracoesDePreco(linhas: LinhaAuditoria[]): AlteracaoPreco[] {
   const out: AlteracaoPreco[] = [];
   for (const l of linhas) {
-    for (const campo of ["preco_venda", "preco_custo"] as const) {
+    for (const campo of ["preco_venda", "preco_atacado", "preco_custo"] as const) {
       const depois = l.dados_depois?.[campo];
       const antes = l.dados_antes?.[campo];
       const mudou = l.operacao === "INSERT"
         ? depois != null
-        : depois !== undefined && Number(antes) !== Number(depois);
+        : depois !== undefined && (
+          antes == null || depois == null ? (antes ?? null) !== depois : Number(antes) !== Number(depois)
+        );
       if (mudou) {
         out.push({
           data: l.created_at, usuario_id: l.usuario_id ?? null, campo,
@@ -124,6 +138,8 @@ export function htmlFichaProduto(p: {
   estoque: number;
   custo: number;
   preco: number;
+  /** valor de atacado; nulo/ausente = produto sem atacado, não imprime */
+  atacado?: number | null;
   movimentos: (Movimento & { usuario?: string })[];
 }): string {
   const r = resumoMovimentos(p.movimentos);
@@ -148,7 +164,7 @@ export function htmlFichaProduto(p: {
 <h1>${esc(p.produto.nome)}</h1>
 <div class="sub">${esc([p.produto.sku, p.produto.codigo_barras].filter(Boolean).join(" · "))} — ${esc(p.loja)} — período ${d(p.de)} a ${d(p.ate)}</div>
 <div class="resumo"><div>Estoque atual: <b>${esc(p.estoque)}</b></div><div>Custo: <b>${moeda(p.custo)}</b></div>
-<div>Preço de venda: <b>${moeda(p.preco)}</b></div><div>Entradas: <b>${r.entradas}</b></div><div>Saídas: <b>${r.saidas}</b> (vendidas: ${r.vendidas})</div></div>
+<div>Preço de venda: <b>${moeda(p.preco)}</b></div>${p.atacado != null ? `<div>Atacado: <b>${moeda(p.atacado)}</b></div>` : ""}<div>Entradas: <b>${r.entradas}</b></div><div>Saídas: <b>${r.saidas}</b> (vendidas: ${r.vendidas})</div></div>
 <table><thead><tr><th>Data</th><th>Tipo</th><th>Origem</th><th class="n">Qtd</th><th class="n">Saldo</th><th class="n">Custo un.</th><th>Usuário</th></tr></thead>
 <tbody>${linhas || '<tr><td colspan="7">Nenhuma movimentação no período.</td></tr>'}</tbody></table>
 <script>window.onload=function(){window.print()}</script></body></html>`;

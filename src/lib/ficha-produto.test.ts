@@ -38,6 +38,20 @@ describe("alteracoesDePreco", () => {
     const r = alteracoesDePreco([{ created_at: t(7), operacao: "INSERT", dados_antes: null, dados_depois: { preco_venda: 20, preco_custo: 8 } }]);
     expect(r.map((x) => x.campo).sort()).toEqual(["preco_custo", "preco_venda"]);
   });
+  it("atacado: nulo ↔ valor é alteração, nulo → nulo e auditoria sem a coluna não são", () => {
+    const base = { preco_venda: 30, preco_custo: 10 };
+    const r = alteracoesDePreco([
+      { created_at: t(6), operacao: "UPDATE", dados_antes: base, dados_depois: { ...base, nome: "X" } },
+      { created_at: t(7), operacao: "UPDATE", dados_antes: { ...base, preco_atacado: null }, dados_depois: { ...base, preco_atacado: null, nome: "Y" } },
+      { created_at: t(8), operacao: "UPDATE", dados_antes: { ...base, preco_atacado: null }, dados_depois: { ...base, preco_atacado: 0 } },
+      { created_at: t(9), operacao: "UPDATE", dados_antes: { ...base, preco_atacado: 0 }, dados_depois: { ...base, preco_atacado: 25 } },
+      { created_at: t(10), operacao: "UPDATE", dados_antes: { ...base, preco_atacado: 25 }, dados_depois: { ...base, preco_atacado: null } },
+      { created_at: t(11), operacao: "INSERT", dados_antes: null, dados_depois: { ...base, preco_atacado: null } },
+    ]);
+    expect(r.filter((x) => x.campo === "preco_atacado").map((x) => [x.antes, x.depois])).toEqual([
+      [25, null], [0, 25], [null, 0],
+    ]);
+  });
 });
 
 describe("rotuloOrigem e impressão", () => {
@@ -50,5 +64,10 @@ describe("rotuloOrigem e impressão", () => {
     const h = htmlFichaProduto({ produto: { nome: "<b>X</b>" }, loja: "L", de: "2026-10-01", ate: "2026-10-10", estoque: 1, custo: 1, preco: 2, movimentos: [] });
     expect(h).toContain("&lt;b&gt;X&lt;/b&gt;");
     expect(h).toContain("Nenhuma movimentação no período");
+    expect(h).not.toContain("Atacado");
+  });
+  it("imprime o atacado só quando o produto tem", () => {
+    const h = htmlFichaProduto({ produto: { nome: "X" }, loja: "L", de: "2026-10-01", ate: "2026-10-10", estoque: 1, custo: 1, preco: 2, atacado: 1.5, movimentos: [] });
+    expect(h).toMatch(/Atacado: <b>R\$\s1,50<\/b>/);
   });
 });

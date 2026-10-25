@@ -213,7 +213,7 @@ export function InventarioPage() {
                       className={`border-b last:border-0 hover:bg-muted/30 ${selecionado === inv.id ? "bg-muted/50" : ""}`}
                     >
                       <td className="whitespace-nowrap p-3">{new Date(inv.data_inicio).toLocaleString("pt-BR")}</td>
-                      <td className="p-3">{inv.loja?.nome ?? "—"}</td>
+                      <td className="p-3">{inv.loja?.apelido || inv.loja?.nome || "—"}</td>
                       <td className="p-3">
                         <Badge variant={STATUS[inv.status]?.variant ?? "outline"}>
                           {STATUS[inv.status]?.label ?? inv.status}
@@ -243,7 +243,7 @@ export function InventarioPage() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <CardTitle className="text-base">
-                  Contagem — {inventarioAtual?.loja?.nome ?? ""}
+                  Contagem — {inventarioAtual?.loja?.apelido || inventarioAtual?.loja?.nome || ""}
                 </CardTitle>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {itens.length} produto(s) · {divergencias.length} divergência(s) · {naoContados.length} sem contagem
@@ -343,7 +343,7 @@ export function InventarioPage() {
             <div className="space-y-1">
               <Label>Loja</Label>
               <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
-                {nomeLoja} <span className="text-muted-foreground">— a filial escolhida no topo</span>
+                {nomeLoja} <span className="text-muted-foreground">— a loja escolhida no topo</span>
               </p>
             </div>
             <div className="space-y-1">

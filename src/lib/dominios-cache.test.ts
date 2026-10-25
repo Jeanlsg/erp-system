@@ -31,6 +31,9 @@ describe("domínios do cache", () => {
 
   it("o resumo do caixa aberto está entre o que a venda recarrega", () => {
     expect(chavesDosDominios(...DOMINIOS_DA_VENDA)).toContain("erp_caixa-aberto");
+    // o vendedor vende no caixa de quem está acima: essa lista tem o resumo
+    // dele, e a invalidação por prefixo de "erp_caixa" NÃO a alcança
+    expect(chavesDosDominios(...DOMINIOS_DA_VENDA)).toContain("erp_caixa-operaveis");
   });
 
   it("invalida cada chave uma vez só, por prefixo", () => {

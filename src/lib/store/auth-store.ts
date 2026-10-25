@@ -3,12 +3,13 @@ import { persist } from "zustand/middleware";
 import { limparCacheDoUsuario } from "@/lib/query-client";
 import { useLojaAtualStore } from "./loja-atual";
 
-export type Role = "admin" | "gerente" | "caixa" | "estoquista";
+export type Role = "admin" | "gerente" | "caixa" | "estoquista" | "vendedor";
 
 /** Força de cada papel. O mais alto dos papéis do usuário vira o `role`
- *  principal — o que o RLS do banco consulta. */
-export const ROLE_RANK: Record<Role, number> = { admin: 4, gerente: 3, estoquista: 2, caixa: 1 };
-export const ROLES: Role[] = ["admin", "gerente", "estoquista", "caixa"];
+ *  principal — o que o RLS do banco consulta. O vendedor é o degrau de baixo
+ *  (outubro/2026): vende no caixa dele ou no de quem está acima. */
+export const ROLE_RANK: Record<Role, number> = { admin: 4, gerente: 3, estoquista: 2, caixa: 1, vendedor: 0 };
+export const ROLES: Role[] = ["admin", "gerente", "estoquista", "caixa", "vendedor"];
 
 /** O papel principal de um conjunto: o mais forte. Vazio → caixa. */
 export function papelPrincipal(papeis: Role[]): Role {
@@ -28,6 +29,8 @@ export type Permission =
   | "pdv.usar"
   | "caixa.abrir"
   | "caixa.fechar"
+  /** sangria e entrada de valores (Ctrl+S / Ctrl+E) — separada para o master tirar do vendedor */
+  | "caixa.sangria"
   | "venda.criar"
   | "venda.cancelar"
   | "venda.desconto"
@@ -91,16 +94,19 @@ export interface User {
   permissoes?: Record<string, boolean> | null;
 }
 
+// Nomes dos cargos pedidos pela loja (outubro/2026). Só o rótulo muda: a chave
+// "admin" continua no banco, nas policies e nas edge functions.
 export const roleLabels: Record<Role, string> = {
-  admin: "Administrador",
+  admin: "Usuário master",
   gerente: "Gerente",
-  caixa: "Operador de Caixa",
   estoquista: "Estoquista",
+  caixa: "Operador de caixa",
+  vendedor: "Vendedor",
 };
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   admin: [
-    "pdv.usar", "caixa.abrir", "caixa.fechar", "venda.criar", "venda.cancelar", "venda.desconto",
+    "pdv.usar", "caixa.abrir", "caixa.fechar", "caixa.sangria", "venda.criar", "venda.cancelar", "venda.desconto",
     "produto.ver", "produto.criar", "produto.editar", "produto.excluir",
     "estoque.ver", "estoque.ajustar", "estoque.transferir",
     "cliente.ver", "cliente.criar", "cliente.editar",
@@ -111,7 +117,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "loja.ver", "loja.criar", "loja.editar",
   ],
   gerente: [
-    "pdv.usar", "caixa.abrir", "caixa.fechar", "venda.criar", "venda.cancelar", "venda.desconto",
+    "pdv.usar", "caixa.abrir", "caixa.fechar", "caixa.sangria", "venda.criar", "venda.cancelar", "venda.desconto",
     "produto.ver", "produto.criar", "produto.editar",
     "estoque.ver", "estoque.ajustar", "estoque.transferir",
     "cliente.ver", "cliente.criar", "cliente.editar",
@@ -123,7 +129,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   caixa: [
     // fechar o próprio caixa faz parte do turno: quem abre, confere e fecha.
     // Sem isto o operador dependia de um gerente no fim do expediente.
-    "pdv.usar", "caixa.abrir", "caixa.fechar", "venda.criar", "venda.desconto",
+    "pdv.usar", "caixa.abrir", "caixa.fechar", "caixa.sangria", "venda.criar", "venda.desconto",
     "produto.ver", "estoque.ver",
     "cliente.ver", "cliente.criar",
   ],
@@ -132,6 +138,13 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "estoque.ver", "estoque.ajustar", "estoque.transferir",
     "compra.ver", "compra.criar", "compra.receber",
     "relatorio.ver", "loja.ver",
+  ],
+  // Padrão do vendedor: tudo o que o balcão faz. O master tira o que não
+  // quiser ao criar o login (permissões próprias do usuário).
+  vendedor: [
+    "pdv.usar", "caixa.abrir", "caixa.fechar", "caixa.sangria", "venda.criar", "venda.desconto",
+    "produto.ver", "estoque.ver",
+    "cliente.ver", "cliente.criar",
   ],
 };
 

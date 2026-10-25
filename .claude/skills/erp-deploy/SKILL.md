@@ -39,7 +39,7 @@ O service worker serve a navegação em network-first: a versão nova chega no p
 ## Edge functions (`erp-*`)
 
 Publicação = copiar os `.ts` da função (menos os `*.test.ts`) para o volume e reiniciar o
-container de funções. ⚠️ Função com mais de um arquivo (`erp-emitir-nfe` importa `./rateio.ts`):
+container de funções. ⚠️ Função com mais de um arquivo (`erp-emitir-nfe` importa `./rateio.ts` e `./loja-fiscal.ts`):
 copiar só o `index.ts` derruba a função com "module not found".
 
 ```bash

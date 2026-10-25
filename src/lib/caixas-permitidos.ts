@@ -43,6 +43,22 @@ export function podeVariosCaixas(
 }
 
 /**
+ * Vende também no caixa aberto por quem está acima dele (migration 113)?
+ *
+ * Só quem tem "vendedor" como papel PRINCIPAL — o mesmo campo que o banco
+ * olha (erp_usuarios.role, em erp.pode_operar_caixa). Quem é vendedor e
+ * também operador de caixa tem o caixa como principal e segue a regra dele:
+ * só o próprio turno. Espelha o banco para a tela não pedir a lista à toa;
+ * quem decide quais caixas são é erp.caixas_operaveis.
+ */
+export function vendeNoCaixaDeCima(
+  user: { admin_principal?: boolean | null; role?: string | null } | null | undefined,
+): boolean {
+  if (!user || user.admin_principal) return false;
+  return user.role === "vendedor";
+}
+
+/**
  * Pode cadastrar, renomear e apagar caixas? Admin ou gerente — o mesmo
  * critério de erp.is_erp_admin(), que é quem de fato recusa no banco. Aqui é
  * para não mostrar ao operador botões que falhariam.

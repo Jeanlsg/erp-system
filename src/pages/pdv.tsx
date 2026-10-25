@@ -19,19 +19,23 @@ import {
   UserPlus,
   Search, Keyboard,
   Bike, FileText, Receipt, ArrowLeft, WifiOff,
+  ChevronRight, CheckCircle2,
 } from "lucide-react";
-import { useProdutos, useCreateCaixa, useFecharCaixa, useKits, useCaixas, useCreateSangria, useCreateEntradaExtra, useEmitirNFeVenda, isSupabaseConfigured, useVendedores, useEstoqueLoja, usePontosVenda, useCriarPontosVenda, useRenomearPontoVenda, useRemoverPontoVenda, useConfigsCaixa, useSaldosPedidos, useAplicarEntradaPedido, useCaixasAbertosDoUsuario, useCaixasPermitidos, useRegioesEntrega } from "@/lib/supabase-queries";
-import { caixaAtivoNaLoja, caixasEmOutrasLojas, podeAbrirOutroCaixa } from "@/lib/loja-do-caixa";
+import { useProdutos, useCreateCaixa, useFecharCaixa, useKits, useCaixas, useCreateSangria, useCreateEntradaExtra, useEmitirNFeVenda, isSupabaseConfigured, useVendedores, useEstoqueLoja, usePontosVenda, useCriarPontosVenda, useRenomearPontoVenda, useRemoverPontoVenda, useConfigsCaixa, useSaldosPedidos, useAplicarEntradaPedido, useCaixasAbertosDoUsuario, useCaixasOperaveis, useCaixasPermitidos, useRegioesEntrega, useFeatureFlags } from "@/lib/supabase-queries";
+import {
+  caixaAtivoNaLoja, caixasEmOutrasLojas, podeAbrirOutroCaixa, caixasParaOperar, caixaDeOutraPessoa, motivoParaNaoFechar,
+} from "@/lib/loja-do-caixa";
 import { useLojaAtualStore } from "@/lib/store/loja-atual";
-import { quantidadeParaLancar, QTD_MAXIMA_POR_LANCAMENTO } from "@/lib/quantidade-lancamento";
-import { pontosQuePodeAbrir, podeVariosCaixas, podeGerirCaixas } from "@/lib/caixas-permitidos";
+import { quantidadeParaLancar, quantidadePorValor } from "@/lib/quantidade-lancamento";
+import { sections } from "@/components/app-sidebar";
+import { pontosQuePodeAbrir, podeVariosCaixas, podeGerirCaixas, vendeNoCaixaDeCima } from "@/lib/caixas-permitidos";
 import { formasParaDeclarar as escolherFormas, faltaDeclarar as temFormaPendente, argumentosDeFechamento } from "@/lib/fechamento-por-forma";
 import { toast } from "sonner";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
-import { useAuth, useAuthStore } from "@/lib/store/auth-store";
+import { useAuth, useAuthStore, ehOperadorDeBalcao, type Permission } from "@/lib/store/auth-store";
 import { usePdvModo } from "@/lib/store/pdv-modo";
 import { imprimirComprovante, abrirJanelaDoComprovante } from "@/lib/comprovante-fechamento";
 import { montarDadosFechamento } from "@/lib/dados-fechamento";
@@ -64,8 +68,61 @@ interface CartItem {
   preco_custo: number;
   quantidade: number;
   imagem_url?: string | null;
+  unidade?: string | null;
   /** desconto NESTA linha, em reais. O desconto geral continua à parte. */
   desconto?: number;
+}
+
+// ---------- frente de caixa no visual do sistema anterior (Excellent) ----------
+// A loja pediu a tela "exatamente igual" à frente de caixa que a equipe usava
+// (outubro/2026): as mesmas cores, os mesmos botões nos mesmos lugares. O que
+// antes ficava aberto na tela (vendedor, cliente, desconto, acréscimo,
+// sangria…) agora abre pelo botão ou atalho dele, como lá.
+const COR = {
+  fundo: "#f7f7f7",
+  texto: "#5e6272",
+  barra: "#242529",       // abas do topo e barra de baixo
+  painel: "#2f3237",      // faixas escuras e botões de ação
+  verde: "#33bb7d",       // aba ativa, botões do código, Add Pagamento
+  verdeEscuro: "#0d7550", // quadros de itens e descontos
+  verdeTotal: "#10a160",  // R$ TOTAL
+  vermelho: "#f05249",    // Cancelar venda
+  cupom: "#e7eff1",       // fundo do cupom
+} as const;
+
+/** Campo da coluna do código: borda cinza, letra grande, cinza quando travado. */
+const CAMPO_PDV =
+  "h-[34px] w-full rounded-[5px] border border-[#b9b9b9] bg-white px-2 text-[20px] text-[#5e6272] outline-none "
+  + "focus:border-[#66afe9] focus:shadow-[0_0_0_3px_rgba(102,175,233,0.3)] disabled:bg-[#eee]";
+
+/** 3 casas na quantidade, como no cupom do sistema anterior. */
+const fmtQtd = (n: number) => n.toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+const fmtValor = (n: number) => n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/** Data e hora do cupom, viva. Componente próprio para o segundo não redesenhar a tela inteira. */
+function RelogioCupom() {
+  const [agora, setAgora] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setAgora(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  return <span>{agora.toLocaleDateString("pt-BR")} {agora.toLocaleTimeString("pt-BR")}</span>;
+}
+
+/** Botão escuro de duas linhas: rótulo e atalho, como os do sistema anterior. */
+function BotaoAcaoPdv({ rotulo, tecla, onClick, disabled, title, className = "", grande = false }: {
+  rotulo: string; tecla?: string; onClick: () => void; disabled?: boolean; title?: string;
+  className?: string; grande?: boolean;
+}) {
+  return (
+    <button type="button" onClick={onClick} disabled={disabled} title={title}
+      className={`flex flex-col items-center justify-center text-center leading-[1.6] text-white transition-[filter] hover:brightness-125 disabled:cursor-not-allowed disabled:text-white/35 disabled:hover:brightness-100 ${
+        grande ? "text-base" : "text-[0.8rem]"} ${className}`}
+      style={{ backgroundColor: COR.painel }}>
+      <span>{rotulo}</span>
+      {tecla && <span>({tecla})</span>}
+    </button>
+  );
 }
 
 
@@ -121,11 +178,40 @@ export function PDVPage() {
   const { lojaId: lojaDoCabecalho, lojas } = useAutoSelectLoja();
   const setLojaGlobal = useLojaAtualStore((st) => st.setCurrentLojaId);
   const lojaId = lojaDoCabecalho;
-  const caixaAberto = caixaAtivoNaLoja(caixasAbertosMeus as any[], lojaId, caixaEscolhidoId) as any;
+  // Vendedor (migration 113): além do caixa dele, vende no turno ABERTO por
+  // alguém de função acima, nos caixas que o master liberou para ele. A lista
+  // vem do banco (erp.caixas_operaveis) porque a RLS não deixa o vendedor ler
+  // o papel de quem abriu; o banco confere de novo ao gravar a venda. As
+  // outras funções seguem só com o próprio caixa.
+  const operaCaixaDeCima = vendeNoCaixaDeCima(user as any);
+  const { data: caixasOperaveis = [] } = useCaixasOperaveis(user?.id, lojaId, operaCaixaDeCima);
+  const operaveisDaLoja = operaCaixaDeCima
+    ? (caixasOperaveis as any[]).filter((c) => c.loja_id === lojaId)
+    : [];
+  // os próprios primeiro (de qualquer filial), depois os de quem está acima, nesta
+  const caixasDaFrente = caixasParaOperar(caixasAbertosMeus as any[], operaveisDaLoja);
+  const caixaAberto = caixaAtivoNaLoja(caixasDaFrente, lojaId, caixaEscolhidoId) as any;
+  // O caixa da frente pode ser de outra pessoa (vendedor no turno do gerente):
+  // a faixa diz de quem é, e o fechamento fica com quem abriu.
+  const caixaDeOutro = caixaDeOutraPessoa(caixaAberto, user?.id);
+  /** Nome de quem abriu: da RPC (o vendedor não lê erp_usuarios dos outros) ou do embed. */
+  const nomeDeQuemAbriu = (cx: any) =>
+    cx?.operador_nome
+    ?? (operaveisDaLoja as any[]).find((o) => o.id === cx?.id)?.operador_nome
+    ?? cx?.usuario?.nome
+    ?? null;
+  const operaveisIds = new Set((operaveisDaLoja as any[]).map((o) => o.id));
   const abertosEmOutrasLojas = caixasEmOutrasLojas(caixasAbertosMeus as any[], lojaId);
   const aberturaPermitida = podeAbrirOutroCaixa(caixasAbertosMeus as any[], variosCaixas);
   const nomeDaLoja = (id?: string | null) =>
     (lojas as any[]).find((l) => l.id === id)?.apelido ?? "outra filial";
+  /** "001 — Juazeiro" para o próprio; "002 · de Fulano" para o turno de quem está acima. */
+  const rotuloDoCaixa = (cx: any) => {
+    const n = String(cx?.numero_caixa ?? "").padStart(3, "0");
+    return caixaDeOutraPessoa(cx, user?.id)
+      ? `${n} · de ${nomeDeQuemAbriu(cx) ?? "outra pessoa"}`
+      : `${n} — ${nomeDaLoja(cx?.loja_id)}`;
+  };
   /** Vai para um caixa aberto: troca a filial do topo e escolhe o caixa. */
   const irParaCaixa = (c: any) => {
     setLojaGlobal(c.loja_id);
@@ -203,6 +289,27 @@ export function PDVPage() {
   const [modalPrecos, setModalPrecos] = useState(false);
   const [modalLocalizar, setModalLocalizar] = useState(false);
   const [modalAtalhos, setModalAtalhos] = useState(false);
+  // O que antes ficava exposto ao lado do cupom agora abre pelo botão dele:
+  // vendedor (F1), cliente (F2), desconto (F6), acréscimo (Ctrl+F6).
+  const [modalVendedor, setModalVendedor] = useState(false);
+  const [modalBuscaCliente, setModalBuscaCliente] = useState(false);
+  const [modalDesconto, setModalDesconto] = useState(false);
+  const [tipoDesconto, setTipoDesconto] = useState<"geral" | "item">("geral");
+  const [itemDesconto, setItemDesconto] = useState("");
+  const [valorDescItem, setValorDescItem] = useState("");
+  const [descItemPct, setDescItemPct] = useState(false);
+  const [modalAcrescimo, setModalAcrescimo] = useState(false);
+  // Cancelar item (F8): pede o número do item, como no sistema anterior —
+  // sem depender de clicar na linha antes.
+  const [itemParaCancelar, setItemParaCancelar] = useState<string | null>(null);
+  // Quantidade em Dinheiro (Ctrl+R): o próximo lançamento lê o campo de
+  // quantidade como VALOR em reais (lib/quantidade-lancamento).
+  const [modalQtdDinheiro, setModalQtdDinheiro] = useState(false);
+  const [valorQtdDinheiro, setValorQtdDinheiro] = useState("");
+  const [qtdEmDinheiro, setQtdEmDinheiro] = useState(false);
+  // número da última venda gravada neste caixa — a venda em curso só ganha
+  // número ao ser gravada (registrar_venda_pdv)
+  const [ultimaVendaNumero, setUltimaVendaNumero] = useState<number | null>(null);
   // avisa o casco: com a venda aberta, a tela é do balcão e o menu sai
   const setVendendo = usePdvModo((s) => s.setVendendo);
   useEffect(() => {
@@ -245,6 +352,21 @@ export function PDVPage() {
   [caixas, user?.id, pontosVendaDaLoja]);
   // Fechar o turno de outra pessoa é supervisão; o banco recusa os demais.
   const podeFecharDeOutro = can("caixa.fechar") && can("financeiro.ver");
+  // Travas por permissão: o master tira do vendedor o que quiser ao criar o
+  // login (permissões próprias). Vão no `ativo` de cada atalho, então tecla e
+  // botão nunca divergem; o title do botão diz por quê.
+  //   · desconto/acréscimo (F6, Ctrl+F6, ⟳ do cupom, tela de pagamento, e o
+  //     preço/desconto do Alterar item — baixar o preço é dar desconto);
+  //   · sangria/entrada de valores (Ctrl+S, Ctrl+E);
+  //   · fechar caixa (Ctrl+X): a permissão E ter aberto o caixa.
+  // "Receber e finalizar" não tem trava: sem pré-venda, o vendedor ficaria
+  // sem como concluir a venda.
+  const podeDesconto = can("venda.desconto");
+  const podeSangria = can("caixa.sangria");
+  const podeAbrirCaixa = can("caixa.abrir");
+  const SEM_DESCONTO = "Seu usuário não tem permissão para dar desconto ou acréscimo. Fale com o usuário master.";
+  const SEM_SANGRIA = "Seu usuário não tem permissão para sangria ou entrada de valores. Fale com o usuário master.";
+  const motivoNaoFecha = motivoParaNaoFechar(caixaAberto, user?.id, can("caixa.fechar"), nomeDeQuemAbriu(caixaAberto));
   const [caixaParaFecharPorFora, setCaixaParaFecharPorFora] = useState<any | null>(null);
   const abertoHaMaisDeUmDia = (iso: string) =>
     new Date(iso).toDateString() !== new Date().toDateString();
@@ -436,6 +558,7 @@ export function PDVPage() {
         preco_custo: Number(p.preco_custo),
         quantidade: qtd,
         imagem_url: p.imagem_url,
+        unidade: p.unidade ?? null,
       }];
     });
   }, []);
@@ -448,13 +571,33 @@ export function PDVPage() {
     setEdDescontoPct(false);
   };
 
+  /**
+   * Menor preço que a linha aceita sem venda.desconto: o do cadastro, ou o
+   * que ela já tinha se for menor (um preço que veio de outra regra não
+   * trava a troca de quantidade).
+   */
+  const precoMinimoSemDesconto = (item: CartItem) => {
+    const tabela = Number((produtos as any[]).find((p) => p.id === item.produto_id)?.preco_venda ?? item.preco_unitario) || 0;
+    return Math.min(tabela, Number(item.preco_unitario) || 0);
+  };
+
   const aplicarEdicaoItem = () => {
     if (!itemEditando) return;
-    const qtd = Math.max(1, parseFloat(edQtd) || 1);
+    // mesma regra do lançamento: inteiro, com teto (lib/quantidade-lancamento)
+    const q = quantidadeParaLancar(edQtd);
+    if (!q.ok) { toast.error(q.erro); return; }
+    const qtd = q.qtd;
     const preco = Math.max(0, parseFloat(edPreco) || 0);
+    // Sem venda.desconto, o Alterar item só muda a quantidade e o preço para
+    // cima: baixar o preço ou descontar a linha é dar desconto por outro
+    // caminho. O desconto que a linha já tinha fica como estava.
+    if (!podeDesconto && preco < precoMinimoSemDesconto(itemEditando) - 0.005) {
+      toast.error(`Sem permissão de desconto: o preço não pode ficar abaixo de ${brl(precoMinimoSemDesconto(itemEditando))}.`);
+      return;
+    }
     const bruto = qtd * preco;
-    const informado = Math.max(0, parseFloat(edDesconto) || 0);
-    const descontoReais = edDescontoPct ? (bruto * informado) / 100 : informado;
+    const informado = podeDesconto ? Math.max(0, parseFloat(edDesconto) || 0) : Number(itemEditando.desconto) || 0;
+    const descontoReais = podeDesconto && edDescontoPct ? (bruto * informado) / 100 : informado;
     if (descontoReais > bruto) {
       toast.error("O desconto não pode passar do valor do item.");
       return;
@@ -463,6 +606,55 @@ export function PDVPage() {
       ? { ...i, quantidade: qtd, preco_unitario: preco, desconto: Math.round(descontoReais * 100) / 100 }
       : i));
     setItemEditando(null);
+  };
+
+  /** Item do cupom pelo número da linha (1, 2, 3…), como o operador o vê. */
+  const itemPeloNumero = (n: string) => cart[(parseInt(n, 10) || 0) - 1] ?? null;
+  /** O item que F7/F8/desconto usam: o clicado no cupom ou, sem clique, o último lançado. */
+  const itemDaVez = () => cart.find((i) => i.produto_id === itemSelecionado) ?? cart[cart.length - 1] ?? null;
+  const numeroDoItem = (item: CartItem | null) => (item ? cart.indexOf(item) + 1 : 0);
+
+  const abrirDesconto = (tipo: "geral" | "item") => {
+    // F6 e o ⟳ já ficam desligados sem a permissão; isto é a mesma regra na porta
+    if (!podeDesconto) { toast.error(SEM_DESCONTO); return; }
+    const item = itemDaVez();
+    setTipoDesconto(tipo);
+    setItemDesconto(item ? String(numeroDoItem(item)) : "");
+    setValorDescItem(item?.desconto ? String(item.desconto) : "");
+    setDescItemPct(false);
+    setModalDesconto(true);
+  };
+
+  /** Desconto Item (no diálogo de Desconto): mesma regra do Alterar item. */
+  const aplicarDescontoItem = () => {
+    const item = itemPeloNumero(itemDesconto);
+    if (!item) { toast.error("Este item não existe no cupom."); return; }
+    const bruto = item.quantidade * item.preco_unitario;
+    const informado = Math.max(0, parseFloat(valorDescItem.replace(",", ".")) || 0);
+    const descontoReais = descItemPct ? (bruto * informado) / 100 : informado;
+    if (descontoReais > bruto) {
+      toast.error("O desconto não pode passar do valor do item.");
+      return;
+    }
+    setCart((cur) => cur.map((i) => i.produto_id === item.produto_id
+      ? { ...i, desconto: Math.round(descontoReais * 100) / 100 }
+      : i));
+    setModalDesconto(false);
+  };
+
+  const inserirQtdDinheiro = () => {
+    if (!(Number(valorQtdDinheiro) > 0)) return;
+    setQtdLinha(String(valorQtdDinheiro).replace(".", ","));
+    setQtdEmDinheiro(true);
+    setModalQtdDinheiro(false);
+    // com o produto já conferido (TAB), Enter na quantidade lança; senão, bipa
+    setTimeout(() => (produtoNaLinha ? campoQtd : campoCodigo).current?.focus(), 50);
+  };
+
+  const abrirCancelarItem = () => {
+    const item = itemDaVez();
+    if (!item) return;
+    setItemParaCancelar(String(numeroDoItem(item)));
   };
 
   /** Acha o produto por código de barras ou SKU, sem diferenciar maiúscula. */
@@ -481,7 +673,9 @@ export function PDVPage() {
       campoCodigo.current?.select();
       return;
     }
-    const q = quantidadeParaLancar(qtdLinha);
+    const q = qtdEmDinheiro
+      ? quantidadePorValor(qtdLinha, Number(p.preco_venda))
+      : quantidadeParaLancar(qtdLinha);
     if (!q.ok) {
       // Recusar com aviso: o erro mais comum aqui é o bipe do próximo produto
       // caindo no campo de quantidade, porque o TAB deixa o foco nele.
@@ -490,9 +684,9 @@ export function PDVPage() {
       return;
     }
     adicionar(p, q.qtd);
-    setCodigo(""); setQtdLinha("1"); setProdutoNaLinha(null);
+    setCodigo(""); setQtdLinha("1"); setProdutoNaLinha(null); setQtdEmDinheiro(false);
     campoCodigo.current?.focus();
-  }, [produtoNaLinha, codigo, qtdLinha, acharPorCodigo, adicionar]);
+  }, [produtoNaLinha, codigo, qtdLinha, qtdEmDinheiro, acharPorCodigo, adicionar]);
 
   // o código volta a ser o campo ativo sempre que a venda começa do zero
   useEffect(() => { if (cart.length === 0) campoCodigo.current?.focus(); }, [cart.length]);
@@ -508,24 +702,23 @@ export function PDVPage() {
       toast.error(`Código ${c} não está no catálogo`);
       return;
     }
-    adicionar(p);
+    // Com "Quantidade em Dinheiro" ligado, o bipe também sai pelo valor —
+    // senão o item entrava com 1 e o modo ficava armado para o seguinte.
+    if (qtdEmDinheiro) {
+      const q = quantidadePorValor(qtdLinha, Number(p.preco_venda));
+      if (!q.ok) { toast.error(q.erro); return; }
+      adicionar(p, q.qtd);
+      setQtdLinha("1");
+      setQtdEmDinheiro(false);
+    } else {
+      adicionar(p);
+    }
     toast.success(`${p.nome} adicionado`, { duration: 1500 });
-  }, [produtos, adicionar]);
+  }, [produtos, adicionar, qtdEmDinheiro, qtdLinha]);
 
   // Leitor USB (emulação de teclado): bipar em qualquer lugar da tela
   // adiciona o item — sem precisar clicar ou abrir a câmera.
   useLeitorUsb(aoLerCodigo);
-
-  // Atualizar quantidade
-  const atualizarQuantidade = useCallback((id: string, qtd: number) => {
-    if (qtd <= 0) {
-      setCart((prev) => prev.filter((i) => i.produto_id !== id));
-    } else {
-      setCart((prev) =>
-        prev.map((i) => (i.produto_id === id ? { ...i, quantidade: qtd } : i))
-      );
-    }
-  }, []);
 
   // Remover item
   const remover = useCallback((id: string) => {
@@ -559,9 +752,15 @@ export function PDVPage() {
     pedirORestante(r.pagamentos);
   };
 
+  // Caixa em que o pagamento começou. A lista de caixas é relida (venda,
+  // sangria, a cada 60 s): se o turno fechar ou a tela cair noutro caixa com
+  // o pagamento aberto, a venda NÃO pode ir sem caixa nem para outra gaveta.
+  const caixaDoPagamento = useRef<string | null>(null);
+
   /** Abre a tela de pagamento, com o cursor já no valor. */
   const finalizar = () => {
     if (cart.length === 0) return;
+    caixaDoPagamento.current = caixaAberto?.id ?? null;
     setTelaPagamento(true);
     focarValorPagamento();
   };
@@ -600,6 +799,8 @@ export function PDVPage() {
     setPagamentos([]);
     setParcelasPagamento("1");
     setEntrega(null);
+    setQtdEmDinheiro(false);
+    setQtdLinha("1");   // o valor do Ctrl+R não pode virar quantidade da venda seguinte
     // NF-e é da venda; o padrão do terminal (sem nota / NFC-e) continua
     setDocFiscal((d) => (d === "nfe" ? lerDocFiscalPadrao() : d));
   }, []);
@@ -647,6 +848,10 @@ export function PDVPage() {
 
   const abrirCaixa = async () => {
     if (!user || !lojaId || !caixaSelecionado) return;
+    if (!podeAbrirCaixa) {
+      toast.error("Seu usuário não tem permissão para abrir caixa. Fale com o usuário master.");
+      return;
+    }
     if (!aberturaPermitida.ok) {
       // No banco, abrir o segundo caixa fecha o primeiro sem conferência.
       toast.error(`Feche antes o caixa aberto em ${nomeDaLoja((aberturaPermitida as any).aberto.loja_id)}.`);
@@ -699,6 +904,8 @@ export function PDVPage() {
 
   const handleFecharCaixa = async () => {
     if (!caixaAberto) return;
+    // o botão e o Ctrl+X já ficam desligados; isto é a mesma regra na porta
+    if (motivoNaoFecha) { toast.error(motivoNaoFecha); return; }
 
     // Por forma: a gaveta é o que o operador declarou em dinheiro; as outras
     // formas vão para o fechamento para conferir maquininha e extrato.
@@ -768,6 +975,15 @@ export function PDVPage() {
   const [finalizando, setFinalizando] = useState(false);
   const handleFinalizarVenda = async (pags: Pagamento[] = pagamentos) => {
     if (!lojaId || !user || cart.length === 0 || finalizando) return;
+    // ⚠️ Sem esta trava, um turno fechado com o pagamento aberto fazia a
+    // venda sair com caixa_id vazio (dinheiro em gaveta nenhuma) ou cair no
+    // outro caixa que a tela escolheu sozinha (revisão de 25/10/2026).
+    if (!caixaAberto || caixaAberto.id !== caixaDoPagamento.current) {
+      toast.error("O caixa desta venda foi fechado ou trocado com o pagamento aberto. Confira o caixa na faixa de cima e abra o pagamento de novo (F10).",
+        { duration: 10000 });
+      setTelaPagamento(false);
+      return;
+    }
     const faltaAgora = pags.length > 0 ? faltaPagar(total, pags) : total;
     if (pags.length === 0 || faltaAgora > 0) {
       toast.error(`Ainda falta receber ${brl(faltaAgora)}.`);
@@ -870,6 +1086,7 @@ export function PDVPage() {
         ? "Venda finalizada. O pedido de entrega está em Separação no Ciclo de pedidos."
         : "Venda finalizada com sucesso.");
       const vendaCriada = envio.resultado;
+      if (vendaCriada?.numero != null) setUltimaVendaNumero(Number(vendaCriada.numero));
 
       // A nota é acessória à venda: se a SEFAZ recusar, a venda continua
       // registrada e a nota pode ser emitida depois em Notas Fiscais.
@@ -895,6 +1112,10 @@ export function PDVPage() {
       console.error("Erro ao finalizar venda:", err);
       // Erro de regra (estoque, CPF, pagamento): a venda não aconteceu e
       // continua na tela para corrigir e confirmar de novo.
+      //
+      // Um dos erros é o caixa ter fechado (o gerente fechou o turno em que o
+      // vendedor vendia, migration 113): relê os caixas para a frente sair dele.
+      invalidarDominios(qc, "caixa");
       toast.error(
         `Erro ao finalizar venda: ${err?.message ?? "erro desconhecido"}. Verifique antes de tentar novamente.`,
         { duration: 10000 }
@@ -915,6 +1136,7 @@ export function PDVPage() {
 
   const handleSangria = async () => {
     if (!caixaAberto || !user || !sangriaValor || !sangriaMotivo) return;
+    if (!podeSangria) { toast.error(SEM_SANGRIA); return; }
     await createSangria.mutateAsync({
       caixa_id: caixaAberto.id,
       usuario_id: user.id,
@@ -988,6 +1210,7 @@ export function PDVPage() {
 
   const handleEntrada = async () => {
     if (!caixaAberto || !user || !entradaValor || !entradaMotivo) return;
+    if (!podeSangria) { toast.error(SEM_SANGRIA); return; }
     await createEntrada.mutateAsync({
       caixa_id: caixaAberto.id,
       usuario_id: user.id,
@@ -1001,29 +1224,49 @@ export function PDVPage() {
   };
 
   // ---- atalhos de teclado (mesmas teclas do sistema anterior da loja) ----
+  // Telas que a frente de caixa abre pelas abas do topo e pelo Devoluções —
+  // os itens e permissões vêm do menu (fonte única), e a página desligada em
+  // "Páginas do sistema" não aparece. Quem só opera o balcão não as vê: o
+  // RootLayout o devolveria para cá.
+  const { data: flags = [] } = useFeatureFlags();
+  const paginaLiberada = (url: string, perm?: Permission) => {
+    if (ehOperadorDeBalcao()) return false;
+    if (perm && !can(perm)) return false;
+    const flag = (flags as any[]).find((f) => f.path === url);
+    return !flag || flag.ativo;
+  };
+  const modulosComerciais = (sections.flatMap((s) => s.items)
+    .find((i) => i.url === "" && i.title === "Controle Comercial")?.children ?? [])
+    .filter((m) => paginaLiberada(m.url, m.perm));
+  const devolucoesLiberada = paginaLiberada("/devolucoes", "venda.criar");
+  // Sair da frente com cupom aberto perderia a venda (o cupom vive nesta tela).
+  const motivoNaoSai = cart.length > 0 ? "Finalize ou cancele a venda antes de sair da frente de caixa" : undefined;
+
   const ATALHOS: Atalho[] = [
-    { tecla: "F1", rotulo: "Vendedor", acao: () => document.querySelector<HTMLElement>("[data-campo='vendedor'] input, [data-campo='vendedor'] button")?.click() },
-    { tecla: "F2", rotulo: "Cliente", acao: () => setModalCliente(true) },
+    { tecla: "F1", rotulo: "Vendedor", acao: () => setModalVendedor(true) },
+    { tecla: "F2", rotulo: "Cliente", acao: () => setModalBuscaCliente(true) },
     { tecla: "F4", rotulo: "Código", acao: () => { campoCodigo.current?.focus(); campoCodigo.current?.select(); } },
     { tecla: "F5", rotulo: "Localizar", acao: () => setModalLocalizar(true) },
-    { tecla: "F6", rotulo: "Desconto no item", acao: () => {
-        const item = cart.find((i) => i.produto_id === itemSelecionado);
-        if (item) abrirEdicaoItem(item);
-        else toast.info("Escolha o item no cupom antes.");
-      }, ativo: cart.length > 0 },
+    // desconto e acréscimo: venda.desconto (o master tira do vendedor)
+    { tecla: "F6", rotulo: "Desconto", acao: () => abrirDesconto("geral"), ativo: cart.length > 0 && podeDesconto },
+    { tecla: "Ctrl+F6", rotulo: "Acréscimo", acao: () => setModalAcrescimo(true), ativo: cart.length > 0 && podeDesconto },
     { tecla: "F7", rotulo: "Alterar item", acao: () => {
-        const item = cart.find((i) => i.produto_id === itemSelecionado);
+        const item = itemDaVez();
         if (item) abrirEdicaoItem(item);
-        else toast.info("Escolha o item no cupom antes.");
       }, ativo: cart.length > 0 },
     { tecla: "F9", rotulo: "Consultar preço", acao: () => setModalPrecos(true) },
-    { tecla: "F8", rotulo: "Cancelar item", acao: () => { if (itemSelecionado) { remover(itemSelecionado); setItemSelecionado(null); } else toast.info("Escolha o item no cupom antes."); }, ativo: cart.length > 0 },
+    { tecla: "Ctrl+R", rotulo: "Quantidade em dinheiro", acao: () => { setValorQtdDinheiro(""); setModalQtdDinheiro(true); } },
+    { tecla: "F8", rotulo: "Cancelar item", acao: abrirCancelarItem, ativo: cart.length > 0 },
     { tecla: "F10", rotulo: "Pagamento", acao: finalizar, ativo: cart.length > 0 },
     { tecla: "F11", rotulo: "Cancelar venda", acao: () => { if (cart.length && confirm("Cancelar a venda e limpar o cupom?")) limparCarrinho(); }, ativo: cart.length > 0 },
-    { tecla: "Ctrl+S", rotulo: "Sangria", acao: () => setModalSangria(true), ativo: !!caixaAberto },
-    { tecla: "Ctrl+E", rotulo: "Entrada de valores", acao: () => setModalEntrada(true), ativo: !!caixaAberto },
+    // sangria e entrada de valores: caixa.sangria (112)
+    { tecla: "Ctrl+S", rotulo: "Sangria", acao: () => setModalSangria(true), ativo: !!caixaAberto && podeSangria },
+    { tecla: "Ctrl+E", rotulo: "Entrada de valores", acao: () => setModalEntrada(true), ativo: !!caixaAberto && podeSangria },
+    { tecla: "Ctrl+D", rotulo: "Devoluções", acao: () => navigate("/devolucoes"), ativo: devolucoesLiberada && !motivoNaoSai },
     { tecla: "Ctrl+A", rotulo: "Aplicar entrada em pedido", acao: () => setModalEntradaPedido(true), ativo: !!caixaAberto },
-    { tecla: "Ctrl+X", rotulo: "Fechar caixa", acao: () => setModalFechamento(true), ativo: !!caixaAberto },
+    // fechar: caixa.fechar E ter aberto o caixa — o vendedor no turno do
+    // gerente vende, mas quem conta a gaveta é quem abriu
+    { tecla: "Ctrl+X", rotulo: "Fechar caixa", acao: () => setModalFechamento(true), ativo: !!caixaAberto && !motivoNaoFecha },
     // F12 no sistema anterior sai da frente de caixa (leva para a seleção de
     // caixa, sem fechar o turno). O navegador reserva F12 para as ferramentas
     // de desenvolvedor e não deixa interceptar, então Ctrl+F12 faz o mesmo.
@@ -1037,22 +1280,44 @@ export function PDVPage() {
   useAtalhosPdv(ATALHOS, !telaPagamento);
   useAtalhosPdv([
     { tecla: "F10", rotulo: "Confirmar venda", acao: confirmarPagamento },
+    // recarregar a página aqui perde o cupom que está sendo pago
+    { tecla: "Ctrl+R", rotulo: "—", acao: () => toast.info("Recarregar a página perderia esta venda.") },
+    { tecla: "F5", rotulo: "—", acao: () => toast.info("Recarregar a página perderia esta venda.") },
   ], telaPagamento);
-  // a barra de baixo mostra só o que o operador usa a todo momento
-  const ATALHOS_VISIVEIS = ATALHOS.filter((a) =>
-    ["F4", "F5", "F7", "F8", "F9", "F10", "F11", "Ctrl+S", "Ctrl+X", "F12", "Ctrl+H"].includes(a.tecla));
+  const atalhoAtivo = (tecla: string) => ATALHOS.find((a) => a.tecla === tecla)?.ativo !== false;
+  // o botão obedece à mesma trava da tecla, mesmo que alguém esqueça o disabled
+  const disparar = (tecla: string) => {
+    const a = ATALHOS.find((x) => x.tecla === tecla);
+    if (a && a.ativo !== false) a.acao();
+  };
+
+  // o que a coluna da esquerda mostra: o produto conferido no TAB ou, sem ele,
+  // o último lançado — a foto e o preço de quem acabou de entrar no cupom
+  const ultimoItem = cart.length ? cart[cart.length - 1] : null;
+  const imagemDaVez = produtoNaLinha?.imagem_url ?? (produtoNaLinha ? null : ultimoItem?.imagem_url) ?? null;
+  const totalQtd = cart.reduce((q, i) => q + i.quantidade, 0);
+  // R$ Unitário e R$ Total da linha de lançamento, com a mesma regra que vai lançar
+  const precoNaLinha = produtoNaLinha ? Number(produtoNaLinha.preco_venda) || 0 : null;
+  const qtdNaLinha = precoNaLinha != null
+    ? (qtdEmDinheiro ? quantidadePorValor(qtdLinha, precoNaLinha) : quantidadeParaLancar(qtdLinha))
+    : null;
+  const totalNaLinha = precoNaLinha != null && qtdNaLinha?.ok ? precoNaLinha * qtdNaLinha.qtd : null;
 
   if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="PDV / Frente de Caixa" />;
 
   // =================== RENDER ===================
+  const naFrente = !!caixaAberto && !saiuDaFrente;
   return (
     <div className="flex h-full flex-col">
-      {/* Header */}
+      {/* Header da seleção/abertura de caixa. Na frente de caixa quem manda é
+          o topo no visual do sistema anterior (abas + Caixa/Usuário/Vendedor/Cliente). */}
+      {!naFrente && (
       <div className="flex items-center justify-between px-6 py-3 border-b bg-background">
         <div className="flex items-center gap-3">
           <Calculator className="h-6 w-6" />
-          {caixaAberto && caixasAbertosMeus.length > 1 ? (
-            /* Mais de um caixa aberto no mesmo nome: o crachá vira seletor.
+          {caixaAberto && caixasDaFrente.length > 1 ? (
+            /* Mais de um caixa para operar (os vários do admin, ou o do
+               vendedor e os de quem está acima dele): o crachá vira seletor.
                Escolher o caixa de outra filial troca a filial do topo — é a
                mesma decisão, e as duas não podem discordar. Com venda em
                andamento fica travado: o cupom não muda de loja no meio. */
@@ -1061,16 +1326,16 @@ export function PDVPage() {
               value={caixaAberto.id}
               disabled={cart.length > 0}
               onChange={(e) => {
-                const c = (caixasAbertosMeus as any[]).find((x) => x.id === e.target.value);
+                const c = (caixasDaFrente as any[]).find((x) => x.id === e.target.value);
                 if (c) irParaCaixa(c);
               }}
               title={cart.length > 0
                 ? "Finalize ou cancele a venda para trocar de caixa"
-                : "Alternar entre os caixas que você tem abertos"}
+                : "Alternar entre os caixas que você pode operar"}
             >
-              {(caixasAbertosMeus as any[]).map((c) => (
+              {(caixasDaFrente as any[]).map((c) => (
                 <option key={c.id} value={c.id}>
-                  Caixa #{c.numero_caixa} — {lojas.find((l: any) => l.id === c.loja_id)?.apelido ?? "loja"}
+                  Caixa {rotuloDoCaixa(c)}
                 </option>
               ))}
             </select>
@@ -1078,6 +1343,7 @@ export function PDVPage() {
             <Badge variant="default" className="bg-green-600">
               <Unlock className="h-3 w-3 mr-1" />
               Caixa #{caixaAberto.numero_caixa} Aberto
+              {caixaDeOutro && <> · de {nomeDeQuemAbriu(caixaAberto) ?? "outra pessoa"}</>}
             </Badge>
           ) : (
             <Badge variant="destructive">
@@ -1087,14 +1353,8 @@ export function PDVPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          {caixaAberto && variosCaixas && !saiuDaFrente && (
-            /* Abrir um segundo caixa sem fechar o primeiro. Só para quem pode
-               manter vários; o banco recusa dos outros. */
-            <Button variant="outline" size="sm" onClick={() => setSaiuDaFrente(true)}
-              title="Abrir outro caixa sem fechar este">
-              <Plus className="mr-1 h-4 w-4" /> Abrir outro caixa
-            </Button>
-          )}
+          {/* "Abrir outro caixa" saiu daqui: é o SAIR (F12) da frente de caixa,
+              que traz para esta tela com o turno aberto. */}
           <Button variant="outline" size="sm" onClick={() => setModalCaixasAbertos(true)}>
             Caixas em Aberto
           </Button>
@@ -1104,22 +1364,26 @@ export function PDVPage() {
           </Button>
           {caixaAberto && (
             <>
-              <Button size="sm" className="bg-neutral-900 text-white hover:bg-neutral-700" onClick={() => setModalSangria(true)}>
+              <Button size="sm" className="bg-neutral-900 text-white hover:bg-neutral-700" onClick={() => disparar("Ctrl+S")}
+                disabled={!atalhoAtivo("Ctrl+S")} title={podeSangria ? undefined : SEM_SANGRIA}>
                 Sangria <span className="ml-1 font-mono text-[10px] opacity-70">Ctrl+S</span>
               </Button>
-              <Button size="sm" className="bg-neutral-900 text-white hover:bg-neutral-700" onClick={() => setModalEntrada(true)}>
+              <Button size="sm" className="bg-neutral-900 text-white hover:bg-neutral-700" onClick={() => disparar("Ctrl+E")}
+                disabled={!atalhoAtivo("Ctrl+E")} title={podeSangria ? undefined : SEM_SANGRIA}>
                 Entrada Extra <span className="ml-1 font-mono text-[10px] opacity-70">Ctrl+E</span>
               </Button>
-              <Button size="sm" className="bg-red-600 text-white hover:bg-red-700" onClick={() => setModalFechamento(true)}>
+              <Button size="sm" className="bg-red-600 text-white hover:bg-red-700" onClick={() => disparar("Ctrl+X")}
+                disabled={!atalhoAtivo("Ctrl+X")} title={motivoNaoFecha ?? undefined}>
                 Fechar Caixa <span className="ml-1 font-mono text-[10px] opacity-80">Ctrl+X</span>
               </Button>
             </>
           )}
         </div>
       </div>
+      )}
 
       {/* Sem caixa aberto - mostrar abertura */}
-      {!caixaAberto || saiuDaFrente ? (
+      {!naFrente ? (
         <div className="flex-1 overflow-auto p-6">
           <div className="max-w-4xl mx-auto space-y-6">
             {/* Saiu da frente com o turno em aberto: o caminho de volta tem de
@@ -1155,7 +1419,9 @@ export function PDVPage() {
                 <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
                   <div>
                     <p className="font-medium">
-                      Caixa #{caixaAberto.numero_caixa} continua aberto no seu nome.
+                      {caixaDeOutro
+                        ? <>Caixa #{caixaAberto.numero_caixa} de {nomeDeQuemAbriu(caixaAberto) ?? "outra pessoa"} continua aberto.</>
+                        : <>Caixa #{caixaAberto.numero_caixa} continua aberto no seu nome.</>}
                     </p>
                     <p className="text-sm text-muted-foreground">
                       Sair da frente de caixa não encerra o turno — o movimento segue registrado.
@@ -1193,13 +1459,22 @@ export function PDVPage() {
                           abertoHaMaisDeUmDia(c.data_abertura) ? "border-amber-400 bg-amber-50 dark:bg-amber-950/20" : ""}`}>
                         <span>
                           <b>{c.ponto?.nome ?? `Caixa ${c.numero_caixa}`}</b> está aberto por{" "}
-                          <b>{c.usuario?.nome ?? "outro operador"}</b> desde{" "}
+                          <b>{nomeDeQuemAbriu(c) ?? "outro operador"}</b> desde{" "}
                           {new Date(c.data_abertura).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
                           {abertoHaMaisDeUmDia(c.data_abertura) && (
                             <span className="ml-1 text-amber-700 dark:text-amber-400">— ficou aberto de outro dia</span>
                           )}
                         </span>
-                        {podeFecharDeOutro ? (
+                        {operaveisIds.has(c.id) ? (
+                          /* vendedor: o turno de quem está acima, liberado para ele (113) */
+                          <Button size="sm" variant="outline" onClick={() => irParaCaixa(c)}
+                            disabled={cart.length > 0 && c.id !== caixaAberto?.id}
+                            title={cart.length > 0 && c.id !== caixaAberto?.id
+                              ? "Finalize ou cancele a venda antes de trocar de caixa"
+                              : "Vender neste caixa — o turno continua de quem abriu, e é ele quem fecha"}>
+                            Operar
+                          </Button>
+                        ) : podeFecharDeOutro ? (
                           <Button size="sm" variant="outline" onClick={() => setCaixaParaFecharPorFora(c)}
                             title="Fecha o turno dessa pessoa com o valor contado e um motivo, que vão para o relatório">
                             Fechar por fora
@@ -1320,8 +1595,10 @@ export function PDVPage() {
                 </div>
                 <Button
                   className="mt-4"
-                  disabled={!caixaSelecionado || !pontoSelecionado || !aberturaPermitida.ok}
-                  title={!aberturaPermitida.ok ? "Feche o caixa que está aberto antes de abrir outro" : undefined}
+                  disabled={!caixaSelecionado || !pontoSelecionado || !aberturaPermitida.ok || !podeAbrirCaixa}
+                  title={!podeAbrirCaixa
+                    ? "Seu usuário não abre caixa: venda no caixa aberto por quem está acima de você, ou fale com o usuário master."
+                    : !aberturaPermitida.ok ? "Feche o caixa que está aberto antes de abrir outro" : undefined}
                   onClick={() => void abrirCaixa()}
                 >
                   <Lock className="h-4 w-4 mr-2" />
@@ -1336,7 +1613,9 @@ export function PDVPage() {
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <AlertCircle className="h-4 w-4" />
                   <span className="text-sm">
-                    Selecione um caixa e clique em "Abrir Caixa" para iniciar as vendas.
+                    {podeAbrirCaixa
+                      ? "Selecione um caixa e clique em \"Abrir Caixa\" para iniciar as vendas."
+                      : "Seu usuário vende no caixa aberto por quem está acima de você. Quando um caixa liberado para você for aberto, ele aparece aqui (Operar)."}
                   </span>
                 </div>
               </CardContent>
@@ -1344,359 +1623,648 @@ export function PDVPage() {
           </div>
         </div>
       ) : (
-        /* Com caixa aberto - mostrar PDV */
-        <div className="flex-1 flex overflow-hidden">
-          {/* Painel Esquerdo: entrada por código e cupom.
+        /* Com caixa aberto: a frente de caixa no visual do sistema anterior —
+           abas, faixa do caixa, produto em letra grande, código à esquerda,
+           cupom à direita e os botões nos mesmos lugares. */
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden" style={{ backgroundColor: COR.fundo, color: COR.texto }}>
+          {/* Abas dos módulos de venda (itens e permissões do menu) */}
+          <nav className="flex shrink-0 gap-[3px] py-1" style={{ backgroundColor: COR.barra }}>
+            <span className="basis-[14%] truncate px-2 py-2.5 text-center text-sm font-bold"
+              style={{ color: COR.verde, backgroundColor: COR.barra }}>
+              Frente de Caixa
+            </span>
+            {modulosComerciais.map((m) => (
+              <button key={m.url} type="button" disabled={!!motivoNaoSai} title={motivoNaoSai}
+                onClick={() => navigate(m.url)}
+                className="basis-[14%] truncate px-2 py-2.5 text-center text-sm text-white hover:brightness-125 disabled:cursor-not-allowed disabled:text-white/50 disabled:hover:brightness-100"
+                style={{ backgroundColor: COR.painel }}>
+                {m.title.replace("/", " / ")}
+              </button>
+            ))}
+          </nav>
 
-              Não há catálogo em grade: balcão não escolhe produto na tela,
-              lê o código de barras ou digita. O catálogo continua acessível
-              em Localizar (F5), para quando o código não se lê. */}
-          <div className="flex flex-1 flex-col overflow-hidden border-r">
-            {/* Estado da conexão e da fila. Fica no topo do painel de venda
-                porque é a informação que muda o que o operador deve prometer
-                ao cliente — sem internet ainda não existe cupom fiscal. */}
-            {(!online || fila.pendentes > 0 || fila.bloqueadas > 0) && (
-              <div
-                className={`flex flex-wrap items-center gap-3 border-b px-4 py-2 text-sm ${
-                  online ? "bg-blue-50 dark:bg-blue-950/20" : "bg-amber-50 dark:bg-amber-950/20"
-                }`}
-              >
-                {online ? <Cloud className="h-4 w-4 text-blue-600" /> : <CloudOff className="h-4 w-4 text-amber-600" />}
-                <span className="font-medium">
-                  {online ? "Conectado" : "Sem internet — as vendas continuam"}
-                </span>
-                {fila.pendentes > 0 && (
-                  <span className="text-muted-foreground">
-                    {fila.pendentes} venda(s) aguardando envio
-                  </span>
-                )}
-                {fila.bloqueadas > 0 && (
-                  <button type="button" className="font-medium text-red-600 underline underline-offset-2"
-                    onClick={() => setVerRecusadas(true)}>
-                    {fila.bloqueadas} venda(s) recusada(s) pelo servidor — ver e resolver
-                  </button>
-                )}
-                {catalogo.usandoEspelho && catalogo.copiadoEm && (
-                  <span className="text-muted-foreground">
-                    catálogo de {new Date(catalogo.copiadoEm).toLocaleString("pt-BR")}
-                  </span>
-                )}
-                {online && fila.pendentes > 0 && (
-                  <Button size="sm" variant="outline" onClick={() => void fila.drenar()} disabled={fila.drenando}>
-                    {fila.drenando
-                      ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                      : <RefreshCw className="mr-1 h-3.5 w-3.5" />}
-                    Enviar agora
-                  </Button>
-                )}
-              </div>
-            )}
-
-            {catalogo.semCatalogo && (
-              <div className="border-b bg-red-50 px-4 py-2 text-sm text-red-700 dark:bg-red-950/20">
-                Sem internet e sem catálogo salvo neste computador. Abra o PDV uma vez com
-                conexão para que os produtos fiquem disponíveis offline.
-              </div>
-            )}
-
-
-            {/* Faixa escura com o último produto lançado, em letra grande, como no
-                sistema anterior: o operador confere de longe o que entrou. */}
-            <div className="flex items-center justify-between gap-3 bg-neutral-900 px-4 py-3 text-white">
-              <span className="truncate text-2xl font-bold tracking-wide uppercase">
-                {cart.length ? cart[cart.length - 1].nome : "Caixa livre"}
-              </span>
-              {cart.length > 0 && (
-                <span className="shrink-0 text-lg font-semibold tabular-nums text-red-400">
-                  {cart[cart.length - 1].quantidade} × {brl(cart[cart.length - 1].preco_unitario)}
+          {/* Caixa, usuário, vendedor (F1), cliente (F2) e SAIR (F12) */}
+          <div className="grid shrink-0 grid-cols-[2fr_2fr_2fr_3fr_2fr_auto] items-center gap-x-4 border-y border-black/10 px-5 py-2.5 text-xs italic leading-[1.6]"
+            style={{ backgroundColor: COR.painel, color: "#cecece" }}>
+            <div className="min-w-0">
+              <strong className="font-medium">Caixa:</strong>
+              <br />
+              {caixasDaFrente.length > 1 ? (
+                /* Mais de um caixa para operar: os vários do admin, ou o do
+                   vendedor e os de quem está acima dele (113). Escolher o de
+                   outra filial troca a filial do topo — é a mesma decisão. Com
+                   venda em andamento fica travado: o cupom não muda de caixa
+                   nem de loja no meio. */
+                <select
+                  className="max-w-full cursor-pointer bg-transparent italic text-[#cecece] outline-none disabled:cursor-not-allowed"
+                  value={caixaAberto.id}
+                  disabled={cart.length > 0}
+                  onChange={(e) => {
+                    const c = (caixasDaFrente as any[]).find((x) => x.id === e.target.value);
+                    if (c) irParaCaixa(c);
+                  }}
+                  title={cart.length > 0
+                    ? "Finalize ou cancele a venda para trocar de caixa"
+                    : "Alternar entre os caixas que você pode operar"}
+                >
+                  {(caixasDaFrente as any[]).map((c) => (
+                    <option key={c.id} value={c.id} className="bg-[#2f3237] not-italic">
+                      {rotuloDoCaixa(c)}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                /* o turno de outra pessoa diz de quem é: a gaveta é dela */
+                <span className="block truncate"
+                  title={caixaDeOutro ? "Você vende neste caixa; quem abriu é quem fecha" : undefined}>
+                  {caixaDeOutro
+                    ? rotuloDoCaixa(caixaAberto)
+                    : String(caixaAberto.numero_caixa ?? "").padStart(3, "0")}
                 </span>
               )}
             </div>
+            <div className="min-w-0">
+              <strong className="font-medium">Usuário:</strong>
+              <br />
+              <span className="block truncate">{user?.nome}</span>
+            </div>
+            <div className="min-w-0">
+              <strong className="font-medium">Vendedor (F1):</strong>{" "}
+              <button type="button" onClick={() => setModalVendedor(true)} title="Escolher o vendedor (F1)"
+                className="align-middle text-white hover:opacity-80">
+                <Search className="inline h-3 w-3" />
+              </button>
+              <br />
+              <span className="block truncate uppercase">
+                {(funcionarios as any[]).find((f) => f.id === vendedorId)?.nome ?? "Sem vendedor"}
+              </span>
+            </div>
+            <div className="min-w-0">
+              <strong className="font-medium">Cliente (F2):</strong>{" "}
+              <button type="button" onClick={() => setModalBuscaCliente(true)} title="Escolher o cliente (F2)"
+                className="align-middle text-white hover:opacity-80">
+                <Search className="inline h-3 w-3" />
+              </button>
+              <br />
+              <span className="block truncate uppercase">{clienteDaVenda?.nome_razao ?? "Cliente balcão"}</span>
+            </div>
+            <div className="min-w-0">
+              <strong className="font-medium">Loja:</strong>
+              <br />
+              <span className="block truncate">{nomeDaLoja(lojaId)}</span>
+            </div>
+            <button type="button" onClick={() => setSaiuDaFrente(true)}
+              title="Sair da frente de caixa — o turno continua aberto (F12 ou Ctrl+F12)"
+              className="h-7 px-3 text-[11px] not-italic text-[#e0e0e0] hover:brightness-125"
+              style={{ backgroundColor: "#43464d" }}>
+              SAIR (F12)
+            </button>
+          </div>
 
-            {/* Linha de entrada: código → TAB → quantidade */}
-            <div className="border-b bg-muted/20 p-3">
-              <div className="flex flex-wrap items-end gap-2">
-                <div className="min-w-[16rem] flex-1">
-                  <Label className="text-xs">Código <span className="text-muted-foreground">(F4)</span></Label>
-                  <Input
-                    ref={campoCodigo}
-                    className="mt-1 font-mono text-lg"
-                    placeholder="Bipe ou digite o código e pressione TAB"
-                    value={codigo}
-                    onChange={(e) => setCodigo(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") { e.preventDefault(); lancarPorCodigo(); }
-                      if (e.key === "Tab" && codigo.trim()) {
-                        // TAB confere o código e passa para a quantidade,
-                        // como no sistema antigo da loja
-                        const p = acharPorCodigo(codigo);
-                        if (p) { e.preventDefault(); setProdutoNaLinha(p); campoQtd.current?.focus(); }
-                      }
-                    }}
-                  />
-                </div>
-                <div className="w-28">
-                  <Label className="text-xs">Quantidade</Label>
-                  <Input
-                    ref={campoQtd}
-                    type="number" min="0" step="any" max={QTD_MAXIMA_POR_LANCAMENTO}
-                    className="mt-1 text-lg"
-                    value={qtdLinha}
-                    onChange={(e) => setQtdLinha(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); lancarPorCodigo(); } }}
-                  />
-                </div>
-                <Button onClick={lancarPorCodigo} disabled={!codigo.trim() && !produtoNaLinha}>
-                  <Plus className="mr-1 h-4 w-4" /> Lançar
+          {/* Estado da conexão e da fila. Só aparece quando muda o que o
+              operador pode prometer ao cliente — sem internet ainda não existe
+              cupom fiscal. */}
+          {(!online || fila.pendentes > 0 || fila.bloqueadas > 0) && (
+            <div
+              className={`flex shrink-0 flex-wrap items-center gap-3 border-b px-4 py-1.5 text-sm text-foreground ${
+                online ? "bg-blue-50" : "bg-amber-50"
+              }`}
+            >
+              {online ? <Cloud className="h-4 w-4 text-blue-600" /> : <CloudOff className="h-4 w-4 text-amber-600" />}
+              <span className="font-medium">
+                {online ? "Conectado" : "Sem internet — as vendas continuam"}
+              </span>
+              {fila.pendentes > 0 && (
+                <span className="text-muted-foreground">
+                  {fila.pendentes} venda(s) aguardando envio
+                </span>
+              )}
+              {fila.bloqueadas > 0 && (
+                <button type="button" className="font-medium text-red-600 underline underline-offset-2"
+                  onClick={() => setVerRecusadas(true)}>
+                  {fila.bloqueadas} venda(s) recusada(s) pelo servidor — ver e resolver
+                </button>
+              )}
+              {catalogo.usandoEspelho && catalogo.copiadoEm && (
+                <span className="text-muted-foreground">
+                  catálogo de {new Date(catalogo.copiadoEm).toLocaleString("pt-BR")}
+                </span>
+              )}
+              {online && fila.pendentes > 0 && (
+                <Button size="sm" variant="outline" className="h-7" onClick={() => void fila.drenar()} disabled={fila.drenando}>
+                  {fila.drenando
+                    ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                    : <RefreshCw className="mr-1 h-3.5 w-3.5" />}
+                  Enviar agora
                 </Button>
-                <Button variant="outline" onClick={() => setModalLocalizar(true)} title="Localizar produto (F5)">
-                  <Search className="mr-1 h-4 w-4" /> Localizar <span className="ml-1 text-xs opacity-60">F5</span>
-                </Button>
-                <Button variant="outline" size="icon" title="Ler pela câmera"
-                  onClick={() => setLeitorAberto(true)}>
+              )}
+            </div>
+          )}
+
+          {catalogo.semCatalogo && (
+            <div className="shrink-0 border-b bg-red-50 px-4 py-1.5 text-sm text-red-700">
+              Sem internet e sem catálogo salvo neste computador. Abra o PDV uma vez com
+              conexão para que os produtos fiquem disponíveis offline.
+            </div>
+          )}
+
+          {/* O produto em letra grande, como no sistema anterior: o operador
+              confere de longe o que está entrando. */}
+          <div className="mx-[13px] mt-[5px] flex shrink-0 items-center gap-4 px-6 pb-[15px] pt-[18px] text-white"
+            style={{ backgroundColor: COR.painel }}>
+            <CheckCircle2 className="h-6 w-6 shrink-0" style={{ color: "#2ecc71" }} />
+            <span className="min-w-0 flex-1 truncate text-[30px] uppercase leading-tight">
+              {produtoNaLinha?.nome ?? ultimoItem?.nome ?? "Caixa livre"}
+            </span>
+            {(produtoNaLinha || ultimoItem) && (
+              <span className="shrink-0 text-right text-xs leading-[1.6] tabular-nums">
+                {produtoNaLinha
+                  ? <>R$ Unitário<br />{brl(Number(produtoNaLinha.preco_venda))}</>
+                  : <>Último lançado<br />{fmtQtd(ultimoItem!.quantidade)} × {brl(ultimoItem!.preco_unitario)}</>}
+              </span>
+            )}
+          </div>
+
+          <div className="mt-3 grid min-h-0 flex-1 grid-cols-[minmax(240px,1fr)_minmax(0,3.1fr)] gap-[21px] px-[13px]">
+            {/* ---- coluna da esquerda: código → TAB → quantidade ---- */}
+            <div className="flex min-h-0 flex-col overflow-y-auto">
+              <label className="flex items-center gap-2 text-base font-medium leading-8">
+                Código <span className="text-[10px]">(F4)</span>
+                <button type="button" onClick={() => setModalLocalizar(true)} title="Localizar produto (F5)"
+                  className="hover:opacity-70">
+                  <Search className="h-3.5 w-3.5" />
+                </button>
+                <small className="ml-auto truncate pl-2 text-[0.6rem] italic text-[#888]">
+                  Pressione TAB para avançar para o campo quantidade
+                </small>
+              </label>
+              <div className="flex gap-[5px]">
+                <input
+                  ref={campoCodigo}
+                  className={`${CAMPO_PDV} min-w-0 flex-1`}
+                  value={codigo}
+                  onChange={(e) => { setCodigo(e.target.value); if (produtoNaLinha) setProdutoNaLinha(null); }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") { e.preventDefault(); lancarPorCodigo(); }
+                    if (e.key === "Tab" && codigo.trim()) {
+                      // TAB confere o código e passa para a quantidade,
+                      // como no sistema antigo da loja
+                      const p = acharPorCodigo(codigo);
+                      if (p) { e.preventDefault(); setProdutoNaLinha(p); campoQtd.current?.focus(); campoQtd.current?.select(); }
+                    }
+                  }}
+                />
+                <button type="button" onClick={lancarPorCodigo} disabled={!codigo.trim() && !produtoNaLinha}
+                  title="Lançar no cupom (Enter)"
+                  className="flex w-[50px] shrink-0 items-center justify-center rounded text-white hover:brightness-110 disabled:text-white/60"
+                  style={{ backgroundColor: COR.verde }}>
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+                <button type="button" onClick={() => setLeitorAberto(true)} title="Ler pela câmera"
+                  className="flex w-[50px] shrink-0 items-center justify-center rounded text-white hover:brightness-110"
+                  style={{ backgroundColor: COR.verde }}>
                   <Camera className="h-4 w-4" />
-                </Button>
+                </button>
               </div>
 
-              {/* O que o operador precisa ver antes de lançar */}
-              {produtoNaLinha ? (
-                <div className="mt-2 flex flex-wrap items-center gap-x-6 gap-y-1 rounded-md border bg-background px-3 py-2 text-sm">
-                  <span className="font-medium">{produtoNaLinha.nome}</span>
-                  <span className="text-muted-foreground">R$ Unitário: <b className="text-foreground">{brl(produtoNaLinha.preco_venda)}</b></span>
-                  <span className="text-muted-foreground">R$ Total: <b className="text-foreground">{brl(Number(produtoNaLinha.preco_venda) * (parseFloat(qtdLinha) || 1))}</b></span>
-                  <span className="text-muted-foreground">
-                    Qtd. Estoque:{" "}
-                    <b className={(saldoDe(produtoNaLinha) ?? 1) <= 0 ? "text-red-600" : "text-foreground"}>
-                      {saldoDe(produtoNaLinha) ?? "—"}
-                    </b>
-                  </span>
-                  {/* só avisa quando o saldo é CONHECIDO e não dá: produto sem
-                      posição de estoque na loja não é produto zerado */}
-                  {saldoDe(produtoNaLinha) !== null && saldoDe(produtoNaLinha)! <= 0 && (
-                    <span className="text-xs font-medium text-red-600">
-                      Produto está com o estoque zerado ou negativo
-                    </span>
+              <label className="mt-1 block text-base font-medium leading-8">
+                {qtdEmDinheiro ? "Valor em dinheiro:" : "Quantidade"}
+              </label>
+              <input
+                ref={campoQtd}
+                inputMode="decimal"
+                className={`${CAMPO_PDV} text-right`}
+                value={qtdLinha}
+                onChange={(e) => setQtdLinha(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); lancarPorCodigo(); } }}
+              />
+              {/* só avisa quando o saldo é CONHECIDO e não dá: produto sem
+                  posição de estoque na loja não é produto zerado */}
+              {produtoNaLinha && saldoDe(produtoNaLinha) !== null && saldoDe(produtoNaLinha)! <= 0 && (
+                <p className="mt-1 text-xs font-medium text-red-600">
+                  Produto está com o estoque zerado ou negativo!
+                </p>
+              )}
+
+              <div className="mt-2 grid grid-cols-2 gap-5">
+                <div className="min-w-0">
+                  <label className="block text-base font-medium leading-8">R$ Unitário</label>
+                  <input disabled className={`${CAMPO_PDV} text-right`}
+                    value={precoNaLinha != null ? fmtValor(precoNaLinha) : ""} />
+                </div>
+                <div className="min-w-0">
+                  <label className="block text-base font-medium leading-8">R$ Total</label>
+                  <input disabled className={`${CAMPO_PDV} text-right`}
+                    value={totalNaLinha != null ? fmtValor(totalNaLinha) : ""} />
+                </div>
+              </div>
+
+              <label className="mt-1 block text-base font-medium leading-8">Qtd. Estoque</label>
+              <input disabled
+                className={`${CAMPO_PDV} text-right disabled:bg-white ${
+                  produtoNaLinha && (saldoDe(produtoNaLinha) ?? 1) <= 0 ? "text-red-600" : ""}`}
+                value={produtoNaLinha ? String(saldoDe(produtoNaLinha) ?? "—") : ""} />
+
+              {/* Só aparecem quando têm valor, como no sistema anterior */}
+              {(acresc > 0 || taxaEntrega > 0) && (
+                <div className="mt-2 grid grid-cols-2 gap-5">
+                  {acresc > 0 && (
+                    <div className="min-w-0">
+                      <label className="block text-base font-medium leading-8">R$ Acréscimo</label>
+                      <input disabled className={`${CAMPO_PDV} text-right`} value={fmtValor(acresc)} />
+                    </div>
+                  )}
+                  {taxaEntrega > 0 && (
+                    <div className="min-w-0">
+                      <label className="block text-base font-medium leading-8">R$ Frete</label>
+                      <input disabled className={`${CAMPO_PDV} text-right`} value={fmtValor(taxaEntrega)} />
+                    </div>
                   )}
                 </div>
-              ) : (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Pressione TAB para conferir o produto e avançar para a quantidade, ou Enter para lançar 1.
-                </p>
               )}
-            </div>
 
-            {/* Cupom: os itens lançados */}
-            <div className="min-h-0 flex-1 overflow-auto">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 border-b bg-muted/40 text-xs uppercase text-muted-foreground">
-                  <tr>
-                    <th className="p-2 text-left">Item</th>
-                    <th className="p-2 text-left">Cód</th>
-                    <th className="p-2 text-left">Descrição</th>
-                    <th className="p-2 text-center">Un</th>
-                    <th className="p-2 text-right">Qtde</th>
-                    <th className="p-2 text-right">Vlr. unit.</th>
-                    <th className="p-2 text-right">Desc.</th>
-                    <th className="p-2 text-right">Total</th>
-                    <th className="p-2"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {cart.length === 0 ? (
-                    <tr><td colSpan={8} className="p-10 text-center text-muted-foreground">
-                      Nenhum item lançado. Bipe o código de barras para começar.
-                    </td></tr>
-                  ) : cart.map((item, i) => (
-                    <tr key={item.produto_id}
-                      onClick={() => setItemSelecionado(item.produto_id)}
-                      onDoubleClick={() => abrirEdicaoItem(item)}
-                      title="Clique para selecionar · duplo clique para alterar (F7)"
-                      className={`cursor-pointer border-b last:border-0 ${
-                        itemSelecionado === item.produto_id ? "bg-primary/10" : "hover:bg-accent"}`}>
-                      <td className="p-2 tabular-nums text-muted-foreground">{i + 1}</td>
-                      <td className="p-2 font-mono text-xs">{item.sku}</td>
-                      <td className="p-2">{item.nome}</td>
-                      <td className="p-2 text-center text-xs text-muted-foreground">UN</td>
-                      <td className="p-2 text-right tabular-nums">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button variant="outline" size="icon" className="h-6 w-6"
-                            onClick={(e) => { e.stopPropagation(); atualizarQuantidade(item.produto_id, item.quantidade - 1); }}>
-                            <span className="text-xs">-</span>
-                          </Button>
-                          <span className="w-8 text-center">{item.quantidade}</span>
-                          <Button variant="outline" size="icon" className="h-6 w-6"
-                            onClick={(e) => { e.stopPropagation(); atualizarQuantidade(item.produto_id, item.quantidade + 1); }}>
-                            <Plus className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </td>
-                      <td className="p-2 text-right tabular-nums">{brl(item.preco_unitario)}</td>
-                      <td className="p-2 text-right tabular-nums text-muted-foreground">
-                        {item.desconto ? "-" + brl(item.desconto) : "—"}
-                      </td>
-                      <td className="p-2 text-right font-semibold tabular-nums">
-                        {brl(item.preco_unitario * item.quantidade - (Number(item.desconto) || 0))}
-                      </td>
-                      <td className="p-2 text-right">
-                        <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive"
-                          onClick={(e) => { e.stopPropagation(); remover(item.produto_id); }} title="Cancelar item (F8)">
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+              {/* foto do produto da vez */}
+              <div className="mt-3 min-h-[90px] flex-1 rounded-[5px] border border-[#b9b9b9] bg-white bg-contain bg-center bg-no-repeat"
+                style={imagemDaVez ? { backgroundImage: `url("${imagemDaVez}")` } : undefined} />
 
-            {/* Barra de atalhos, como no sistema antigo: o operador enxerga a
-                tecla sem decorar */}
-            {/* Botões grandes em preto (cancelar em vermelho, pagamento em verde),
-                como pediu a loja: "tá muito branco, a pessoa se bate pra achar". */}
-            <div className="grid grid-cols-3 gap-1.5 border-t bg-neutral-100 p-2 sm:grid-cols-4 xl:grid-cols-6 dark:bg-neutral-900">
-              {ATALHOS_VISIVEIS.map((a) => (
-                <button key={a.tecla} type="button" onClick={a.acao} disabled={a.ativo === false}
-                  className={`flex flex-col items-center justify-center rounded-md px-2 py-2 text-center text-sm font-semibold leading-tight text-white shadow-sm transition-colors disabled:opacity-40 ${
-                    a.tecla === "F11" ? "bg-red-600 hover:bg-red-700"
-                      : a.tecla === "F10" ? "bg-green-600 hover:bg-green-700"
-                      : a.tecla === "Ctrl+X" ? "bg-red-800 hover:bg-red-900"
-                      : "bg-neutral-800 hover:bg-red-700"}`}>
-                  <span>{a.rotulo}</span>
-                  <span className="mt-0.5 font-mono text-[11px] font-normal opacity-75">({a.tecla})</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Painel Direito: quem vende, para quem, e o total */}
-          <div className="flex w-[420px] flex-col overflow-hidden bg-muted/30">
-            <div className="grid grid-cols-1 gap-2 border-b p-3">
-              <div data-campo="vendedor">
-                <Label className="text-xs">Vendedor <span className="text-muted-foreground">(F1)</span></Label>
-                <ComboboxBusca
-                  className="mt-1"
-                  itens={funcionarios.map((f: any) => ({
-                    id: f.id, rotulo: f.nome ?? f.cargo ?? "—", detalhe: f.cargo ?? undefined,
-                  }))}
-                  value={vendedorId}
-                  onChange={setVendedorId}
-                  vazio="Sem vendedor"
-                />
+              <div className="hidden h-[152px] shrink-0 items-center justify-center [@media(min-height:820px)]:flex">
+                <img src="/logo-xlife.png" alt="X-Life" className="max-h-24 max-w-[80%] object-contain" />
               </div>
-              <div>
-                <Label className="text-xs">Cliente <span className="text-muted-foreground">(F2)</span></Label>
-                <div className="mt-1 flex gap-1">
-                  <ComboboxBusca
-                    className="flex-1"
-                    itens={clientes.map((c: any) => ({
-                      id: c.id, rotulo: c.nome_razao,
-                      detalhe: [c.cpf_cnpj, c.celular ?? c.telefone].filter(Boolean).join(" · "),
-                    }))}
-                    value={clienteId}
-                    onChange={setClienteId}
-                    vazio="Cliente balcão"
-                  />
-                  <Button variant="outline" size="sm" className="h-9 shrink-0 px-2"
-                    onClick={() => setModalCliente(true)} title="Novo cliente pelo celular (busca no ERP e no CRM)">
-                    <UserPlus className="h-4 w-4" />
-                  </Button>
+            </div>
+
+            {/* ---- coluna da direita: cupom e botões ---- */}
+            <div className="flex min-h-0 min-w-0 flex-col">
+              <div className="flex min-h-[150px] flex-1 flex-col rounded border border-[#e3e3e3] p-[5px] font-['Courier_New',Courier,monospace] text-xs"
+                style={{ backgroundColor: COR.cupom }}>
+                <div className="flex shrink-0 items-center justify-between px-0.5 pb-1.5 pt-0.5">
+                  <RelogioCupom />
+                  {ultimaVendaNumero != null && (
+                    <span className="text-[13px]">ÚLTIMA VENDA N°. {ultimaVendaNumero}</span>
+                  )}
                 </div>
-                <ClienteRapidoPdvDialog
-                  open={modalCliente} onOpenChange={setModalCliente} online={online}
-                  onCliente={(id) => setClienteId(id)}
-                />
+                <div className="min-h-0 flex-1 overflow-auto">
+                  <table className="w-full table-fixed border-collapse text-[13.2px]">
+                    <colgroup>
+                      <col className="w-[7%]" /><col className="w-[11%]" /><col />
+                      <col className="w-[6%]" /><col className="w-[9%]" /><col className="w-[11%]" />
+                      <col className="w-[9%]" /><col className="w-[9%]" /><col className="w-[11%]" />
+                    </colgroup>
+                    <thead className="sticky top-0 z-10">
+                      <tr className="text-left text-white [&>th]:border-b [&>th]:border-r [&>th]:border-b-[#b1b1b1] [&>th]:border-r-[#cfd8db] [&>th]:p-2 [&>th]:font-medium"
+                        style={{ backgroundColor: COR.painel }}>
+                        <th>ITEM</th>
+                        <th>CÓD</th>
+                        <th>DESC ITEM</th>
+                        <th>UN</th>
+                        <th>QTDE</th>
+                        <th>VLR. UNIT</th>
+                        <th>
+                          <span className="flex items-center justify-between gap-1">
+                            % DESC
+                            <button type="button" title={podeDesconto ? "Aplicar desconto no item" : SEM_DESCONTO}
+                              disabled={cart.length === 0 || !podeDesconto}
+                              onClick={() => abrirDesconto("item")} className="hover:opacity-70 disabled:opacity-40">
+                              <RefreshCw className="h-3 w-3" />
+                            </button>
+                          </span>
+                        </th>
+                        <th>
+                          <span className="flex items-center justify-between gap-1">
+                            R$ DESC
+                            <button type="button" title={podeDesconto ? "Aplicar desconto no item" : SEM_DESCONTO}
+                              disabled={cart.length === 0 || !podeDesconto}
+                              onClick={() => abrirDesconto("item")} className="hover:opacity-70 disabled:opacity-40">
+                              <RefreshCw className="h-3 w-3" />
+                            </button>
+                          </span>
+                        </th>
+                        <th className="!border-r-0">TOTAL</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {cart.map((item, i) => {
+                        const bruto = item.preco_unitario * item.quantidade;
+                        const descItem = Number(item.desconto) || 0;
+                        return (
+                          <tr key={item.produto_id}
+                            onClick={() => setItemSelecionado(item.produto_id)}
+                            onDoubleClick={() => abrirEdicaoItem(item)}
+                            title="Clique para selecionar · duplo clique para alterar (F7)"
+                            className={`cursor-pointer [&>td]:truncate [&>td]:border-b [&>td]:border-dotted [&>td]:border-b-[#2f3237] [&>td]:p-2.5 ${
+                              itemSelecionado === item.produto_id ? "bg-[#cfdde2]" : "hover:bg-[#dbe6e9]"}`}>
+                            <td>{i + 1}</td>
+                            <td>{item.sku}</td>
+                            <td className="uppercase">{item.nome}</td>
+                            <td className="uppercase">{item.unidade || "UN"}</td>
+                            <td className="text-right">{fmtQtd(item.quantidade)}</td>
+                            <td className="text-right">{fmtValor(item.preco_unitario)}</td>
+                            <td className="text-right">{bruto > 0 ? fmtValor((descItem / bruto) * 100) : "0,00"}</td>
+                            <td className="text-right">{fmtValor(descItem)}</td>
+                            <td className="text-right">{brl(bruto - descItem)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
 
-            {/* Desconto e acréscimo na tela principal (pedido da loja: "aqui não tem o
-                desconto na tela principal"). O mesmo estado da tela de pagamento;
-                trava depois do primeiro pagamento lançado, como lá. O desconto de
-                UM item continua no F6/F7. (Aqui ficava uma segunda lista
-                "Carrinho" que repetia o cupom.) */}
-            <div className="flex-1 overflow-y-auto p-4">
-              <div className="rounded-md border-2 border-red-600/70 bg-background p-3">
-                <p className="mb-2 text-sm font-semibold text-red-700 dark:text-red-400">Desconto e acréscimo da venda</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-xs">Desconto geral</Label>
-                    <div className="mt-1 flex gap-1">
-                      <Input type="number" step="0.01" min="0" placeholder="0,00" value={desconto}
-                        disabled={pagamentos.length > 0 || cart.length === 0}
-                        onChange={(e) => setDesconto(e.target.value)} className="h-10 text-base" />
-                      <Button type="button" variant={descontoPercentual ? "default" : "outline"} className="h-10 px-3"
-                        disabled={pagamentos.length > 0 || cart.length === 0}
-                        onClick={() => setDescontoPercentual(!descontoPercentual)}
-                        title="Alternar entre R$ e %">{descontoPercentual ? "%" : "R$"}</Button>
+              {/* Botões de ação e totais */}
+              <div className="mt-6 grid shrink-0 grid-cols-[7fr_5fr] gap-6">
+                <div className="grid grid-cols-3 grid-rows-[60px_60px] gap-1">
+                  <BotaoAcaoPdv rotulo="Fechar Caixa" tecla="Ctrl + X" onClick={() => disparar("Ctrl+X")}
+                    disabled={!atalhoAtivo("Ctrl+X")} title={motivoNaoFecha ?? undefined} />
+                  <BotaoAcaoPdv rotulo="Alterar item" tecla="F7" onClick={() => disparar("F7")} disabled={!atalhoAtivo("F7")} />
+                  <BotaoAcaoPdv rotulo="Consultar preço" tecla="F9" onClick={() => disparar("F9")} />
+                  <BotaoAcaoPdv rotulo="Quantidade em Dinheiro" tecla="Ctrl + R" onClick={() => disparar("Ctrl+R")} />
+                  <BotaoAcaoPdv rotulo="Cancelar item" tecla="F8" onClick={() => disparar("F8")} disabled={!atalhoAtivo("F8")} />
+                  <BotaoAcaoPdv rotulo="Localizar" tecla="F5" onClick={() => disparar("F5")} />
+                </div>
+
+                <div className="grid grid-cols-2 grid-rows-[40px_40px_40px] gap-1 text-white">
+                  <div className="grid grid-cols-[1fr_1.35fr] gap-1">
+                    <div className="flex items-center justify-between px-2 text-[0.8rem] leading-none" style={{ backgroundColor: COR.verdeEscuro }}>
+                      <span>Total<br />Itens</span>
+                      <span className="text-[15px] tabular-nums">{cart.length}</span>
+                    </div>
+                    <div className="flex items-center justify-between px-2 text-[0.8rem] leading-none" style={{ backgroundColor: COR.verdeEscuro }}>
+                      <span>Tot.<br />Qtd</span>
+                      <span className="text-[15px] tabular-nums">
+                        {totalQtd.toLocaleString("pt-BR", { minimumFractionDigits: 4, maximumFractionDigits: 4 })}
+                      </span>
                     </div>
                   </div>
-                  <div>
-                    <Label className="text-xs">Acréscimo (R$)</Label>
-                    <Input type="number" step="0.01" min="0" placeholder="0,00" value={acrescimo}
-                      disabled={pagamentos.length > 0 || cart.length === 0}
-                      onChange={(e) => setAcrescimo(e.target.value)} className="mt-1 h-10 text-base" />
+                  <div className="row-span-2 flex flex-col justify-between p-[5px]" style={{ backgroundColor: COR.verdeTotal }}>
+                    <span className="px-1.5 pt-2 text-right text-xs font-bold">R$ TOTAL</span>
+                    <span className="truncate px-0.5 text-right font-[Arial,sans-serif] text-4xl leading-none tabular-nums">
+                      {fmtValor(total)}
+                    </span>
                   </div>
+                  <div className="flex items-center justify-between px-2 text-[0.8rem] leading-none" style={{ backgroundColor: COR.verdeEscuro }}>
+                    <span>R$ de<br />Descontos</span>
+                    <span className="text-[15px] tabular-nums">{fmtValor(totalDesconto)}</span>
+                  </div>
+                  <button type="button"
+                    onClick={() => {
+                      // O F11 já perguntava; o botão limpava direto. Mesmo ato,
+                      // mesma pergunta — perder o cupom por um clique errado é
+                      // refazer a venda com o cliente esperando.
+                      if (cart.length === 0 || confirm("Cancelar a venda e limpar o cupom?")) limparCarrinho();
+                    }}
+                    className="text-[0.8rem] hover:brightness-110" style={{ backgroundColor: COR.vermelho }}>
+                    Cancelar venda (F11)
+                  </button>
+                  <button type="button" onClick={finalizar} disabled={cart.length === 0}
+                    title="Abre a tela de pagamento (F10)"
+                    className="text-[0.8rem] hover:brightness-110 disabled:cursor-not-allowed disabled:text-white/60 disabled:hover:brightness-100"
+                    style={{ backgroundColor: COR.verde }}>
+                    Add Pagamento (F10)
+                  </button>
                 </div>
-                <p className="mt-2 text-[11px] text-muted-foreground">
-                  Desconto em um item só: selecione o item e use F6. Depois de lançar pagamento, desconto e
-                  acréscimo travam — remova os pagamentos para alterar.
-                </p>
-              </div>
-            </div>
-
-            {/* Totais — o pagamento em si é a tela exclusiva (F10) */}
-            <div className="space-y-2 border-t bg-background p-3">
-              <div className="grid grid-cols-3 gap-1.5 text-white">
-                <div className="rounded-md bg-neutral-800 px-2 py-1.5">
-                  <p className="text-[10px] uppercase opacity-75">Itens</p>
-                  <p className="text-base font-bold tabular-nums">{cart.length} · {cart.reduce((q, i) => q + i.quantidade, 0)}</p>
-                </div>
-                <div className="rounded-md bg-neutral-800 px-2 py-1.5">
-                  <p className="text-[10px] uppercase opacity-75">Subtotal</p>
-                  <p className="text-base font-bold tabular-nums">{brl(subtotal)}</p>
-                </div>
-                <div className={`rounded-md px-2 py-1.5 ${totalDesconto > 0 ? "bg-red-600" : "bg-neutral-800"}`}>
-                  <p className="text-[10px] uppercase opacity-75">Descontos</p>
-                  <p className="text-base font-bold tabular-nums">{totalDesconto > 0 ? "-" : ""}{brl(totalDesconto)}</p>
-                </div>
-              </div>
-              {(acresc > 0 || taxaEntrega > 0) && (
-                <div className="flex justify-between px-1 text-sm">
-                  <span>{acresc > 0 ? "Acréscimo" : ""}{acresc > 0 && taxaEntrega > 0 ? " + " : ""}{taxaEntrega > 0 ? "Entrega" : ""}</span>
-                  <span className="tabular-nums">+{brl(acresc + taxaEntrega)}</span>
-                </div>
-              )}
-              <div className="flex items-end justify-between rounded-md bg-green-600 px-3 py-2 text-white">
-                <span className="text-sm font-semibold uppercase">Total</span>
-                <span className="text-4xl font-bold tabular-nums">{brl(total)}</span>
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <Button className="flex-1 bg-red-600 text-white hover:bg-red-700"
-                  onClick={() => {
-                    // O F11 já perguntava; o botão limpava direto. Mesmo ato,
-                    // mesma pergunta — perder o cupom por um clique errado é
-                    // refazer a venda com o cliente esperando.
-                    if (cart.length === 0 || confirm("Cancelar a venda e limpar o cupom?")) {
-                      limparCarrinho();
-                    }
-                  }}>
-                  <X className="h-4 w-4 mr-1" />
-                  Cancelar venda (F11)
-                </Button>
-                <Button
-                  className="flex-1 bg-green-600 hover:bg-green-700"
-                  disabled={cart.length === 0}
-                  onClick={finalizar}
-                  title="Abre a tela de pagamento (F10)"
-                >
-                  <Check className="h-4 w-4 mr-1" />
-                  Pagamento (F10)
-                </Button>
               </div>
             </div>
           </div>
+
+          {/* Barra de baixo: o que antes ficava exposto na tela abre daqui */}
+          <footer className="mt-1 flex shrink-0 gap-[3px] py-1" style={{ backgroundColor: COR.barra }}>
+            <BotaoAcaoPdv grande className="basis-[12.3%] py-[15px]" rotulo="Desconto" tecla="F6"
+              onClick={() => disparar("F6")} disabled={!atalhoAtivo("F6")}
+              title={podeDesconto ? undefined : SEM_DESCONTO} />
+            <BotaoAcaoPdv grande className="basis-[12.3%] py-[15px]" rotulo="Acréscimo" tecla="Ctrl + F6"
+              onClick={() => disparar("Ctrl+F6")} disabled={!atalhoAtivo("Ctrl+F6")}
+              title={podeDesconto ? undefined : SEM_DESCONTO} />
+            <BotaoAcaoPdv grande className="basis-[12.3%] py-[15px]" rotulo="Sangria" tecla="Ctrl + S"
+              onClick={() => disparar("Ctrl+S")} disabled={!atalhoAtivo("Ctrl+S")}
+              title={podeSangria ? undefined : SEM_SANGRIA} />
+            <BotaoAcaoPdv grande className="basis-[12.3%] py-[15px]" rotulo="Entrada de Valores" tecla="Ctrl + E"
+              onClick={() => disparar("Ctrl+E")} disabled={!atalhoAtivo("Ctrl+E")}
+              title={podeSangria ? undefined : SEM_SANGRIA} />
+            {devolucoesLiberada && (
+              <BotaoAcaoPdv grande className="basis-[12.3%] py-[15px]" rotulo="Devoluções" tecla="Ctrl + D"
+                onClick={() => disparar("Ctrl+D")} disabled={!atalhoAtivo("Ctrl+D")} title={motivoNaoSai} />
+            )}
+            <BotaoAcaoPdv grande className="basis-[12.3%] py-[15px]" rotulo="Aplicar Entrada" tecla="Ctrl + A"
+              onClick={() => disparar("Ctrl+A")} />
+            <BotaoAcaoPdv grande className="basis-[12.3%] py-[15px]" rotulo="Caixas em Aberto"
+              onClick={() => setModalCaixasAbertos(true)} />
+            <BotaoAcaoPdv grande className="basis-[12.3%] py-[15px]" rotulo="Atalhos" tecla="Ctrl + H"
+              onClick={() => disparar("Ctrl+H")} />
+          </footer>
         </div>
       )}
+
+      {/* Vendedor (F1) — é dele a comissão da venda */}
+      <Dialog open={modalVendedor} onOpenChange={setModalVendedor}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Vendedor <span className="text-sm font-normal text-muted-foreground">(F1)</span></DialogTitle>
+          </DialogHeader>
+          <ComboboxBusca
+            itens={funcionarios.map((f: any) => ({
+              id: f.id, rotulo: f.nome ?? f.cargo ?? "—", detalhe: f.cargo ?? undefined,
+            }))}
+            value={vendedorId}
+            onChange={(id) => { setVendedorId(id); setModalVendedor(false); }}
+            vazio="Sem vendedor"
+          />
+          <p className="text-xs text-muted-foreground">A comissão desta venda vai para o vendedor escolhido.</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setModalVendedor(false)}>Fechar (ESC)</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cliente (F2) — da filial, ou pelo celular (busca no ERP e no CRM) */}
+      <Dialog open={modalBuscaCliente} onOpenChange={setModalBuscaCliente}>
+        <DialogContent className="max-w-md"
+          // o cursor vai direto para a busca; o botão do celular fica acima
+          // dela para a lista aberta não cobri-lo
+          onOpenAutoFocus={(e) => {
+            e.preventDefault();
+            (e.currentTarget as HTMLElement).querySelector<HTMLInputElement>("[data-busca-cliente] input")?.focus();
+          }}>
+          <DialogHeader>
+            <DialogTitle>Cliente <span className="text-sm font-normal text-muted-foreground">(F2)</span></DialogTitle>
+          </DialogHeader>
+          <Button variant="outline" className="w-full"
+            onClick={() => { setModalBuscaCliente(false); setModalCliente(true); }}>
+            <UserPlus className="mr-1 h-4 w-4" /> Buscar pelo celular ou cadastrar (ERP e CRM)
+          </Button>
+          <div data-busca-cliente>
+          <ComboboxBusca
+            itens={clientes.map((c: any) => ({
+              id: c.id, rotulo: c.nome_razao,
+              detalhe: [c.cpf_cnpj, c.celular ?? c.telefone].filter(Boolean).join(" · "),
+            }))}
+            value={clienteId}
+            onChange={(id) => { setClienteId(id); setModalBuscaCliente(false); }}
+            vazio="Cliente balcão"
+            placeholder="Nome, CPF/CNPJ ou telefone…"
+          />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setModalBuscaCliente(false)}>Fechar (ESC)</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <ClienteRapidoPdvDialog
+        open={modalCliente} onOpenChange={setModalCliente} online={online}
+        onCliente={(id) => setClienteId(id)}
+      />
+
+      {/* Desconto (F6) — geral ou de um item, como no sistema anterior.
+          O geral trava depois do primeiro pagamento lançado, igual à tela de
+          pagamento; o do item segue a regra do Alterar item. */}
+      <Dialog open={modalDesconto} onOpenChange={setModalDesconto}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Desconto <span className="text-sm font-normal text-muted-foreground">(F6)</span></DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-2">
+            <Button type="button" variant={tipoDesconto === "geral" ? "default" : "outline"}
+              onClick={() => setTipoDesconto("geral")}>Desconto geral</Button>
+            <Button type="button" variant={tipoDesconto === "item" ? "default" : "outline"}
+              onClick={() => setTipoDesconto("item")}>Desconto no item</Button>
+          </div>
+          {tipoDesconto === "geral" ? (
+            <div className="space-y-2">
+              <Label>Desconto na venda</Label>
+              <div className="flex gap-1">
+                <Input autoFocus type="number" step="0.01" min="0" placeholder="0,00" value={desconto}
+                  disabled={pagamentos.length > 0}
+                  onChange={(e) => setDesconto(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") setModalDesconto(false); }}
+                  className="h-10 text-base" />
+                <Button type="button" variant={descontoPercentual ? "default" : "outline"} className="h-10 w-14"
+                  disabled={pagamentos.length > 0}
+                  onClick={() => setDescontoPercentual(!descontoPercentual)}
+                  title="Alternar entre R$ e %">{descontoPercentual ? "%" : "R$"}</Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {pagamentos.length > 0
+                  ? "Há pagamento lançado: o desconto da venda está travado. Remova os pagamentos para alterar."
+                  : `Subtotal ${brl(subtotal)} · com desconto ${brl(total)}`}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="grid grid-cols-[6rem_1fr] items-end gap-2">
+                <div>
+                  <Label>Nº do item</Label>
+                  <Input type="number" min="1" className="mt-1 h-10" value={itemDesconto}
+                    onChange={(e) => {
+                      setItemDesconto(e.target.value);
+                      const it = itemPeloNumero(e.target.value);
+                      setValorDescItem(it?.desconto ? String(it.desconto) : "");
+                    }} />
+                </div>
+                <p className="truncate pb-2 text-sm">
+                  {itemPeloNumero(itemDesconto)?.nome ?? <span className="text-red-600">Este item não existe.</span>}
+                </p>
+              </div>
+              <Label>Desconto no item</Label>
+              <div className="flex gap-1">
+                <Input autoFocus type="number" step="0.01" min="0" placeholder="0,00" value={valorDescItem}
+                  onChange={(e) => setValorDescItem(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") aplicarDescontoItem(); }}
+                  className="h-10 text-base" />
+                <Button type="button" variant={descItemPct ? "default" : "outline"} className="h-10 w-14"
+                  onClick={() => setDescItemPct(!descItemPct)}
+                  title="Alternar entre R$ e %">{descItemPct ? "%" : "R$"}</Button>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setModalDesconto(false)}>Fechar (ESC)</Button>
+            {tipoDesconto === "item" && (
+              <Button onClick={aplicarDescontoItem} disabled={!itemPeloNumero(itemDesconto)}>Aplicar</Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Acréscimo (Ctrl+F6) — sobre a venda; trava depois do primeiro pagamento */}
+      <Dialog open={modalAcrescimo} onOpenChange={setModalAcrescimo}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Acréscimo <span className="text-sm font-normal text-muted-foreground">(Ctrl+F6)</span></DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Acréscimo na venda (R$)</Label>
+            <Input autoFocus type="number" step="0.01" min="0" placeholder="0,00" value={acrescimo}
+              disabled={pagamentos.length > 0}
+              onChange={(e) => setAcrescimo(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") setModalAcrescimo(false); }}
+              className="h-10 text-base" />
+            {pagamentos.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                Há pagamento lançado: o acréscimo está travado. Remova os pagamentos para alterar.
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setModalAcrescimo(false)}>Fechar (ESC)</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quantidade em Dinheiro (Ctrl+R): o próximo lançamento sai pelo valor */}
+      <Dialog open={modalQtdDinheiro} onOpenChange={setModalQtdDinheiro}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Quantidade em Dinheiro <span className="text-sm font-normal text-muted-foreground">(Ctrl+R)</span></DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Valor R$</Label>
+            <InputMoeda value={valorQtdDinheiro} onChange={(v) => setValorQtdDinheiro(String(v))}
+              onKeyDown={(e) => { if (e.key === "Enter") inserirQtdDinheiro(); }} />
+            <p className="text-xs text-muted-foreground">
+              O próximo produto lançado entra na quantidade que este valor compra.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setModalQtdDinheiro(false)}>Fechar (ESC)</Button>
+            <Button disabled={!(Number(valorQtdDinheiro) > 0)} onClick={inserirQtdDinheiro}>
+              Inserir quantidade
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancelar item (F8) — pelo número do item, já preenchido com o da vez */}
+      <Dialog open={itemParaCancelar !== null} onOpenChange={(o) => { if (!o) setItemParaCancelar(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Cancelar item <span className="text-sm font-normal text-muted-foreground">(F8)</span></DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Nº do item</Label>
+            <Input autoFocus type="number" min="1" className="h-10 text-base" value={itemParaCancelar ?? ""}
+              onChange={(e) => setItemParaCancelar(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter") return;
+                const it = itemPeloNumero(itemParaCancelar ?? "");
+                if (it) { remover(it.produto_id); setItemSelecionado(null); setItemParaCancelar(null); }
+              }} />
+            {(() => {
+              const it = itemPeloNumero(itemParaCancelar ?? "");
+              return it
+                ? <p className="text-sm">{it.nome} — {fmtQtd(it.quantidade)} × {brl(it.preco_unitario)}</p>
+                : <p className="text-sm text-red-600">Este item não existe.</p>;
+            })()}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setItemParaCancelar(null)}>Voltar</Button>
+            <Button variant="destructive" disabled={!itemPeloNumero(itemParaCancelar ?? "")}
+              onClick={() => {
+                const it = itemPeloNumero(itemParaCancelar ?? "");
+                if (it) { remover(it.produto_id); setItemSelecionado(null); setItemParaCancelar(null); }
+              }}>
+              Cancelar item
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Alterar item (F7) — quantidade, preço e desconto da linha */}
       <Dialog open={!!itemEditando} onOpenChange={(o) => !o && setItemEditando(null)}>
@@ -1720,20 +2288,26 @@ export function PDVPage() {
                 <div>
                   <Label>Valor unitário</Label>
                   <InputMoeda value={edPreco} onChange={(v) => setEdPreco(String(v))} />
+                  {!podeDesconto && (
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      Sem permissão de desconto: o preço não fica abaixo de {brl(precoMinimoSemDesconto(itemEditando))}.
+                    </p>
+                  )}
                 </div>
               </div>
               <div>
                 <div className="flex items-center justify-between">
-                  <Label>Desconto no item <span className="text-muted-foreground">(F6)</span></Label>
+                  <Label>Desconto no item</Label>
                   <div className="flex gap-1">
-                    <Button size="sm" variant={!edDescontoPct ? "default" : "outline"}
+                    <Button size="sm" variant={!edDescontoPct ? "default" : "outline"} disabled={!podeDesconto}
                       className="h-6 px-2 text-xs" onClick={() => setEdDescontoPct(false)}>R$</Button>
-                    <Button size="sm" variant={edDescontoPct ? "default" : "outline"}
+                    <Button size="sm" variant={edDescontoPct ? "default" : "outline"} disabled={!podeDesconto}
                       className="h-6 px-2 text-xs" onClick={() => setEdDescontoPct(true)}>%</Button>
                   </div>
                 </div>
                 <Input type="number" min="0" step="any" className="mt-1"
                   value={edDesconto} onChange={(e) => setEdDesconto(e.target.value)}
+                  disabled={!podeDesconto} title={podeDesconto ? undefined : SEM_DESCONTO}
                   onKeyDown={(e) => { if (e.key === "Enter") aplicarEdicaoItem(); }} />
               </div>
               <div className="flex justify-between border-t pt-2 text-sm">
@@ -1997,20 +2571,27 @@ export function PDVPage() {
                     <Label className="text-xs">Desconto geral</Label>
                     <div className="mt-1 flex gap-1">
                       <Input type="number" step="0.01" placeholder="0,00" value={desconto}
-                        disabled={pagamentos.length > 0}
+                        disabled={pagamentos.length > 0 || !podeDesconto}
+                        title={podeDesconto ? undefined : SEM_DESCONTO}
                         onChange={(e) => setDesconto(e.target.value)} className="h-9" />
                       <Button variant={descontoPercentual ? "default" : "outline"} size="sm" className="h-9 px-3"
-                        disabled={pagamentos.length > 0}
+                        disabled={pagamentos.length > 0 || !podeDesconto}
                         onClick={() => setDescontoPercentual(!descontoPercentual)}>%</Button>
                     </div>
                   </div>
                   <div>
                     <Label className="text-xs">Acréscimo</Label>
                     <Input type="number" step="0.01" placeholder="0,00" value={acrescimo}
-                      disabled={pagamentos.length > 0}
+                      disabled={pagamentos.length > 0 || !podeDesconto}
+                      title={podeDesconto ? undefined : SEM_DESCONTO}
                       onChange={(e) => setAcrescimo(e.target.value)} className="mt-1 h-9" />
                   </div>
                 </div>
+                {!podeDesconto && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Seu usuário não dá desconto nem acréscimo (permissão do usuário master).
+                  </p>
+                )}
                 {pagamentos.length > 0 && (
                   <p className="text-[11px] text-muted-foreground">
                     Desconto e acréscimo travam depois do primeiro pagamento lançado — mudar o total
@@ -2607,15 +3188,22 @@ export function PDVPage() {
                   {caixasAbertos.map((c) => (
                     <tr key={c.id} className="border-b">
                       <td className="p-2">#{c.numero_caixa || "-"}</td>
-                      <td className="p-2">{(c as any).usuario?.nome || "-"}</td>
+                      <td className="p-2">{nomeDeQuemAbriu(c) || "-"}</td>
                       <td className="p-2">
                         {c.data_abertura ? new Date(c.data_abertura).toLocaleString("pt-BR") : "-"}
                       </td>
                       <td className="p-2">{brl(c.valor_inicial || 0)}</td>
                       <td className="p-2 text-green-600">{brl(c.total_vendas || 0)}</td>
                       <td className="p-2 text-right">
-                        {(c as any).usuario_id === user?.id ? (
+                        {/* o próprio, ou (vendedor) o de quem está acima liberado para ele (113) */}
+                        {(c as any).usuario_id === user?.id || operaveisIds.has(c.id) ? (
                           <Button size="sm" variant="outline"
+                            disabled={cart.length > 0 && c.id !== caixaAberto?.id}
+                            title={cart.length > 0 && c.id !== caixaAberto?.id
+                              ? "Finalize ou cancele a venda para trocar de caixa"
+                              : (c as any).usuario_id === user?.id
+                                ? undefined
+                                : "Vender neste caixa — o turno continua de quem abriu, e é ele quem fecha"}
                             onClick={() => { irParaCaixa(c); setModalCaixasAbertos(false); }}>
                             Operar
                           </Button>

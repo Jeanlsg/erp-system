@@ -4,7 +4,7 @@ import {
   Home, Calculator, Wallet, Receipt, Truck, Bike, MessageSquare, ShoppingCart, Barcode, CreditCard, Wrench, FileText, Users, Building2, Package, Calendar, LineChart, Briefcase, Mail, Settings, Cog, Store, Key, HelpCircle, PanelLeftClose, PanelLeftOpen, LayoutDashboard, RotateCcw, PackagePlus, ShoppingBag, ArrowLeftRight, ScrollText, Banknote, AlertTriangle, Shield, Search, Smartphone, Star, Lock, Network, Send, FolderTree, ScanBarcode, ChevronRight, Minus, Flag, ChevronDown, ExternalLink, BookOpen,
 } from "lucide-react";
 
-import { useAuth, type Permission } from "@/lib/store/auth-store";
+import { useAuth, roleLabels, type Permission } from "@/lib/store/auth-store";
 import { useSidebarCollapsed, toggleSidebar, useSectionCollapsed, toggleSection } from "@/lib/store/sidebar-store";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useFeatureFlags } from "@/lib/supabase-queries";
@@ -674,7 +674,7 @@ export function AppSidebar() {
               <p className="text-xs text-white/60">Bem-vindo(a),</p>
               <p className="text-sm font-medium truncate text-white">{user?.nome ?? "Jean Suplementos"}</p>
               <p className="text-[10px] uppercase tracking-wider text-white/50">
-                {(user?.role ?? "FUNCIONARIO MASTER").toString().replace(/_/g, " ")}
+                {user?.role ? (roleLabels[user.role] ?? user.role) : "Usuário master"}
               </p>
             </div>
           </div>

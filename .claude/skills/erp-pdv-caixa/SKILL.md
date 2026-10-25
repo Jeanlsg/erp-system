@@ -10,12 +10,22 @@ defeito real). Regras puras ficam em `src/lib/*` e têm teste; mantenha assim.
 
 ## Fluxo da venda
 
+0. **Visual:** a frente de caixa copia a do sistema anterior (Excellent, pedido da loja em
+   10/2026): abas dos módulos (itens e permissões vêm de `sections` do menu), faixa
+   Caixa/Usuário/Vendedor/Cliente/Loja/SAIR (F12), produto em letra grande, código à esquerda,
+   cupom em Courier à direita, 6 botões de ação + totais, barra de baixo. Cores em `COR`
+   (`pdv.tsx`). Com a venda aberta o `PdvLayout` esconde o cabeçalho dele; filial e logout ficam
+   na seleção de caixa (SAIR). Nada de painel aberto ao lado do cupom: vendedor, cliente,
+   desconto e acréscimo abrem pelo botão/atalho.
 1. **Cupom:** produto por código (leitor USB em qualquer lugar da tela: `use-leitor-usb.ts`;
    câmera: `leitor-codigo-barras`), busca (F5), quantidade (`quantidade-lancamento.ts`),
-   desconto por item (F6/F7). Kit entra como item com `kit_id`.
-2. **Cliente:** combobox da filial (`useClientesDaFilial`) ou "cliente pelo celular"
-   (`src/components/cliente-rapido-pdv.tsx`): busca no ERP (`erp.buscar_cliente_por_telefone`) e no
-   CRM (`erp.buscar_lead_crm`), ou cadastra. Vendedor = funcionário ligado ao usuário (comissão).
+   quantidade em dinheiro (Ctrl+R, `quantidadePorValor`), desconto geral ou por item (F6, ou
+   o ⟳ no cabeçalho % DESC/R$ DESC), alterar item (F7), cancelar item pelo número (F8; sem
+   clique na linha, vale o último lançado). Kit entra como item com `kit_id`.
+2. **Cliente (F2):** diálogo com a busca da filial (`useClientesDaFilial`) e o botão "cliente
+   pelo celular" (`src/components/cliente-rapido-pdv.tsx`): busca no ERP
+   (`erp.buscar_cliente_por_telefone`) e no CRM (`erp.buscar_lead_crm`), ou cadastra.
+   Vendedor (F1) = funcionário ligado ao usuário (comissão).
 3. **Tela de pagamento (F10):** ocupa a frente inteira. Desconto geral, acréscimo, formas
    (`src/components/pagamentos-venda.tsx`: `aplicarDigitado`, `prepararFinalizacao`,
    `faltaPagar`, `trocoDe` — testadas), documento fiscal (sem nota / NFC-e / NF-e), CPF na nota.
@@ -77,12 +87,46 @@ caracteres (vai como justificativa da nota). Fora disso, o caminho é Devoluçã
 - Comprovante: `src/lib/comprovante-fechamento.ts` + `dados-fechamento.ts` (formato do sistema
   anterior; o esperado na gaveta vem do banco, `vw_caixa_resumo`, por forma).
 
+## Vendedor no caixa de quem está acima (migration 113)
+
+- Função `vendedor` (111/112, `ROLE_RANK` 0). Vende no turno **aberto** por ele ou por alguém de
+  função acima (caixa, estoquista, gerente, master), nos caixas que o master liberou para ele
+  (`erp_usuario_pontos_venda`, lista vazia = todos) e na filial dele. As outras funções: só o
+  próprio caixa. Vale o papel **principal** (`erp_usuarios.role`).
+- Banco: `erp.pode_operar_caixa(caixa)` e `erp.caixas_operaveis(loja)` (SECURITY DEFINER — o
+  vendedor não lê o papel de quem abriu). `registrar_venda_pdv` confere o `caixa_id`: existe, é da
+  filial da venda e, **online**, está aberto e quem vende pode operá-lo. Venda da fila offline só
+  precisa do caixa existir na filial e de quem envia trabalhar nela (o caixa pode ter fechado; a
+  fila sobe com a sessão de quem entrar).
+- Tela: `useCaixasOperaveis` (chave `erp_caixa-operaveis`, no domínio `caixa` — a venda relê) +
+  `caixasParaOperar`/`caixaAtivoNaLoja` (próprios primeiro). A faixa mostra "Caixa: 002 · de
+  Fulano"; o seletor e "Caixas em Aberto" oferecem "Operar". **Só quem abriu fecha**
+  (`motivoParaNaoFechar`).
+- Travas por permissão (o master tira por usuário), no `ativo` do atalho + title no botão:
+  `venda.desconto` (F6, Ctrl+F6, ⟳ do cupom, campos da tela de pagamento e preço abaixo do cadastro
+  / desconto no Alterar item), `caixa.sangria` (Ctrl+S, Ctrl+E), `caixa.fechar` (Ctrl+X),
+  `caixa.abrir` (Abrir Caixa). "Receber e finalizar" não tem trava.
+- ⚠️ A RLS de `erp_sangrias`/`erp_entradas_extras` (inserts diretos do front) só aceita escrita de
+  admin/gerente nas migrations — confira no banco real, com o JWT de um caixa e de um vendedor,
+  antes de contar que sangria funciona para eles.
+
 ## Atalhos
 
 `src/lib/use-atalhos-pdv.ts` escuta a **janela inteira** em fase de captura: F-keys e Ctrl valem
 até dentro de campo. Qualquer tela sobreposta que não pode receber os atalhos do cupom
 precisa desligá-los (`useAtalhosPdv(ATALHOS, !telaAberta)`) e ter os seus. Um F11 vazando para
 a tela de pagamento cancelaria a venda. `Ctrl+H` lista todos.
+
+Mesmas teclas do sistema anterior: F1 vendedor, F2 cliente, F4 código, F5 localizar, F6
+desconto, Ctrl+F6 acréscimo, F7 alterar item, F8 cancelar item, F9 consultar preço, Ctrl+R
+quantidade em dinheiro, F10 pagamento, F11 cancelar venda, Ctrl+S sangria, Ctrl+E entrada,
+Ctrl+D devoluções (só com cupom vazio — sair da tela perde o cupom), Ctrl+A aplicar entrada,
+Ctrl+X fechar caixa, F12/Ctrl+F12 sair da frente. Os botões da tela chamam o mesmo `ATALHOS`
+(`disparar`), então botão e tecla nunca divergem.
+
+Para ver a tela sem tocar no banco: suba o Vite com `VITE_SUPABASE_URL` apontando para um host
+falso e responda as chamadas no Playwright (`page.route`) com dados fictícios, semeando o
+`localStorage` `erp-auth` com um usuário.
 
 ## Roteiro de teste do balcão (homologação)
 
@@ -92,6 +136,7 @@ a tela de pagamento cancelaria a venda. `Ctrl+H` lista todos.
 4. NFC-e com e sem CPF; NF-e com cliente sem endereço (tem de avisar **antes** de gravar).
 5. Offline: desligar a rede, vender, religar; a venda sobe uma vez só.
 6. Abrir, sangria, fechar caixa **com um usuário de papel caixa** (RLS), imprimir comprovante.
+6b. Vendedor: vender no caixa aberto pelo gerente ("Caixa: 00X · de Fulano"), sangria nele, e conferir que Fechar Caixa fica desligado; gerente fecha o turno e a próxima venda do vendedor é recusada com a mensagem de caixa fechado.
 7. Atalhos com a tela de pagamento aberta: F11/F8 não podem agir; F10 confirma.
 
 Unitários: `npx vitest run` (pagamentos, atalhos, quantidade, fechamento por forma, comprovante, caixas permitidos).

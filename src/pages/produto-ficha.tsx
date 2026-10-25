@@ -28,8 +28,9 @@ import { useAuth } from "@/lib/store/auth-store";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { brl } from "@/lib/format";
 import {
-  TIPOS_MOVIMENTO, alteracoesDePreco, htmlFichaProduto, resumoMovimentos, rotuloOrigem, sinalDoMovimento,
+  ROTULO_CAMPO_PRECO, TIPOS_MOVIMENTO, alteracoesDePreco, htmlFichaProduto, resumoMovimentos, rotuloOrigem, sinalDoMovimento,
 } from "@/lib/ficha-produto";
+import { precoAtacadoNoPayload, precoAtacadoOriginal } from "@/lib/preco-atacado";
 
 // Data LOCAL (AAAA-MM-DD). toISOString() é UTC: à noite em Recife já é o dia
 // seguinte, e a tela mostrava "até amanhã".
@@ -73,14 +74,26 @@ export function ProdutoFichaPage() {
   const custoTela = custo === "" ? Number(produto?.preco_custo ?? 0) : custo;
   const vendaTela = venda === "" ? Number(produto?.preco_venda ?? 0) : venda;
   const margem = vendaTela > 0 ? ((vendaTela - custoTela) / vendaTela) * 100 : 0;
-  const precoMudou = produto && (custo !== "" || venda !== "")
-    && (Number(custoTela) !== Number(produto.preco_custo) || Number(vendaTela) !== Number(produto.preco_venda));
+  // Atacado (migration 115) é opcional: vazio = sem atacado, então "" não
+  // serve de "não mexi" como nos dois de cima — undefined é que serve.
+  const [atacado, setAtacado] = useState<number | "" | undefined>(undefined);
+  const atacadoGravado = precoAtacadoOriginal(produto);
+  const atacadoTela = atacado === undefined ? (atacadoGravado ?? "") : atacado;
+  const atacadoPayload = precoAtacadoNoPayload(String(atacadoTela), atacadoGravado);
+  const atacadoMudou = atacado !== undefined && (!atacadoPayload.ok || "preco_atacado" in atacadoPayload.campos);
+  const precoMudou = produto && (
+    ((custo !== "" || venda !== "")
+      && (Number(custoTela) !== Number(produto.preco_custo) || Number(vendaTela) !== Number(produto.preco_venda)))
+    || atacadoMudou);
 
   const salvarPrecos = async () => {
     if (!produto) return;
+    if (!atacadoPayload.ok) { toast.error(atacadoPayload.erro); return; }
     try {
-      await atualizar.mutateAsync({ id: produto.id, preco_custo: Number(custoTela), preco_venda: Number(vendaTela) } as any);
-      setCusto(""); setVenda("");
+      await atualizar.mutateAsync({
+        id: produto.id, preco_custo: Number(custoTela), preco_venda: Number(vendaTela), ...atacadoPayload.campos,
+      } as any);
+      setCusto(""); setVenda(""); setAtacado(undefined);
       toast.success("Preços salvos. A alteração fica no histórico abaixo.");
     } catch (e: any) { toast.error(e?.message ?? String(e)); }
   };
@@ -118,6 +131,7 @@ export function ProdutoFichaPage() {
     w.document.write(htmlFichaProduto({
       produto, loja: lojaAtual?.apelido ?? lojaAtual?.nome ?? "", de, ate, estoque, custo: custoMedio,
       preco: Number(produto.preco_venda ?? 0),
+      atacado: atacadoGravado,
       movimentos: movimentos.map((m: any) => ({ ...m, usuario: nomeUsuario(m.usuario_id) })),
     }));
     w.document.close();
@@ -160,14 +174,16 @@ export function ProdutoFichaPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Preços */}
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">Custo e preço de venda</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Custo e preços</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             {!podeVerPrecos && <p className="text-xs text-muted-foreground">Seu usuário não pode alterar preços.</p>}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               <div><Label className="text-xs">Preço de custo</Label>
                 <InputMoeda className="mt-1" value={custoTela} disabled={!podeVerPrecos} onChange={(v) => setCusto(v === "" ? 0 : v)} /></div>
               <div><Label className="text-xs">Preço de venda</Label>
                 <InputMoeda className="mt-1" value={vendaTela} disabled={!podeVerPrecos} onChange={(v) => setVenda(v === "" ? 0 : v)} /></div>
+              <div><Label className="text-xs">Valor de atacado</Label>
+                <InputMoeda className="mt-1" value={atacadoTela} placeholder="Sem atacado" disabled={!podeVerPrecos} onChange={setAtacado} /></div>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-xs text-muted-foreground">Margem com estes valores: <b>{margem.toFixed(1)}%</b></span>
@@ -282,7 +298,7 @@ export function ProdutoFichaPage() {
 
       {/* Histórico de preço e custo (auditoria: só admin/gerente leem) */}
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><History className="h-4 w-4" /> Histórico de preço e custo</CardTitle></CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><History className="h-4 w-4" /> Histórico de preços e custo</CardTitle></CardHeader>
         <CardContent>
           {historicoPreco.length === 0 ? (
             <p className="text-sm text-muted-foreground">
@@ -295,7 +311,7 @@ export function ProdutoFichaPage() {
                 {historicoPreco.map((h, k) => (
                   <tr key={k} className="border-b last:border-0">
                     <td className="p-2 whitespace-nowrap">{new Date(h.data).toLocaleString("pt-BR")}</td>
-                    <td className="p-2">{h.campo === "preco_venda" ? "Preço de venda" : "Preço de custo"}</td>
+                    <td className="p-2">{ROTULO_CAMPO_PRECO[h.campo]}</td>
                     <td className="p-2 text-right tabular-nums">{h.antes == null ? "—" : brl(h.antes)}</td>
                     <td className="p-2 text-right font-semibold tabular-nums">{h.depois == null ? "—" : brl(h.depois)}</td>
                     <td className="p-2">{nomeUsuario(h.usuario_id)}</td>

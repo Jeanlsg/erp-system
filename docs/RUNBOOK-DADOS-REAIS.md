@@ -124,7 +124,8 @@ Esperado: `COMMIT`, e a linha `mantidos: lojas=2 usuarios=N ... (conta_auditoria
 
 1. **"Baixar modelo"** → salva `modelo-importacao-produtos.csv`.
 2. Substitua as duas linhas de exemplo pelos produtos reais, **sem mexer no cabeçalho**:
-   `nome;sku;codigo_barras;categoria;preco_custo;preco_venda;estoque;estoque_minimo;ncm;cest;csosn;unidade;marca;validade_dias`
+   `nome;sku;codigo_barras;categoria;preco_custo;preco_venda;preco_atacado;estoque;estoque_minimo;ncm;cest;csosn;unidade;marca;validade_dias`
+   `preco_atacado` é opcional: célula vazia = produto sem valor de atacado (exige a migration 115 no banco).
 3. **Preços sempre com centavos e vírgula decimal**: `149,90`, `1.234,56`, `45,00`.
 4. Salve como **"CSV UTF-8"**.
 5. **"Escolher arquivo"** → confira a linha de resumo e a **pré-visualização**, em especial a coluna **Venda**.

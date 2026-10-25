@@ -24,7 +24,8 @@ export const DOMINIOS = {
   ],
   /** O turno de caixa: resumo aberto, esperado na gaveta, sangrias, fechamentos. */
   caixa: [
-    "erp_caixa", "erp_caixa-aberto", "erp_caixa_movimentacoes", "erp_fechamentos-caixa",
+    // erp_caixa-operaveis: o caixa de quem está acima, em que o vendedor vende (113)
+    "erp_caixa", "erp_caixa-aberto", "erp_caixa-operaveis", "erp_caixa_movimentacoes", "erp_fechamentos-caixa",
     "erp_rel_fechamentos", "erp_sangrias", "erp_entradas-extras", "erp-sangrias-periodo",
     "erp-entradas-extras-periodo", "erp_vendas-hoje-caixa", "erp_formas-recebimento",
     "erp-taxas-cartao", "erp_fluxo-caixa", "erp_fluxo-caixa-kpis",

@@ -154,7 +154,8 @@ export function EstoqueMovimentacoesPage() {
                         <td className="p-3">
                           <div className="font-medium">{m.produto?.nome ?? "—"}</div>
                           <div className="text-xs text-muted-foreground">
-                            {m.produto?.sku ?? ""} {m.loja?.nome ? `· ${m.loja.nome}` : ""}
+                            {/* apelido = nome de tela da loja ("Matriz"/"Filial"); o nome comercial é o da nota */}
+                            {m.produto?.sku ?? ""} {(m.loja?.apelido || m.loja?.nome) ? `· ${m.loja.apelido || m.loja.nome}` : ""}
                           </div>
                         </td>
                         <td className="p-3">

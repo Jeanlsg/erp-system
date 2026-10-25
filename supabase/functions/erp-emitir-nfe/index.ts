@@ -18,6 +18,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { ratear, ratearValoresDaVenda, totalDaNota, faltaParaEntregaNfce } from "./rateio.ts";
+import { nomeFantasiaFiscal, lojaNoTextoFiscal } from "./loja-fiscal.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -74,11 +75,26 @@ Deno.serve(async (req) => {
     const { data: erpUser } = await admin
       .from("erp_usuarios").select("id, role, ativo").eq("id", userData.user.id).maybeSingle();
     if (!erpUser?.ativo) return json(403, { erro: "usuário sem acesso ao ERP" });
-    if (!["admin", "gerente"].includes(erpUser.role)) {
-      return json(403, { erro: "sem permissão para emitir NF-e (requer admin/gerente)" });
-    }
+    const ehGestao = ["admin", "gerente"].includes(erpUser.role);
 
     const { venda_id, remessa_id, loja_id, tipo, devolucao_de, devolucao_fornecedor_id, espelho } = await req.json();
+
+    // Operador de caixa e vendedor emitem SÓ a NFC-e da venda que eles mesmos
+    // gravaram no PDV. Antes a função recusava todo mundo fora de
+    // admin/gerente: no balcão a venda gravava e o cupom voltava 403 (revisão
+    // de 25/10/2026). NF-e, remessa, devolução e espelho seguem da gestão.
+    if (!ehGestao) {
+      const cupomDoPdv = tipo === "nfce" && !!venda_id && !remessa_id && !devolucao_de
+        && !devolucao_fornecedor_id && espelho !== true;
+      if (!cupomDoPdv) {
+        return json(403, { erro: "sem permissão para emitir NF-e (requer usuário master ou gerente)" });
+      }
+      const { data: daVenda } = await admin
+        .from("erp_vendas").select("usuario_id").eq("id", venda_id).maybeSingle();
+      if (!daVenda || daVenda.usuario_id !== erpUser.id) {
+        return json(403, { erro: "a NFC-e só pode ser emitida por quem fez a venda, ou por um gerente" });
+      }
+    }
     // espelho: monta e valida a nota (dry-run) e devolve o DANFE de
     // pré-visualização, sem enviar à SEFAZ, sem gastar número e sem gravar
     const ehEspelho = espelho === true;
@@ -424,7 +440,9 @@ Deno.serve(async (req) => {
       const mesmaUF = remessa.origem.uf === remessa.destino.uf;
       cfopPadrao = mesmaUF ? "5152" : "6152";
       natureza = "REMESSA ENTRE ESTABELECIMENTOS";
-      observacoes = `Remessa para filial ${remessa.destino.apelido}`;
+      // nome comercial + cidade, não o apelido: na tela ele é "Matriz"/"Filial"
+      // (migration 114) e "Remessa para filial Filial" não diz para onde foi
+      observacoes = `Remessa para filial ${lojaNoTextoFiscal(remessa.destino)}`;
       destinatario = {
         cpf_cnpj: remessa.destino.cnpj,
         nome: remessa.destino.nome,
@@ -605,7 +623,8 @@ Deno.serve(async (req) => {
       emitente: {
         cnpj: loja.cnpj,
         razao: loja.nome,
-        fantasia: loja.apelido,
+        // nome comercial; o apelido é só de tela ("Matriz"/"Filial") — ver loja-fiscal.ts
+        fantasia: nomeFantasiaFiscal(loja),
         ie: loja.inscricao_estadual,
         crt: Number(sefaz.crt ?? 1), // regime da loja (Configurações SEFAZ); 1 = Simples
         uf: loja.uf,

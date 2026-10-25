@@ -166,8 +166,10 @@ export function LojasPage() {
           <DialogHeader><DialogTitle>{editando ? "Editar Loja" : "Nova Loja"}</DialogTitle><DialogClose /></DialogHeader>
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Nome *</Label><Input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} /></div>
-              <div><Label>Apelido *</Label><Input value={form.apelido} onChange={(e) => setForm({ ...form, apelido: e.target.value })} /></div>
+              {/* O nome é o que sai na nota (emitente, fantasia, SPED); o apelido
+                  ("Matriz", "Filial") é só o rótulo das telas — migration 114. */}
+              <div><Label>Nome * <span className="text-xs font-normal text-muted-foreground">(sai na nota fiscal)</span></Label><Input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} /></div>
+              <div><Label>Apelido * <span className="text-xs font-normal text-muted-foreground">(só nas telas)</span></Label><Input value={form.apelido} onChange={(e) => setForm({ ...form, apelido: e.target.value })} /></div>
             </div>
             <div><Label>CNPJ</Label><Input value={form.cnpj} onChange={(e) => setForm({ ...form, cnpj: e.target.value })} placeholder="00.000.000/0000-00" /></div>
             <div className="grid grid-cols-2 gap-3">

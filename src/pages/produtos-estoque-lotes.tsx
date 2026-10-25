@@ -50,6 +50,7 @@ import { ImportarProdutosDialog } from "@/components/importar-produtos";
 import { LotesProdutoDialog } from "@/components/lotes-produto";
 import { ComboboxBusca } from "@/components/ui/combobox-busca";
 import { CFOPS, CSOSNS, CSTS_ICMS, CSTS_PIS_COFINS, ORIGENS_MERCADORIA, faltaNoTributoDoProduto } from "@/lib/tabelas-fiscais";
+import { precoAtacadoNoPayload, precoAtacadoOriginal, textoPrecoAtacado } from "@/lib/preco-atacado";
 
 // =============================
 // Ações rápidas (botões topo)
@@ -94,13 +95,17 @@ export function ProdutosEstoqueLotesPage() {
 
   // Form
   const [formProduto, setFormProduto] = useState({
-    sku: "", nome: "", preco_custo: "0", preco_venda: "0",
+    sku: "", nome: "", preco_custo: "0", preco_venda: "0", preco_atacado: "",
     unidade: "UN", estoque_minimo: "0", duracao_dias: "", marca: "", codigo_barras: "",
     categoria_id: "", ncm: "", cest: "", cfop_padrao: "5102", csosn: "102",
     origem_mercadoria: "0", icms: "", aliquota_credito_sn: "",
     cst_icms: "", cst_pis: "", pis: "", cst_cofins: "", cofins: "",
   });
   const [formCategoria, setFormCategoria] = useState({ nome: "", descricao: "" });
+  // Atacado como estava gravado ao abrir o modal: undefined = não se sabe
+  // (produto novo ou cadastro que não chegou à tela). Sem ele, campo vazio
+  // não distingue "limpei" de "nunca carregou" — ver src/lib/preco-atacado.ts.
+  const [atacadoOriginal, setAtacadoOriginal] = useState<number | null | undefined>(undefined);
 
   // Ajuste de saldo: passa pela RPC ajustar_estoque_atomico, que grava a
   // movimentação no Kardex com saldo anterior/posterior. Editar o número
@@ -301,13 +306,14 @@ export function ProdutosEstoqueLotesPage() {
   const abrirNovoProduto = () => {
     setEditId(null);
     setFormProduto({
-      sku: "", nome: "", preco_custo: "0", preco_venda: "0",
+      sku: "", nome: "", preco_custo: "0", preco_venda: "0", preco_atacado: "",
       unidade: "UN", estoque_minimo: "0", duracao_dias: "", marca: "", codigo_barras: "",
       ncm: "", cest: "", cfop_padrao: "5102", csosn: "102",
       origem_mercadoria: "0", icms: "", aliquota_credito_sn: "",
     cst_icms: "", cst_pis: "", pis: "", cst_cofins: "", cofins: "",
       categoria_id: "",
     });
+    setAtacadoOriginal(undefined);
     setModalProduto(true);
   };
 
@@ -323,11 +329,14 @@ export function ProdutosEstoqueLotesPage() {
     setEditId(id);
     const cat = categorias.find((c) => c.id === p.categoria_id)
       ?? categorias.find((c) => c.nome === linha.categoria_nome);
+    const atacado = precoAtacadoOriginal(p);
+    setAtacadoOriginal(atacado);
     setFormProduto({
       sku: p.sku ?? p.produto_sku ?? "",
       nome: p.nome ?? p.produto_nome ?? "",
       preco_custo: String(p.preco_custo ?? 0),
       preco_venda: String(p.preco_venda ?? 0),
+      preco_atacado: textoPrecoAtacado(atacado),
       unidade: p.unidade ?? "UN",
       estoque_minimo: String(p.estoque_minimo ?? 0),
       duracao_dias: p.duracao_dias != null ? String(p.duracao_dias) : "",
@@ -351,6 +360,8 @@ export function ProdutosEstoqueLotesPage() {
       toast.error("Preencha SKU e Nome");
       return;
     }
+    const atacado = precoAtacadoNoPayload(formProduto.preco_atacado, atacadoOriginal);
+    if (!atacado.ok) { toast.error(atacado.erro); return; }
     const payload = {
       sku: formProduto.sku,
       nome: formProduto.nome,
@@ -374,6 +385,7 @@ export function ProdutosEstoqueLotesPage() {
       pis: formProduto.pis === "" ? null : (parseFloat(formProduto.pis.replace(",", ".")) || null),
       cst_cofins: formProduto.cst_cofins || null,
       cofins: formProduto.cofins === "" ? null : (parseFloat(formProduto.cofins.replace(",", ".")) || null),
+      ...atacado.campos,
     };
     // CSOSN que o emissor não monta sem o dado: recusa aqui, não na SEFAZ
     const faltaTributo = faltaNoTributoDoProduto(payload);
@@ -832,6 +844,15 @@ export function ProdutosEstoqueLotesPage() {
                 <InputMoeda
                   value={formProduto.preco_venda}
                   onChange={(v) => setFormProduto({ ...formProduto, preco_venda: String(v) })}
+                />
+              </div>
+              <div>
+                <Label>Valor de atacado</Label>
+                {/* opcional: vazio = sem preço de atacado (nulo), não zero */}
+                <InputMoeda
+                  value={formProduto.preco_atacado}
+                  placeholder="Sem atacado"
+                  onChange={(v) => setFormProduto({ ...formProduto, preco_atacado: v === "" ? "" : String(v) })}
                 />
               </div>
               <div>

@@ -45,7 +45,7 @@ function Passo({ texto }: { texto: string }) {
 
 const PAPEIS: Papel[] = [
   {
-    id: "caixa", nome: "Caixa", Icone: Monitor,
+    id: "caixa", nome: "Operador de caixa", Icone: Monitor,
     sub: "Quem opera a frente de loja: vender, receber e fechar o dia.",
     tarefas: [
       {
@@ -200,13 +200,13 @@ const PAPEIS: Papel[] = [
     ],
   },
   {
-    id: "admin", nome: "Administrador", Icone: Shield,
+    id: "admin", nome: "Usuário master", Icone: Shield,
     sub: "Quem configura o sistema, os acessos e o fiscal.",
     tarefas: [
       {
         titulo: "Usuários e permissões", imagem: "usuarios.jpeg", rota: "/gestao/usuarios",
         passos: [
-          "<b>Novo usuário</b>: e-mail, nome e papel (admin, gerente, caixa, estoquista). Sem senha, o convite chega por e-mail com link para o próprio usuário definir a dele.",
+          "<b>Novo usuário</b>: e-mail, nome, senha e funções (Usuário master, Gerente, Estoquista, Operador de caixa, Vendedor). Não há convite por e-mail: o login já nasce com a senha.",
           "As permissões finas por módulo controlam o que aparece no menu de cada um.",
           "Bloquear um usuário corta o acesso na hora, sem apagar o histórico.",
         ],

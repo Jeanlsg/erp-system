@@ -38,7 +38,8 @@ export function TutoriaisPage() {
   const [aberto, setAberto] = useState<string | null>(null);
 
   const meus = useMemo(() => {
-    const papel = user?.role ?? "admin";
+    // o vendedor opera o balcão: vê os tutoriais do operador de caixa
+    const papel = user?.role === "vendedor" ? "caixa" : (user?.role ?? "admin");
     return TUTORIAIS.filter((t) => t.perfis.includes(papel));
   }, [user?.role]);
 

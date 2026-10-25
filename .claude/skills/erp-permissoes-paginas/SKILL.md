@@ -21,8 +21,17 @@ Dar permissão de navegação não libera o banco.
 `erp.erp_usuarios`: `role` (papel principal), `papeis[]` (todos), `permissoes` (jsonb próprio),
 `admin_principal`, `ativo`, `loja_default_id`.
 
-- **Papel principal = o mais alto** de `papeis` (admin > gerente > estoquista > caixa). Um trigger
-  garante que `role` está em `papeis`.
+- **Funções (10/2026):** na tela, "papel" virou **função**, com os rótulos Usuário master
+  (`admin` — a chave não mudou no banco nem nas edge functions), Gerente, Estoquista, Operador de
+  caixa (`caixa`) e **Vendedor** (`vendedor`, migrations 111/112). Rótulos só em `roleLabels`.
+  O vendedor tem no banco os direitos do operador de caixa; vende no próprio caixa ou no de
+  alguém acima, nos caixas que o master liberar (`erp.pode_operar_caixa`, 113).
+- **Papel principal = o mais alto** de `papeis` (admin > gerente > estoquista > caixa > vendedor).
+  Um trigger garante que `role` está em `papeis`.
+- **Permissão nova = backfill.** Quem tem `permissoes` próprio só tem o que está no objeto: uma
+  permissão nova que passa a travar um botão já existente tira o botão dessa pessoa. A 112 fez
+  isso para `caixa.sangria` (dada a quem já tinha `caixa.abrir`). Valor novo de enum: migration
+  sozinha, e o uso dele na seguinte.
 - **`can(perm)`**, nesta ordem: `admin_principal` → tudo; `permissoes` não vazio → vale só ele
   (`{"all": true}` é curinga); senão, a **união** das permissões padrão de cada papel.
 - **Permissões padrão por papel:** `erp.erp_papel_permissoes`, editáveis na aba "Papéis e

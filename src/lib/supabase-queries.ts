@@ -1341,6 +1341,35 @@ export function useCaixasAbertosDoUsuario(usuarioId?: string) {
   });
 }
 
+/**
+ * Turnos abertos nesta filial que o VENDEDOR pode operar além dos dele: os
+ * abertos por alguém de função acima, nos caixas que o master liberou para
+ * ele (erp.caixas_operaveis, migration 113). A regra é do banco porque a RLS
+ * de erp_usuarios não deixa o vendedor ler o papel de quem abriu — e é o
+ * mesmo banco que confere de novo em registrar_venda_pdv.
+ *
+ * Cada caixa vem com as colunas de vw_caixa_resumo (esperado na gaveta,
+ * vendas por forma…), o nome de quem abriu (`operador_nome`) e o do caixa
+ * (`ponto_nome`). A chave está no domínio "caixa" (dominios-cache): a venda
+ * relê esta lista — sem isso o resumo do caixa alheio ficaria o da abertura,
+ * o mesmo defeito do esperado na gaveta.
+ */
+export function useCaixasOperaveis(usuarioId?: string, lojaId?: string | null, ativo = true) {
+  return useQuery<any[]>({
+    queryKey: ['erp_caixa-operaveis', usuarioId, lojaId],
+    queryFn: async () => {
+      if (!isSupabaseConfigured() || !usuarioId || !lojaId) return [];
+      const { data, error } = await supabase.schema('erp').rpc('caixas_operaveis', { p_loja: lojaId });
+      if (error) throw error;
+      return ((data as any[] | null) ?? []).map((c) => comTotaisReais(c));
+    },
+    enabled: ativo && !!usuarioId && !!lojaId,
+    // Quem abriu fecha o turno quando quiser; sem reler, a frente do vendedor
+    // ficaria num caixa que o banco já recusa.
+    refetchInterval: 60_000,
+  });
+}
+
 /** O caixa aberto mais recente. Mesma queryKey: uma requisição só. */
 export function useCaixaAberto(usuarioId?: string) {
   const q = useCaixasAbertosDoUsuario(usuarioId);
@@ -5503,7 +5532,7 @@ export function useEstoqueMovimentacoes(filtros: EstoqueMovimentacaoFiltro = {})
       if (!isSupabaseConfigured()) return [];
       let q = supabase
         .from('erp_estoque_movimentacoes')
-        .select('*, produto:erp_produtos(id, nome, sku, unidade), loja:erp_lojas(id, nome)')
+        .select('*, produto:erp_produtos(id, nome, sku, unidade), loja:erp_lojas(id, nome, apelido)')
         .order('created_at', { ascending: false })
         .limit(filtros.limite ?? 300);
 
@@ -5619,7 +5648,7 @@ export function useInventarios(lojaId?: string) {
       if (!isSupabaseConfigured()) return [];
       let q = supabase
         .from('erp_inventarios')
-        .select('*, loja:erp_lojas(id, nome)')
+        .select('*, loja:erp_lojas(id, nome, apelido)')
         .order('created_at', { ascending: false });
       if (lojaId) q = q.eq('loja_id', lojaId);
       const { data, error } = await q;

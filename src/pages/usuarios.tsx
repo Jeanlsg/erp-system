@@ -46,6 +46,7 @@ const PERMISSOES_POR_MODULO: Record<string, string[]> = {
     "pdv.usar",
     "caixa.abrir",
     "caixa.fechar",
+    "caixa.sangria",
     "venda.criar",
     "venda.cancelar",
     "venda.desconto",
@@ -143,9 +144,9 @@ function PapeisPanel({ isAdmin, userId }: { isAdmin: boolean; userId?: string })
       <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs dark:border-amber-900 dark:bg-amber-950/20">
         <p className="font-medium">O que isto controla</p>
         <p className="mt-1 text-muted-foreground">
-          Quais itens de menu e botões cada papel vê, para todo usuário do papel que não tenha
-          permissões próprias. Um usuário com vários papéis enxerga a união deles. O acesso ao
-          banco continua governado pelo papel principal (o mais alto) nas regras do Supabase.
+          Quais itens de menu e botões cada função vê, para todo usuário da função que não tenha
+          permissões próprias. Um usuário com várias funções enxerga a união delas. O acesso ao
+          banco continua governado pela função principal (a mais alta) nas regras do Supabase.
         </p>
       </div>
       {ROLES.map((papel) => {
@@ -307,7 +308,7 @@ function ImportarDoCrmDialog({ open, onOpenChange, onImportado, lojas }: {
               <p className="mt-1 text-[11px] text-amber-700">Confira se é a pessoa certa antes de adicionar.</p>
             </div>
             <div>
-              <Label className="text-xs">Papéis</Label>
+              <Label className="text-xs">Funções</Label>
               <div className="mt-1 flex flex-wrap gap-3">
                 {ROLES.map((p) => (
                   <label key={p} className="flex cursor-pointer items-center gap-1 text-xs">
@@ -796,7 +797,7 @@ export function UsuariosPage() {
       <Tabs value={aba} onValueChange={setAba} className="space-y-4">
       <TabsList>
         <TabsTrigger value="usuarios"><Users className="h-3.5 w-3.5 mr-1.5" /> Usuários</TabsTrigger>
-        <TabsTrigger value="papeis"><Layers className="h-3.5 w-3.5 mr-1.5" /> Papéis e permissões padrão</TabsTrigger>
+        <TabsTrigger value="papeis"><Layers className="h-3.5 w-3.5 mr-1.5" /> Funções e permissões padrão</TabsTrigger>
       </TabsList>
       <TabsContent value="usuarios" className="space-y-4">
 
@@ -849,17 +850,14 @@ export function UsuariosPage() {
               </div>
             </div>
             <div>
-              <Label className="text-xs">Papel (Role)</Label>
+              <Label className="text-xs">Função</Label>
               <Select value={roleFilter} onValueChange={setRoleFilter}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todos</SelectItem>
-                  <SelectItem value="admin">Administrador</SelectItem>
-                  <SelectItem value="gerente">Gerente</SelectItem>
-                  <SelectItem value="caixa">Operador de Caixa</SelectItem>
-                  <SelectItem value="estoquista">Estoquista</SelectItem>
+                  {ROLES.map((p) => <SelectItem key={p} value={p}>{roleLabels[p]}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -900,7 +898,7 @@ export function UsuariosPage() {
                   <tr>
                     <th className="text-left p-2">Nome</th>
                     <th className="text-left p-2">Email</th>
-                    <th className="text-center p-2">Papel</th>
+                    <th className="text-center p-2">Função</th>
                     <th className="text-left p-2">Filiais</th>
                     <th className="text-center p-2">Permissões</th>
                     <th className="text-center p-2">Status</th>
@@ -948,7 +946,7 @@ export function UsuariosPage() {
                           <div className="flex flex-wrap justify-center gap-1">
                             {papeisDe(u).map((p) => (
                               <Badge key={p} variant={p === u.role ? "default" : "outline"}
-                                title={p === u.role ? "Papel principal — governa o acesso ao banco" : undefined}>
+                                title={p === u.role ? "Função principal — governa o acesso ao banco" : undefined}>
                                 {roleLabels[p] ?? p}
                               </Badge>
                             ))}
@@ -1102,7 +1100,7 @@ export function UsuariosPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Papéis</Label>
+                <Label>Funções</Label>
                 <div className="mt-1 space-y-1 rounded-md border p-2">
                   {ROLES.map((p) => (
                     <label key={p} className="flex items-center gap-2 text-sm cursor-pointer">
@@ -1122,7 +1120,7 @@ export function UsuariosPage() {
                   ))}
                 </div>
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  Vê a união dos papéis. Acesso ao banco pelo principal:{" "}
+                  Vê a união das funções. Acesso ao banco pela principal:{" "}
                   <b>{roleLabels[papelPrincipal(formUsuario.papeis)]}</b>.
                 </p>
               </div>
@@ -1389,7 +1387,7 @@ export function UsuariosPage() {
               <p className="text-xs text-muted-foreground">
                 {usarPermissoesCustom
                   ? "Permissões definidas individualmente abaixo"
-                  : "Usando o padrão dos papéis: " + nomesDosPapeis(papeisSelecionados)}
+                  : "Usando o padrão das funções: " + nomesDosPapeis(papeisSelecionados)}
               </p>
             </label>
             {usarPermissoesCustom && (
@@ -1397,10 +1395,10 @@ export function UsuariosPage() {
                 variant="outline"
                 size="sm"
                 onClick={aplicarPermissoesDosPapeis}
-                title="Preencher com o padrão dos papéis"
+                title="Preencher com o padrão das funções"
               >
                 <RotateCcw className="h-3 w-3 mr-1" />
-                Copiar dos papéis
+                Copiar das funções
               </Button>
             )}
           </div>
@@ -1466,7 +1464,7 @@ export function UsuariosPage() {
           {!usarPermissoesCustom && (
             <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-2">
               <p className="text-xs text-muted-foreground">
-                Permissões padrão dos papéis <strong>{nomesDosPapeis(papeisSelecionados)}</strong>:
+                Permissões padrão das funções <strong>{nomesDosPapeis(papeisSelecionados)}</strong>:
               </p>
               <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
                 {permissoesPadrao.map((p) => (

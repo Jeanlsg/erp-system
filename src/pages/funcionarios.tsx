@@ -184,7 +184,7 @@ export function FuncionariosPage() {
         // tela dizia "atualizado"
         const { data: alterado, error } = await supabase.from("erp_usuarios").update({ role, papeis }).eq("id", form.usuario_id).select("id");
         if (error) throw new Error(`papéis: ${error.message}`);
-        if (!alterado?.length) throw new Error("só um administrador altera os papéis de um login");
+        if (!alterado?.length) throw new Error("só o usuário master altera as funções de um login");
       }
       return form.usuario_id;
     }
@@ -715,7 +715,7 @@ export function FuncionariosPage() {
                     </div>
                   )}
                   <div>
-                    <Label>Papéis</Label>
+                    <Label>Funções</Label>
                     <div className="mt-1 flex flex-wrap gap-3">
                       {ROLES.map((p) => (
                         <label key={p} className="flex items-center gap-1.5 text-sm cursor-pointer">
@@ -729,7 +729,7 @@ export function FuncionariosPage() {
                       ))}
                     </div>
                     <p className="mt-1 text-[11px] text-muted-foreground">
-                      Vê a união dos papéis; acesso ao banco pelo principal: <b>{roleLabels[papelPrincipal(form.papeis)]}</b>.
+                      Vê a união das funções; acesso ao banco pela principal: <b>{roleLabels[papelPrincipal(form.papeis)]}</b>.
                       {!form.usuario_id && " Se o e-mail já tiver login, use Usuários e Permissões › Importar do CRM."}
                     </p>
                   </div>

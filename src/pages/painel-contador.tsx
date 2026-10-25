@@ -112,7 +112,7 @@ export function PainelContadorPage() {
       <div>
         <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight"><Briefcase className="h-6 w-6" /> Painel do Contador</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          O mês fiscal desta filial ({loja?.apelido ?? "—"}{loja?.cnpj ? ` · CNPJ ${loja.cnpj}` : ""}): notas, vendas sem nota e financeiro.
+          O mês fiscal desta loja ({loja?.apelido ?? "—"}{loja?.cnpj ? ` · CNPJ ${loja.cnpj}` : ""}): notas, vendas sem nota e financeiro.
         </p>
       </div>
 

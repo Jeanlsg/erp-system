@@ -230,7 +230,9 @@ Deno.serve(async (req) => {
         so(loja.codigo_municipio_ibge), "", "",
         perfil, String(cfg.sped_ind_ativ ?? "1")]);
       add(["0001", "0"]);
-      add(["0005", txt(loja.apelido ?? loja.nome, 60), so(loja.cep), txt(loja.logradouro, 60),
+      // 0005 FANTASIA: o nome comercial. O apelido é só de tela desde a
+      // migration 114 ("Matriz"/"Filial") e não identifica a empresa no SPED.
+      add(["0005", txt(loja.nome, 60), so(loja.cep), txt(loja.logradouro, 60),
         txt(loja.numero, 10), txt(loja.complemento, 60), txt(loja.bairro, 60),
         so(loja.telefone), "", txt(loja.email, 60)]);
       add(["0100", txt(cfg.sped_contador_nome, 100), so(cfg.sped_contador_cpf),

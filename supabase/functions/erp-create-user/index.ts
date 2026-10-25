@@ -7,7 +7,7 @@
 //     body: {
 //       email: 'usuario@empresa.com',
 //       nome: 'Nome Completo',
-//       role: 'caixa' | 'gerente' | 'admin' | 'estoquista',
+//       role: 'caixa' | 'gerente' | 'admin' | 'estoquista' | 'vendedor',
 //       loja_default_id?: string,
 //       telefone?: string,
 //       senha?: string,         // Opcional - se informada, usuario pode logar direto
@@ -17,7 +17,7 @@
 
 import { clienteAdmin, corsHeaders, exigirAdminAtivo, jsonResponse } from "../_shared/erp-admin.ts";
 
-type Role = "admin" | "gerente" | "caixa" | "estoquista";
+type Role = "admin" | "gerente" | "caixa" | "estoquista" | "vendedor";
 
 interface CreateUserPayload {
   email: string;
@@ -73,7 +73,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       return jsonResponse({ success: false, error: "Email inválido" }, 400);
     }
 
-    const validRoles: Role[] = ["admin", "gerente", "caixa", "estoquista"];
+    const validRoles: Role[] = ["admin", "gerente", "caixa", "estoquista", "vendedor"];
     const role: Role = body.role || "caixa";
     if (!validRoles.includes(role)) {
       return jsonResponse(

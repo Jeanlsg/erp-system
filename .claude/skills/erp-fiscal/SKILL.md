@@ -6,6 +6,11 @@ description: Módulo fiscal do ERP X-Life — como NF-e e NFC-e são emitidas (e
 # Fiscal do ERP X-Life
 
 Emitente: **Simples Nacional (CRT 1)**, duas lojas — Petrolina-**PE** e Juazeiro-**BA** (matriz).
+Desde 10/2026 (migration 114) o `apelido` da loja é **Matriz**/**Filial**, só de tela; a `cidade`
+continua Juazeiro/Petrolina. Na nota e no SPED vai o `nome` comercial: xNome e xFant, "Remessa
+para filial <nome> - <cidade>/<UF>" (cidade omitida se o nome já a traz; `erp-emitir-nfe/loja-fiscal.ts`),
+registros 0000 e 0005.
+Nenhuma saída fiscal pode usar `apelido`.
 Para a Reforma Tributária (IBS/CBS, 2027), use a skill `erp-reforma-ibs-cbs`.
 
 ## ⚠️ Antes de tudo

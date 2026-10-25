@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { pontosQuePodeAbrir, podeVariosCaixas, podeGerirCaixas } from "./caixas-permitidos";
+import { pontosQuePodeAbrir, podeVariosCaixas, podeGerirCaixas, vendeNoCaixaDeCima } from "./caixas-permitidos";
 
 const PETROLINA = { id: "57cf59e2-6240-4d14-bc21-2dac4b2a089b", nome: "Caixa 1 — Petrolina" };
 const JUAZEIRO = { id: "cdffb6eb-ba5a-4767-99c0-6c904e8d5b0c", nome: "Caixa 1 — Juazeiro" };
@@ -48,5 +48,20 @@ describe("podeGerirCaixas", () => {
     expect(podeGerirCaixas({ role: "caixa" })).toBe(false);
     expect(podeGerirCaixas({ role: "estoquista" })).toBe(false);
     expect(podeGerirCaixas(null)).toBe(false);
+  });
+});
+
+describe("vendeNoCaixaDeCima (migration 113)", () => {
+  it("vendedor como papel principal pede os caixas de quem está acima", () => {
+    expect(vendeNoCaixaDeCima({ role: "vendedor" })).toBe(true);
+  });
+  it("as outras funções seguem só com o próprio caixa", () => {
+    for (const role of ["caixa", "estoquista", "gerente", "admin"]) {
+      expect(vendeNoCaixaDeCima({ role })).toBe(false);
+    }
+  });
+  it("o dono nunca entra nesta regra, nem sem usuário", () => {
+    expect(vendeNoCaixaDeCima({ admin_principal: true, role: "vendedor" })).toBe(false);
+    expect(vendeNoCaixaDeCima(null)).toBe(false);
   });
 });

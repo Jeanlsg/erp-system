@@ -10,6 +10,10 @@ optante do **Simples Nacional**, com PDV que emite NFC-e, estoque com lotes e va
 financeiro, fiscal (NF-e, NFC-e, DF-e, SPED) e integração com o CRM da própria loja.
 Tudo self-hosted numa VPS com EasyPanel.
 
+**Nomes das lojas (10/2026, migration 114):** na tela o `apelido` é **Matriz** / **Filial**
+(a matriz é a do CNPJ com estabelecimento `0001`); a `cidade` continua Juazeiro-BA /
+Petrolina-PE; a nota fiscal e o SPED usam o `nome` comercial — nunca o apelido.
+
 ## Stack
 
 | Camada | Tecnologia | Onde |

@@ -15,6 +15,60 @@
  */
 
 type CaixaAberto = { id: string; loja_id?: string | null };
+type CaixaDeAlguem = CaixaAberto & { usuario_id?: string | null };
+
+/**
+ * Os caixas que a frente pode operar: os do próprio usuário e, para o
+ * vendedor, os turnos abertos por quem está acima dele que o banco liberou
+ * (erp.caixas_operaveis, migration 113).
+ *
+ * Os próprios vêm primeiro: com o caixa dele aberto, é nele que o vendedor
+ * cai. Nenhum aparece duas vezes — a lista do banco também traz os próprios.
+ * A escolha entre eles continua sendo de `caixaAtivoNaLoja`.
+ */
+export function caixasParaOperar<T extends CaixaAberto>(
+  proprios: T[] | null | undefined,
+  operaveis: T[] | null | undefined,
+): T[] {
+  const vistos = new Set<string>();
+  const todos: T[] = [];
+  for (const c of [...(proprios ?? []), ...(operaveis ?? [])]) {
+    if (vistos.has(c.id)) continue;
+    vistos.add(c.id);
+    todos.push(c);
+  }
+  return todos;
+}
+
+/** O turno foi aberto por outra pessoa (o vendedor operando o caixa de quem está acima)? */
+export function caixaDeOutraPessoa(
+  caixa: CaixaDeAlguem | null | undefined,
+  usuarioId: string | null | undefined,
+): boolean {
+  return !!caixa?.usuario_id && caixa.usuario_id !== usuarioId;
+}
+
+/**
+ * Por que este usuário não pode fechar o caixa da frente — ou null, se pode.
+ *
+ * Fechar exige a permissão (o master tira do vendedor ao criar o login) E ter
+ * aberto o caixa: quem conta a gaveta e assina a diferença é quem abriu. O
+ * vendedor no caixa de outra pessoa vende, mas não fecha; o turno alheio
+ * esquecido se fecha por fora (fechar_caixa_indireto, gerente/master).
+ */
+export function motivoParaNaoFechar(
+  caixa: CaixaDeAlguem | null | undefined,
+  usuarioId: string | null | undefined,
+  temPermissao: boolean,
+  nomeDeQuemAbriu?: string | null,
+): string | null {
+  if (!caixa) return "Nenhum caixa aberto.";
+  if (!temPermissao) return "Seu usuário não tem permissão para fechar caixa. Fale com o usuário master.";
+  if (caixaDeOutraPessoa(caixa, usuarioId)) {
+    return `Este caixa foi aberto por ${nomeDeQuemAbriu || "outra pessoa"}: só quem abriu fecha o caixa.`;
+  }
+  return null;
+}
 
 /** O caixa que o PDV opera: o escolhido, se for desta filial; senão o mais recente dela. */
 export function caixaAtivoNaLoja<T extends CaixaAberto>(

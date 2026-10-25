@@ -1,6 +1,6 @@
 // Tipos baseados no schema SQL do Supabase
 
-export type UserRole = "admin" | "gerente" | "caixa" | "estoquista";
+export type UserRole = "admin" | "gerente" | "caixa" | "estoquista" | "vendedor";
 
 export interface Loja {
   id: string;
@@ -110,6 +110,8 @@ export interface Produto {
   unidade: string;
   preco_custo: number;
   preco_venda: number;
+  /** Valor de atacado (migration 115); nulo = sem atacado. Opcional: banco sem a 115 não devolve a coluna. */
+  preco_atacado?: number | null;
   estoque_minimo: number;
   estoque_maximo: number | null;
   peso: number | null;
