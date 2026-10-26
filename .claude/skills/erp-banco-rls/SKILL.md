@@ -34,6 +34,15 @@ libera nada que a policy proíbe.
 - Função que lê outro schema (`public.leads`, `auth.users`): `SECURITY DEFINER`,
   `SET search_path = erp, public`, e uma trava dentro (`WHERE erp.current_erp_user_id() IS NOT NULL`
   ou `erp.is_erp_admin_safe()`). Depois `REVOKE ALL … FROM public; GRANT EXECUTE … TO authenticated`.
+- **Função nova no `erp` nasce fechada para o `anon`** pelo event trigger
+  `erp_fecha_execute_funcao_nova` (migration 117): ele tira PUBLIC/anon e dá EXECUTE a
+  `authenticated` e `service_role`. Função só do service_role: faça o `REVOKE … FROM authenticated`
+  logo depois do CREATE (o `CREATE OR REPLACE` seguinte mantém a ACL). `ALTER DEFAULT PRIVILEGES
+  … IN SCHEMA` **não** tira o EXECUTE de PUBLIC — foi o erro da 056, que deixou 39 funções abertas.
+- **Nunca crie view sem schema** (`CREATE VIEW x` cai no `public`, que libera tudo para o `anon`) e
+  use `WITH (security_invoker = true)`: o dono das views é o `supabase_admin`, superusuário, que
+  ignora RLS. Conferir o anon depois de aplicar:
+  `select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='erp' and has_function_privilege('anon',p.oid,'EXECUTE');` → 0.
 - **Não use palavra reservada como nome de variável** em PL/pgSQL (`current_role`, `user`…).
   `is_erp_admin_safe()` devolveu `false` para todos por meses porque comparava
   `CURRENT_ROLE` (`'authenticated'`) com `'admin'` (migration 074).
