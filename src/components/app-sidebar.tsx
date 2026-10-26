@@ -204,7 +204,7 @@ export const sections: NavSection[] = [
       { title: "Frente de Caixa", url: "/pdv", icon: ScanBarcode, perm: "pdv.usar" },
       { title: "Notas Fiscais", url: "/notas-fiscais", icon: FileText, perm: "fiscal.emitir",
         tambem: ABAS_NOTAS_FISCAIS.map((a) => a.url.split("?")[0]).filter((u) => u !== "/notas-fiscais") },
-      { title: "Pedidos Delivery", url: "/pedidos-delivery", icon: Bike, perm: "venda.criar" },
+      { title: "Pedidos Delivery", url: "/pedidos-delivery", icon: Bike, perm: "pedido.delivery" },
       // { title: "Pedidos iFood", url: "/ifood", icon: ShoppingCart, perm: "venda.criar" }, // desativado: cliente não usa iFood — reativar descomentando aqui e a rota
       { title: "ExApp Pedidos", url: "/exapp-pedidos", icon: MessageSquare, perm: "venda.criar" },
       {

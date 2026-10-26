@@ -34,6 +34,8 @@ export type Permission =
   | "venda.criar"
   | "venda.cancelar"
   | "venda.desconto"
+  /** delivery: Ciclo de pedidos e "Precisa de entrega?" no PDV — o master libera para o vendedor */
+  | "pedido.delivery"
   | "produto.ver"
   | "produto.criar"
   | "produto.editar"
@@ -107,6 +109,7 @@ export const roleLabels: Record<Role, string> = {
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   admin: [
     "pdv.usar", "caixa.abrir", "caixa.fechar", "caixa.sangria", "venda.criar", "venda.cancelar", "venda.desconto",
+    "pedido.delivery",
     "produto.ver", "produto.criar", "produto.editar", "produto.excluir",
     "estoque.ver", "estoque.ajustar", "estoque.transferir",
     "cliente.ver", "cliente.criar", "cliente.editar",
@@ -118,6 +121,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   ],
   gerente: [
     "pdv.usar", "caixa.abrir", "caixa.fechar", "caixa.sangria", "venda.criar", "venda.cancelar", "venda.desconto",
+    "pedido.delivery",
     "produto.ver", "produto.criar", "produto.editar",
     "estoque.ver", "estoque.ajustar", "estoque.transferir",
     "cliente.ver", "cliente.criar", "cliente.editar",
@@ -130,6 +134,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     // fechar o próprio caixa faz parte do turno: quem abre, confere e fecha.
     // Sem isto o operador dependia de um gerente no fim do expediente.
     "pdv.usar", "caixa.abrir", "caixa.fechar", "caixa.sangria", "venda.criar", "venda.desconto",
+    "pedido.delivery",
     "produto.ver", "estoque.ver",
     "cliente.ver", "cliente.criar",
   ],
@@ -139,8 +144,8 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "compra.ver", "compra.criar", "compra.receber",
     "relatorio.ver", "loja.ver",
   ],
-  // Padrão do vendedor: tudo o que o balcão faz. O master tira o que não
-  // quiser ao criar o login (permissões próprias do usuário).
+  // Padrão do vendedor: tudo o que o balcão faz, menos o delivery. O master
+  // tira ou dá ao criar o login (permissões próprias do usuário).
   vendedor: [
     "pdv.usar", "caixa.abrir", "caixa.fechar", "caixa.sangria", "venda.criar", "venda.desconto",
     "produto.ver", "estoque.ver",

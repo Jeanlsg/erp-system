@@ -50,6 +50,7 @@ const PERMISSOES_POR_MODULO: Record<string, string[]> = {
     "venda.criar",
     "venda.cancelar",
     "venda.desconto",
+    "pedido.delivery",
   ],
   "Produtos": [
     "produto.ver",
@@ -96,6 +97,15 @@ const PERMISSOES_POR_MODULO: Record<string, string[]> = {
   ],
 };
 
+// O que o master decide para o vendedor já ao criar o login. Vira permissão
+// própria do usuário; o resto do padrão da função continua igual.
+const FUNCOES_DO_VENDEDOR: { perm: string; rotulo: string }[] = [
+  { perm: "caixa.abrir", rotulo: "Abrir caixa" },
+  { perm: "caixa.fechar", rotulo: "Fechar o próprio caixa" },
+  { perm: "caixa.sangria", rotulo: "Sangria e entrada de valores" },
+  { perm: "venda.desconto", rotulo: "Dar desconto e acréscimo" },
+  { perm: "pedido.delivery", rotulo: "Delivery (Ciclo de pedidos e entrega na venda)" },
+];
 
 // ============================================================
 // Aba "Papéis": as permissões padrão de cada papel, editáveis.
@@ -368,6 +378,12 @@ export function UsuariosPage() {
   const papeisDe = (u: any): Role[] => (u?.papeis?.length ? u.papeis : [u?.role ?? "caixa"]);
   const permissoesDosPapeis = (ps: Role[]) => Array.from(new Set(ps.flatMap((p) => mapaPapeis[p] ?? [])));
   const nomesDosPapeis = (ps: Role[]) => ps.map((p) => roleLabels[p]).join(", ");
+  /** O que o usuário pode hoje: permissões próprias (objeto não vazio) ou a união das funções. */
+  const permissoesEfetivasDe = (u: any): Record<string, boolean> => {
+    const proprias = (u?.permissoes ?? {}) as Record<string, boolean>;
+    if (Object.keys(proprias).length > 0) return proprias;
+    return Object.fromEntries(permissoesDosPapeis(papeisDe(u)).map((p) => [p, true]));
+  };
 
   const [search, setSearch] = useState("");
   const [modalImportarCrm, setModalImportarCrm] = useState(false);
@@ -400,6 +416,9 @@ export function UsuariosPage() {
     data_admissao: new Date().toLocaleDateString("sv-SE"), funcionarioAtivo: true,
   });
   const [showPasswordUsuario, setShowPasswordUsuario] = useState(false);
+  // Vendedor: o que pode fazer e em quais caixas — decidido no próprio formulário
+  const [funcoesVendedor, setFuncoesVendedor] = useState<Record<string, boolean>>({});
+  const [caixasVendedor, setCaixasVendedor] = useState<string[]>([]);
   const [permissoesCustom, setPermissoesCustom] = useState<Record<string, boolean>>({});
   const [usarPermissoesCustom, setUsarPermissoesCustom] = useState(false);
 
@@ -468,12 +487,17 @@ export function UsuariosPage() {
       funcionario: false, cargo: "", departamento: "", cpf: "",
       data_admissao: new Date().toLocaleDateString("sv-SE"), funcionarioAtivo: true,
     });
+    const padraoVendedor = mapaPapeis.vendedor ?? [];
+    setFuncoesVendedor(Object.fromEntries(FUNCOES_DO_VENDEDOR.map((f) => [f.perm, padraoVendedor.includes(f.perm)])));
+    setCaixasVendedor([]);
     setShowPasswordUsuario(false);
     setModalUsuario(true);
   };
 
   const abrirEdicaoUsuario = (u: any) => {
     setEditId(u.id);
+    const efetivas = permissoesEfetivasDe(u);
+    setFuncoesVendedor(Object.fromEntries(FUNCOES_DO_VENDEDOR.map((f) => [f.perm, efetivas[f.perm] === true])));
     setFormUsuario({
       nome: u.nome ?? "",
       email: u.email ?? "",
@@ -539,6 +563,24 @@ export function UsuariosPage() {
     invalidarDominios(qc, "pessoas");
   };
 
+  /**
+   * Vendedor: grava o que ele pode fazer (permissões próprias) e os caixas
+   * que opera. Os caixas são trava de banco (abrir e vender no turno de quem
+   * está acima, migration 113); as funções controlam botões e menu.
+   */
+  const gravarDoVendedor = async (userId: string, existente: any | null) => {
+    try {
+      const proprias = (existente?.permissoes ?? {}) as Record<string, boolean>;
+      const base = Object.keys(proprias).length > 0
+        ? proprias
+        : Object.fromEntries(permissoesDosPapeis(formUsuario.papeis).map((p) => [p, true]));
+      await updatePermissoes.mutateAsync({ id: userId, permissoes: { ...base, ...funcoesVendedor } });
+      await definirCaixas.mutateAsync({ usuarioId: userId, pontos: caixasVendedor });
+    } catch (e: any) {
+      toast.warning(`Usuário salvo, mas as funções e os caixas do vendedor não: ${e.message ?? e}`, { duration: 10000 });
+    }
+  };
+
   const salvarUsuario = async () => {
     if (!formUsuario.nome || !formUsuario.email) {
       toast.error("Preencha nome e e-mail");
@@ -556,6 +598,13 @@ export function UsuariosPage() {
     const editandoDono = !!editId && !!(usuarios.find((x: any) => x.id === editId) as any)?.admin_principal;
     if (!editandoDono && formUsuario.filiais.length === 0) {
       toast.error("Marque ao menos uma filial em que o usuário trabalha.");
+      return;
+    }
+    const ehVendedor = formUsuario.papeis.includes("vendedor");
+    // nenhum caixa marcado no banco quer dizer "todos": para o vendedor o
+    // master escolhe de propósito, então a tela pede ao menos um
+    if (ehVendedor && caixasDasFiliais.length > 0 && caixasVendedor.length === 0) {
+      toast.error("Marque ao menos um caixa que o vendedor pode operar.");
       return;
     }
     // a filial padrão tem de ser uma das dele; senão, a primeira marcada
@@ -593,6 +642,7 @@ export function UsuariosPage() {
         }
         try { await sincronizarFuncionario(editId); }
         catch (e: any) { toast.warning(`Usuário salvo, mas o funcionário não: ${e.message ?? e}`, { duration: 10000 }); }
+        if (ehVendedor) await gravarDoVendedor(editId, usuarios.find((x: any) => x.id === editId));
       } else {
         // Criação: usa Edge Function create-user
         const { data, error } = await supabase.functions.invoke<{
@@ -621,6 +671,7 @@ export function UsuariosPage() {
         if (r.user_id) {
           try { await sincronizarFuncionario(r.user_id); }
           catch (e: any) { toast.warning(`Usuário criado, mas o funcionário não: ${e.message ?? e}`, { duration: 10000 }); }
+          if (ehVendedor) await gravarDoVendedor(r.user_id, null);
         }
       }
       void qc.invalidateQueries({ queryKey: ["erp_usuario_lojas"] });
@@ -758,6 +809,13 @@ export function UsuariosPage() {
   useEffect(() => {
     setCaixasDaConta(caixasSalvos);
   }, [permissoesUsuarioId, caixasSalvos.join(",")]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Formulário do usuário: caixas do vendedor, só os das filiais marcadas
+  const caixasDasFiliais = (todosPontosVenda as any[]).filter((pv) => formUsuario.filiais.includes(pv.loja_id));
+  const { data: caixasDoEditado = [] } = useCaixasPermitidos(editId ?? undefined);
+  useEffect(() => {
+    if (editId) setCaixasVendedor(caixasDoEditado);
+  }, [editId, caixasDoEditado.join(",")]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const usuarioSelecionado = usuarios.find((u) => u.id === permissoesUsuarioId);
   const papeisSelecionados = papeisDe(usuarioSelecionado);
@@ -1173,6 +1231,53 @@ export function UsuariosPage() {
                 )}
               </div>
             </div>
+
+            {/* Vendedor: o master decide aqui o que ele faz e em quais caixas. */}
+            {formUsuario.papeis.includes("vendedor") && (
+              <div className="space-y-3 rounded-md border p-3">
+                <div>
+                  <Label>O que este vendedor pode fazer</Label>
+                  <div className="mt-1 grid gap-1 sm:grid-cols-2">
+                    {FUNCOES_DO_VENDEDOR.map((f) => (
+                      <label key={f.perm} className="flex cursor-pointer items-center gap-2 text-sm">
+                        <input type="checkbox" className="h-4 w-4"
+                          checked={funcoesVendedor[f.perm] === true}
+                          onChange={(e) => setFuncoesVendedor({ ...funcoesVendedor, [f.perm]: e.target.checked })} />
+                        {f.rotulo}
+                      </label>
+                    ))}
+                  </div>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Vender e receber sempre ficam liberados. Isto controla os botões e o menu dele.
+                  </p>
+                </div>
+                <div>
+                  <Label>Caixas que pode operar</Label>
+                  {caixasDasFiliais.length === 0 ? (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Nenhum caixa cadastrado nas filiais marcadas. Cadastre em PDV › Configurações.
+                    </p>
+                  ) : (
+                    <div className="mt-1 grid gap-1 sm:grid-cols-2">
+                      {caixasDasFiliais.map((pv: any) => (
+                        <label key={pv.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                          <input type="checkbox" className="h-4 w-4"
+                            checked={caixasVendedor.includes(pv.id)}
+                            onChange={(e) => setCaixasVendedor((prev) =>
+                              e.target.checked ? [...prev, pv.id] : prev.filter((id) => id !== pv.id))} />
+                          {pv.nome}
+                          <span className="text-xs text-muted-foreground">{pv.loja?.apelido ?? pv.loja?.nome ?? ""}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Ele abre só estes caixas e vende só neles — no turno dele ou de quem está acima. O banco recusa os outros.
+                  </p>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Telefone</Label>
@@ -1331,7 +1436,7 @@ export function UsuariosPage() {
           <div className="rounded-md border p-3">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-sm font-medium">Caixas que esta conta pode abrir</p>
+                <p className="text-sm font-medium">Caixas que esta conta pode abrir e operar</p>
                 <p className="text-xs text-muted-foreground">
                   {caixasDaConta.length === 0
                     ? "Nenhum marcado: a conta pode abrir qualquer caixa."

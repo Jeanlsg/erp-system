@@ -364,6 +364,8 @@ export function PDVPage() {
   const podeDesconto = can("venda.desconto");
   const podeSangria = can("caixa.sangria");
   const podeAbrirCaixa = can("caixa.abrir");
+  // delivery (Ciclo de pedidos e "Precisa de entrega?"): o vendedor só vê se o master liberar
+  const podeDelivery = can("pedido.delivery");
   const SEM_DESCONTO = "Seu usuário não tem permissão para dar desconto ou acréscimo. Fale com o usuário master.";
   const SEM_SANGRIA = "Seu usuário não tem permissão para sangria ou entrada de valores. Fale com o usuário master.";
   const motivoNaoFecha = motivoParaNaoFechar(caixaAberto, user?.id, can("caixa.fechar"), nomeDeQuemAbriu(caixaAberto));
@@ -760,6 +762,14 @@ export function PDVPage() {
   /** Abre a tela de pagamento, com o cursor já no valor. */
   const finalizar = () => {
     if (cart.length === 0) return;
+    // Login de vendedor sem funcionário próprio (conta do balcão): sem dizer
+    // quem atendeu, a venda sairia sem vendedor e sem comissão.
+    const loginSemFuncionario = !funcionarios.some((f: any) => f.usuario_id === usuarioLogado?.id);
+    if (!vendedorId && usuarioLogado?.role === "vendedor" && loginSemFuncionario && funcionarios.length > 0) {
+      toast.info("Escolha quem está vendendo (F1) antes de receber.");
+      setModalVendedor(true);
+      return;
+    }
     caixaDoPagamento.current = caixaAberto?.id ?? null;
     setTelaPagamento(true);
     focarValorPagamento();
@@ -1515,7 +1525,7 @@ export function PDVPage() {
             </Card>
 
             {/* Tipo de frente: o delivery é o Ciclo de pedidos, tela própria */}
-            <Card>
+            {podeDelivery && <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">Tipo de frente de caixa</CardTitle>
               </CardHeader>
@@ -1528,7 +1538,7 @@ export function PDVPage() {
                   Delivery abre o Ciclo de pedidos, onde o pedido anda pela esteira até a entrega.
                 </span>
               </CardContent>
-            </Card>
+            </Card>}
 
             {/* Card 2: Usuário e Saldo Inicial */}
             <Card>
@@ -1682,6 +1692,10 @@ export function PDVPage() {
                     : String(caixaAberto.numero_caixa ?? "").padStart(3, "0")}
                 </span>
               )}
+              {/* quem abriu é quem responde pela gaveta — visível para todos */}
+              <span className="block truncate not-italic text-[11px] text-[#9a9a9a]">
+                aberto por {caixaDeOutro ? (nomeDeQuemAbriu(caixaAberto) ?? "outra pessoa") : (user?.nome ?? "você")}
+              </span>
             </div>
             <div className="min-w-0">
               <strong className="font-medium">Usuário:</strong>
@@ -1695,9 +1709,21 @@ export function PDVPage() {
                 <Search className="inline h-3 w-3" />
               </button>
               <br />
-              <span className="block truncate uppercase">
-                {(funcionarios as any[]).find((f) => f.id === vendedorId)?.nome ?? "Sem vendedor"}
-              </span>
+              {/* Login de vendedor compartilhado no balcão: quem atende troca
+                  aqui, e a venda (e a comissão) sai no nome dele. */}
+              <select
+                className="max-w-full cursor-pointer bg-transparent uppercase italic text-[#cecece] outline-none"
+                value={vendedorId}
+                onChange={(e) => setVendedorId(e.target.value)}
+                title="Trocar o vendedor desta venda (F1)"
+              >
+                <option value="" className="bg-[#2f3237] not-italic">Sem vendedor</option>
+                {(funcionarios as any[]).map((f) => (
+                  <option key={f.id} value={f.id} className="bg-[#2f3237] not-italic">
+                    {f.nome ?? f.cargo ?? "—"}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="min-w-0">
               <strong className="font-medium">Cliente (F2):</strong>{" "}
@@ -2614,14 +2640,16 @@ export function PDVPage() {
             <div className="min-h-0 space-y-5 overflow-y-auto px-6 py-4">
               {/* Antes da forma de pagamento, como no sistema anterior: a
                   entrega muda o total que vai ser pago. */}
-              <EntregaVendaPdv
-                entrega={entrega}
-                aoMudar={setEntrega}
-                clienteId={clienteId || null}
-                travado={pagamentos.length > 0}
-                valorMercadoria={Math.max(0, subtotal - totalDesconto + acresc)}
-                online={online}
-              />
+              {podeDelivery && (
+                <EntregaVendaPdv
+                  entrega={entrega}
+                  aoMudar={setEntrega}
+                  clienteId={clienteId || null}
+                  travado={pagamentos.length > 0}
+                  valorMercadoria={Math.max(0, subtotal - totalDesconto + acresc)}
+                  online={online}
+                />
+              )}
 
               <PagamentosVenda
                 total={total}
