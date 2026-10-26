@@ -39,6 +39,11 @@ libera nada que a policy proíbe.
   `authenticated` e `service_role`. Função só do service_role: faça o `REVOKE … FROM authenticated`
   logo depois do CREATE (o `CREATE OR REPLACE` seguinte mantém a ACL). `ALTER DEFAULT PRIVILEGES
   … IN SCHEMA` **não** tira o EXECUTE de PUBLIC — foi o erro da 056, que deixou 39 funções abertas.
+- **Login só do CRM é `authenticated` também.** Função SECURITY DEFINER e view com direito do
+  dono precisam de `erp.chamador_do_erp()` (migration 118: perfil ativo no ERP, ou sem usuário
+  final no JWT — service_role, cron). As views do erp sem `security_invoker` têm o filtro
+  `WHERE erp.chamador_do_erp()` por fora: ao recriar uma delas, mantenha o filtro. Função usada
+  dentro de view precisa de EXECUTE para quem consulta (a checagem é do usuário, não do dono).
 - **Nunca crie view sem schema** (`CREATE VIEW x` cai no `public`, que libera tudo para o `anon`) e
   use `WITH (security_invoker = true)`: o dono das views é o `supabase_admin`, superusuário, que
   ignora RLS. Conferir o anon depois de aplicar:
