@@ -17,7 +17,9 @@
 //      openssl pkcs12 -export -out /tmp/t.pfx -inkey /tmp/k.pem \
 //        -in /tmp/c.pem -passout pass:123) &&
 //     php /tmp/dryrun-nfce.php"
+// O token vem de NFE_SERVICE_TOKEN, que o container já tem no ambiente.
 // ============================================================
+$token = getenv("NFE_SERVICE_TOKEN") ?: "teste-local";
 $payload = [
   "dry_run" => true,
   "ambiente" => 2,
@@ -37,7 +39,7 @@ $payload = [
   "pagamentos" => [["forma" => "03", "valor" => 119.90]],
 ];
 $ctx = stream_context_create(["http" => ["method" => "POST",
-  "header" => "Content-Type: application/json\r\nAuthorization: Bearer f95e57aa0a74186d48503a2de4a39b7467d6968a6cd2041e263e2217dd02e4fc\r\n",
+  "header" => "Content-Type: application/json\r\nAuthorization: Bearer {$token}\r\n",
   "content" => json_encode($payload), "ignore_errors" => true]]);
 $r = json_decode(file_get_contents("http://127.0.0.1:8100/v1/nfe/emitir", false, $ctx), true);
 if (empty($r["xml_base64"])) { echo "ERRO: ", json_encode($r, JSON_UNESCAPED_UNICODE), PHP_EOL; exit(1); }
