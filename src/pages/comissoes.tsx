@@ -7,6 +7,7 @@
 // ============================================================
 
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { Banknote, CheckCircle2, Loader2, FileText, Target, Plus, Trash2 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -151,7 +152,8 @@ export function ComissoesPage() {
           <Banknote className="h-6 w-6" /> Comissões
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Geradas automaticamente a cada venda com vendedor. O % vem do funcionário; com faixas cadastradas, o total vendido no mês define o % do mês inteiro.
+          Geradas automaticamente a cada venda com vendedor. O % vem do funcionário; com comissão dinâmica, o total vendido no mês define o % do mês inteiro —
+          o mês de todos os vendedores fica em <Link to="/gestao/comissao-dinamica" className="underline underline-offset-2">Comissão dinâmica</Link>.
         </p>
       </div>
 
@@ -193,7 +195,9 @@ export function ComissoesPage() {
         </CardContent></Card>
       </div>
 
-      {/* Faixas de comissão do vendedor filtrado: vendas (produtos) e serviços */}
+      {/* Comissão dinâmica do vendedor filtrado: vendas (produtos) e serviços.
+          ⚠️ Sumiu de 26/10 a 30/10: a 118 tirou o EXECUTE de situacao_faixa_*
+          e o erro ficava calado na consulta. A 120 devolve, com trava. */}
       {situacaoFaixaVenda && <CartaoFaixa rotulo="Vendas no mês" unidade="em vendas" situacao={situacaoFaixaVenda} />}
       {situacaoFaixa && <CartaoFaixa rotulo="Serviços no mês" unidade="em serviços" situacao={situacaoFaixa} />}
 
@@ -354,7 +358,7 @@ export function ComissoesPage() {
                     <td className="p-3 font-mono text-xs">{c.venda?.numero_pedido ?? "—"}</td>
                     <td className="p-3">{nomeDe(c)}</td>
                     <td className="p-3 text-right tabular-nums">{brl(c.valor_venda)}</td>
-                    <td className="p-3 text-right tabular-nums">{Number(c.percentual_comissao).toFixed(2)}%{c.faixa_venda ? " (faixa)" : ""}</td>
+                    <td className="p-3 text-right tabular-nums">{Number(c.percentual_comissao).toFixed(2)}%{c.faixa_venda ? " (dinâmica)" : ""}</td>
                     <td className="p-3 text-right text-xs tabular-nums text-muted-foreground">
                       {Number(c.valor_servicos ?? 0) > 0
                         ? <>{brl(Number(c.valor_servicos))} a {Number(c.percentual_servico ?? 0)}%{c.faixa_servico ? " (faixa)" : ""}</>

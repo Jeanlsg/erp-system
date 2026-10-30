@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { validarFaixas } from "@/lib/faixas-comissao";
+import { Link } from "react-router-dom";
+import { mesmasFaixas, resumoFaixas, validarFaixas } from "@/lib/faixas-comissao";
 import { EditorFaixasComissao, faixasEmNumeros, type FaixaTexto } from "@/components/editor-faixas-comissao";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,10 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { InputMoeda } from "@/components/ui/input-moeda";
 import { Label } from "@/components/ui/label";
-import { Building2, Plus, Search, Loader2, UserCheck, UserX, Mail, Phone, Pencil, UserMinus, RotateCcw, KeyRound } from "lucide-react";
+import { Building2, Plus, Search, Loader2, UserCheck, UserX, Mail, Phone, Pencil, UserMinus, RotateCcw, KeyRound, TrendingUp } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { useFuncionarios, useCreateFuncionario, useUpdateFuncionario, isSupabaseConfigured, useFaixasServico, useDefinirFaixasServico, useFaixasComissao, useDefinirFaixasComissao } from "@/lib/supabase-queries";
+import { useFuncionarios, useCreateFuncionario, useUpdateFuncionario, isSupabaseConfigured, useFaixasServico, useDefinirFaixasServico, useFaixasComissao, useDefinirFaixasComissao, useTodasFaixasComissao } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
@@ -64,8 +65,10 @@ export function FuncionariosPage() {
     setFaixasVenda(faixasVendaSalvas.map((f) => ({ venda_minima: String(f.venda_minima), percentual: String(f.percentual) })));
   }, [editando?.id, JSON.stringify(faixasVendaSalvas)]); // eslint-disable-line react-hooks/exhaustive-deps
   const faixasVendaNumericas = faixasEmNumeros(faixasVenda);
-  const checagemFaixasVenda = validarFaixas(faixasVendaNumericas);
-  const checagemFaixas = validarFaixas(faixasNumericas);
+  const checagemFaixasVenda = validarFaixas(faixasVendaNumericas, "em vendas");
+  const checagemFaixas = validarFaixas(faixasNumericas, "em serviços");
+  // para a coluna Comissão da lista dizer quem está na comissão dinâmica
+  const { data: faixasPorFuncionario } = useTodasFaixasComissao("venda");
   const [form, setForm] = useState({
     nome: "",
     cpf: "",
@@ -246,8 +249,12 @@ export function FuncionariosPage() {
         ...camposDaFicha(),
         usuario_id: usuarioId,
       });
-      await definirFaixas.mutateAsync({ funcionarioId: editando.id, faixas: faixasNumericas });
-      await definirFaixasVenda.mutateAsync({ funcionarioId: editando.id, faixas: faixasVendaNumericas });
+      // Gravar faixas apaga e recria a lista, e o banco refaz cada comissão
+      // do mês do funcionário por linha gravada: só quando mudaram.
+      if (!mesmasFaixas(faixasNumericas, faixasSalvas))
+        await definirFaixas.mutateAsync({ funcionarioId: editando.id, faixas: faixasNumericas });
+      if (!mesmasFaixas(faixasVendaNumericas, faixasVendaSalvas))
+        await definirFaixasVenda.mutateAsync({ funcionarioId: editando.id, faixas: faixasVendaNumericas });
       void qc.invalidateQueries({ queryKey: ["erp_usuarios_vinculo"] });
       invalidarDominios(qc, "pessoas");
       void qc.invalidateQueries({ queryKey: ["erp_usuarios"] });
@@ -481,7 +488,12 @@ export function FuncionariosPage() {
                     <td className="p-3 text-right tabular-nums">{f.salario ? brl(f.salario) : "—"}</td>
                     <td className="p-3 text-sm">{f.data_admissao ? date(f.data_admissao) : "—"}</td>
                     <td className="p-3 text-center tabular-nums text-sm">
-                      {Number(f.comissao_percentual ?? 0) > 0 ? `${Number(f.comissao_percentual)}%` : "—"}
+                      {faixasPorFuncionario?.get(f.id)?.length ? (
+                        <div className="flex flex-col items-center gap-0.5">
+                          <Badge variant="secondary" className="gap-1"><TrendingUp className="h-3 w-3" />Dinâmica</Badge>
+                          <span className="text-[11px] text-muted-foreground">{resumoFaixas(faixasPorFuncionario.get(f.id)!)}</span>
+                        </div>
+                      ) : Number(f.comissao_percentual ?? 0) > 0 ? `${Number(f.comissao_percentual)}%` : "—"}
                     </td>
                     <td className="p-3 text-center">
                       <Badge variant={f.data_demissao ? "outline" : "default"}>
@@ -533,8 +545,60 @@ export function FuncionariosPage() {
             </div>
             <div className="grid grid-cols-3 gap-3">
               <div><Label>Salário</Label><InputMoeda value={form.salario} onChange={(v) => setForm({ ...form, salario: String(v) })} /></div>
-              <div><Label>Comissão %</Label><Input type="number" step="0.01" value={form.comissao} onChange={(e) => setForm({ ...form, comissao: e.target.value })} /></div>
+              <div><Label>Comissão fixa %</Label><Input type="number" step="0.01" value={form.comissao} onChange={(e) => setForm({ ...form, comissao: e.target.value })} /></div>
               <div><Label>Admissão</Label><Input type="date" value={form.data_admissao} onChange={(e) => setForm({ ...form, data_admissao: e.target.value })} /></div>
+            </div>
+
+            {/* Comissão dinâmica (nome de 30/10/2026; faixas da 107 e da 097).
+                Ficava dentro de "Informações confidenciais", fechada, e quem
+                procurava a comissão por faixa não achava. A tabela de faixas
+                só é legível por admin e gerente (RLS), como a ficha. */}
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-3">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <p className="flex items-center gap-1.5 text-sm font-medium"><TrendingUp className="h-4 w-4" /> Comissão dinâmica</p>
+                  <p className="text-xs text-muted-foreground">
+                    Bateu X em vendas no mês, ganha Y% sobre todas as vendas do mês. Sem faixas, vale a comissão fixa acima.
+                  </p>
+                </div>
+                <Link to="/gestao/comissao-dinamica" className="text-xs text-primary underline-offset-2 hover:underline">
+                  Ver relatório
+                </Link>
+              </div>
+              <EditorFaixasComissao
+                titulo="Faixas sobre vendas (produtos)"
+                descricao="O total de produtos que a pessoa vender no mês define a faixa, e o percentual dela vale para todas as vendas do mês — sobe de faixa como numa tabela de frete. Cadastre quantas faixas quiser."
+                rotuloTotal="em vendas"
+                faixas={faixasVenda}
+                aoMudar={setFaixasVenda}
+              />
+              <details className="rounded-md border bg-background p-3">
+                <summary className="cursor-pointer text-sm font-medium">
+                  Serviços
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    {faixas.length ? `${faixas.length} ${faixas.length === 1 ? "faixa" : "faixas"}` : "comissão própria de serviço"}
+                  </span>
+                </summary>
+                <div className="mt-3 space-y-3">
+                  <div>
+                    <Label>Comissão sobre serviço %</Label>
+                    <Input type="number" step="0.01" min="0" value={form.comissao_servico}
+                      onChange={(e) => setForm({ ...form, comissao_servico: e.target.value })} />
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Serviço comissiona diferente de produto: mão de obra não tem custo de
+                      mercadoria. Em branco, vale a comissão fixa acima. Com faixas
+                      cadastradas abaixo, são elas que valem.
+                    </p>
+                  </div>
+                  <EditorFaixasComissao
+                    titulo="Faixas de serviço"
+                    descricao="O total de serviços que a pessoa vender no mês define a faixa, e o percentual dela vale para todos os serviços do mês."
+                    rotuloTotal="em serviços"
+                    faixas={faixas}
+                    aoMudar={setFaixas}
+                  />
+                </div>
+              </details>
             </div>
 
             {/* Ficha de admissão — o que a contabilidade pede e a tela não tinha */}
@@ -586,7 +650,7 @@ export function FuncionariosPage() {
               </div>
             </details>
 
-            {/* Confidencial: banco e comissão.
+            {/* Confidencial: banco. A comissão foi para "Comissão dinâmica".
 
                 A tabela inteira já só é legível por admin e gerente desde a
                 078 — o aviso existe para quem está com a tela aberta no
@@ -595,7 +659,7 @@ export function FuncionariosPage() {
               <summary className="cursor-pointer text-sm font-medium">
                 Informações confidenciais
                 <span className="ml-2 text-xs font-normal text-muted-foreground">
-                  dados bancários e comissão — visível só a administrador e gerente
+                  dados bancários — visível só a administrador e gerente
                 </span>
               </summary>
               <div className="mt-3 space-y-3">
@@ -617,30 +681,6 @@ export function FuncionariosPage() {
                   </div>
                   <div><Label>Chave PIX</Label><Input value={form.chave_pix} onChange={(e) => setForm({ ...form, chave_pix: e.target.value })} /></div>
                 </div>
-                <EditorFaixasComissao
-                  titulo="Faixas de comissão sobre vendas (produtos)"
-                  descricao="O total de produtos que a pessoa vender no mês define a faixa, e o percentual dela vale para todas as vendas do mês — sobe de faixa como numa tabela de frete. Sem faixas, vale a Comissão % fixa acima."
-                  rotuloTotal="em vendas"
-                  faixas={faixasVenda}
-                  aoMudar={setFaixasVenda}
-                />
-                <div>
-                  <Label>Comissão sobre serviço %</Label>
-                  <Input type="number" step="0.01" min="0" value={form.comissao_servico}
-                    onChange={(e) => setForm({ ...form, comissao_servico: e.target.value })} />
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Serviço comissiona diferente de produto: mão de obra não tem custo de
-                    mercadoria. Em branco, vale o percentual geral acima. Com faixas
-                    cadastradas abaixo, são elas que valem.
-                  </p>
-                </div>
-                <EditorFaixasComissao
-                  titulo="Faixas de comissão de serviço"
-                  descricao="O total de serviços que a pessoa vender no mês define a faixa, e o percentual dela vale para todos os serviços do mês."
-                  rotuloTotal="em serviços"
-                  faixas={faixas}
-                  aoMudar={setFaixas}
-                />
               </div>
             </details>
 

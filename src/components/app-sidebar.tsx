@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
-  Home, Calculator, Wallet, Receipt, Truck, Bike, MessageSquare, ShoppingCart, Barcode, CreditCard, Wrench, FileText, Users, Building2, Package, Calendar, LineChart, Briefcase, Mail, Settings, Cog, Store, Key, HelpCircle, PanelLeftClose, PanelLeftOpen, LayoutDashboard, RotateCcw, PackagePlus, ShoppingBag, ArrowLeftRight, ScrollText, Banknote, AlertTriangle, Shield, Search, Smartphone, Star, Lock, Network, Send, FolderTree, ScanBarcode, ChevronRight, Minus, Flag, ChevronDown, ExternalLink, BookOpen,
+  Home, Calculator, Wallet, Receipt, Truck, Bike, MessageSquare, ShoppingCart, Barcode, CreditCard, Wrench, FileText, Users, Building2, Package, Calendar, LineChart, Briefcase, Mail, Settings, Cog, Store, Key, HelpCircle, PanelLeftClose, PanelLeftOpen, LayoutDashboard, RotateCcw, PackagePlus, ShoppingBag, ArrowLeftRight, ScrollText, Banknote, AlertTriangle, Shield, Search, Smartphone, Star, Lock, Network, Send, FolderTree, ScanBarcode, ChevronRight, Minus, Flag, ChevronDown, ExternalLink, BookOpen, TrendingUp,
 } from "lucide-react";
 
 import { useAuth, roleLabels, type Permission } from "@/lib/store/auth-store";
@@ -260,6 +260,7 @@ export const sections: NavSection[] = [
           { title: "Regiões de Entrega", url: "/gestao/regioes-entrega", icon: MapPin, perm: "config.ver" },
           // do ERP:
           { title: "Comissões", url: "/gestao/comissoes", icon: Banknote, perm: "usuario.ver" },
+          { title: "Comissão Dinâmica", url: "/gestao/comissao-dinamica", icon: TrendingUp, perm: "usuario.ver" },
           { title: "Movimentações (Kardex)", url: "/estoque/movimentacoes", icon: ArrowLeftRight, perm: "produto.ver" },
           { title: "Inventário / Balanço", url: "/estoque/inventario", icon: Package, perm: "estoque.ajustar" },
           { title: "Transferências", url: "/estoque.transferencia", icon: ArrowLeftRight, perm: "estoque.transferir" },

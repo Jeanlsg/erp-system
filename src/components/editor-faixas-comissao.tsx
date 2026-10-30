@@ -1,5 +1,5 @@
 // ============================================================
-// Editor de faixas de comissão ("vendeu a partir de R$ X no mês, ganha Y%").
+// Editor da comissão dinâmica ("vendeu a partir de R$ X no mês, ganha Y%").
 // Usado para as faixas sobre vendas de produtos (107) e sobre serviços (097)
 // na ficha do funcionário.
 // ============================================================
@@ -30,7 +30,7 @@ export function EditorFaixasComissao({ titulo, descricao, rotuloTotal, faixas, a
   aoMudar: (f: FaixaTexto[]) => void;
 }) {
   const numericas = faixasEmNumeros(faixas);
-  const { erros, avisos } = validarFaixas(numericas);
+  const { erros, avisos } = validarFaixas(numericas, rotuloTotal);
   return (
     <div className="rounded-md border bg-background p-3">
       <Label>{titulo}</Label>

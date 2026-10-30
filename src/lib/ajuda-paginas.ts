@@ -74,8 +74,9 @@ const A: Record<string, AjudaPagina> = {
   },
   kits: { titulo: "Kits & Combos", descricao: "Produtos compostos: um kit agrupa itens do cadastro e baixa o estoque dos componentes ao vender." },
   fornecedores: { titulo: "Fornecedores", descricao: "Cadastro de fornecedores usado em compras, contas a pagar e na entrada de NF-e." },
-  funcionarios: { titulo: "Funcionários", descricao: "Cadastro de funcionários; vendedores daqui podem ser vinculados às vendas para comissão." },
-  "gestao/comissoes": { titulo: "Comissões", descricao: "Comissão de cada venda com vendedor, calculada sozinha (% do funcionário; produto ou serviço com % próprio sobrepõe). Filtre por período e vendedor e marque como pagas." },
+  funcionarios: { titulo: "Funcionários", descricao: "Cadastro de funcionários; vendedores daqui podem ser vinculados às vendas para comissão. A comissão pode ser fixa (um % só) ou dinâmica: faixas de faturamento no mês, cada uma com seu %." },
+  "gestao/comissoes": { titulo: "Comissões", descricao: "Comissão de cada venda com vendedor, calculada sozinha (% do funcionário; produto ou serviço com % próprio sobrepõe; com comissão dinâmica, a faixa do mês). Filtre por período e vendedor e marque como pagas." },
+  "gestao/comissao-dinamica": { titulo: "Comissão dinâmica", descricao: "Bateu X em vendas no mês, ganha Y% sobre todas as vendas do mês. Escolha o mês e veja, de cada vendedor, quanto faturou, em que faixa está, quanto falta para subir e a comissão a pagar. As faixas se cadastram na ficha do funcionário, em Funcionários › Comissão dinâmica." },
   lojas: {
     titulo: "Lojas",
     descricao: "Cadastro das lojas (matriz e filiais). O botão de conferência valida IE e endereço contra o cadastro da SEFAZ — este endereço é o do emitente em toda nota fiscal.",

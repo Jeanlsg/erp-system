@@ -4237,6 +4237,87 @@ export function useDefinirFaixasComissao(tipo: TipoFaixa) {
       qc.invalidateQueries({ queryKey: [TABELA_FAIXAS[tipo]] });
       qc.invalidateQueries({ queryKey: [`erp_faixa_${tipo}_situacao`] });
       qc.invalidateQueries({ queryKey: ["erp_comissoes"] });
+      qc.invalidateQueries({ queryKey: ["erp_comissao_dinamica"] });
+    },
+  });
+}
+
+/** Faixas de todos os funcionários, por funcionário — para a lista mostrar quem tem comissão dinâmica. */
+export function useTodasFaixasComissao(tipo: TipoFaixa) {
+  return useQuery<Map<string, { venda_minima: number; percentual: number }[]>>({
+    queryKey: [TABELA_FAIXAS[tipo], "todas"],
+    queryFn: async () => {
+      const m = new Map<string, { venda_minima: number; percentual: number }[]>();
+      if (!isSupabaseConfigured()) return m;
+      const { data, error } = await supabase.from(TABELA_FAIXAS[tipo])
+        .select("funcionario_id, venda_minima, percentual").order("venda_minima");
+      if (error) throw error;
+      for (const f of data ?? []) {
+        const l = m.get(f.funcionario_id) ?? [];
+        l.push({ venda_minima: Number(f.venda_minima), percentual: Number(f.percentual) });
+        m.set(f.funcionario_id, l);
+      }
+      return m;
+    },
+  });
+}
+
+export type LinhaComissaoDinamica = {
+  funcionario_id: string;
+  nome: string;
+  cargo: string | null;
+  demitido_em: string | null;
+  /** tem faixas sobre vendas */
+  dinamica: boolean;
+  percentual_fixo: number;
+  faixas: { venda_minima: number; percentual: number }[];
+  vendas: number;
+  itens: number;
+  /** produtos vendidos no mês — o total que define a faixa */
+  faturamento: number;
+  servicos: number;
+  /** % da faixa atingida; null para quem não tem comissão dinâmica */
+  percentual: number | null;
+  proxima_venda_minima: number | null;
+  proximo_percentual: number | null;
+  falta: number | null;
+  comissao: number;
+  comissao_pendente: number;
+  comissao_paga: number;
+};
+
+/**
+ * Comissão dinâmica do mês, todos os vendedores (migration 120). Os totais
+ * vêm das mesmas funções que decidem a faixa no banco — somar vendas aqui no
+ * front daria outro número (e cortaria em 1000 linhas).
+ *
+ * @param mes "aaaa-mm"
+ */
+export function useRelatorioComissaoDinamica(mes: string) {
+  return useQuery<LinhaComissaoDinamica[]>({
+    queryKey: ["erp_comissao_dinamica", mes],
+    enabled: /^\d{4}-\d{2}$/.test(mes),
+    queryFn: async () => {
+      if (!isSupabaseConfigured()) return [];
+      const { data, error } = await supabase.schema("erp").rpc("relatorio_comissao_dinamica", { p_mes: `${mes}-01` });
+      if (error) throw error;
+      const n = (v: unknown) => (v === null || v === undefined ? null : Number(v));
+      return ((data as any[]) ?? []).map((r) => ({
+        ...r,
+        percentual_fixo: Number(r.percentual_fixo),
+        faixas: (r.faixas ?? []).map((f: any) => ({ venda_minima: Number(f.venda_minima), percentual: Number(f.percentual) })),
+        vendas: Number(r.vendas),
+        itens: Number(r.itens),
+        faturamento: Number(r.faturamento),
+        servicos: Number(r.servicos),
+        percentual: n(r.percentual),
+        proxima_venda_minima: n(r.proxima_venda_minima),
+        proximo_percentual: n(r.proximo_percentual),
+        falta: n(r.falta),
+        comissao: Number(r.comissao),
+        comissao_pendente: Number(r.comissao_pendente),
+        comissao_paga: Number(r.comissao_paga),
+      }));
     },
   });
 }

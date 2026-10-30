@@ -10,6 +10,7 @@ import { SetupPage } from "@/pages/setup";
 import { EquipamentosPage } from "@/pages/equipamentos";
 import { TutoriaisPage } from "@/pages/tutoriais";
 import { ComissoesPage } from "@/pages/comissoes";
+import { ComissaoDinamicaPage } from "@/pages/comissao-dinamica";
 import { CustomersPage } from "@/pages/customers";
 // import { VisaoGeralPage } from "@/pages/visao-geral"; // unificada no Dashboard
 import { FinanceiroPage } from "@/pages/financeiro";
@@ -137,6 +138,7 @@ export default function App() {
         <Route path="gestao/fornecedores" element={<FornecedoresPage />} />
         <Route path="gestao/funcionarios" element={<FuncionariosPage />} />
         <Route path="gestao/comissoes" element={<ComissoesPage />} />
+        <Route path="gestao/comissao-dinamica" element={<ComissaoDinamicaPage />} />
         <Route path="gestao/servicos" element={<ServicosPage />} />
         <Route path="gestao/transportadoras" element={<TransportadorasPage />} />
         <Route path="gestao/agenda-telefonica" element={<AgendaTelefonicaPage />} />

@@ -20,7 +20,7 @@ export const DOMINIOS = {
     "erp_vendas", "erp_vendas-hoje", "erp_vendas-por-dia", "erp_vendas-por-dia-view",
     "erp-vendas-por-periodo", "erp_rel_vendas", "erp-top-produtos-vendidos", "erp_top-produtos",
     "erp_top-produtos-view", "erp_curva_abc", "erp_itens_devolviveis", "erp_dashboard",
-    "erp_dashboard-stats", "erp_metas", "erp_comissoes", "erp_notas_fiscais-venda-ids",
+    "erp_dashboard-stats", "erp_metas", "erp_comissoes", "erp_comissao_dinamica", "erp_notas_fiscais-venda-ids",
   ],
   /** O turno de caixa: resumo aberto, esperado na gaveta, sangrias, fechamentos. */
   caixa: [
