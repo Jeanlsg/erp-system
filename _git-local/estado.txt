@@ -1,0 +1,7 @@
+repositório: /Users/jeanlsg/Documents/github/erp-system
+remoto: https://github.com/Jeanlsg/erp-system.git
+branch: main
+HEAD: 4a9bc31ed954fdf1a4e11c6dd2ceb8672b6d90e3
+
+git status:
+## main...origin/main
