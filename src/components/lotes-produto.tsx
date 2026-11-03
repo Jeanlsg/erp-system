@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
 import { date as fmtData } from "@/lib/format";
+import { useAuth } from "@/lib/store/auth-store";
 
 /** Dias entre hoje e a data (negativo = já venceu). */
 function diasAte(iso: string): number {
@@ -50,6 +51,8 @@ interface Props {
 
 export function LotesProdutoDialog({ open, onOpenChange, produto, lojas, lojaIdInicial }: Props) {
   const qc = useQueryClient();
+  // baixar vencido mexe no estoque da filial: o banco exige estoque.ajustar (123)
+  const podeAjustarEstoque = useAuth().can("estoque.ajustar");
   const [modoPrazo, setModoPrazo] = useState<"data" | "dias">("data");
   const [form, setForm] = useState({
     codigo: "", quantidade: "", fabricacao: "", validade: "", dias: "", loja_id: "",
@@ -476,7 +479,7 @@ export function LotesProdutoDialog({ open, onOpenChange, produto, lojas, lojaIdI
                             )}
                           </td>
                           <td className="p-2 text-right whitespace-nowrap">
-                            {d < 0 && Number(l.quantidade) > 0 && (
+                            {d < 0 && Number(l.quantidade) > 0 && podeAjustarEstoque && (
                               <Button size="sm" variant="outline" className="h-7 text-xs mr-1 border-destructive text-destructive"
                                 onClick={() => void baixarVencido(l)} disabled={ocupado === `baixa-${l.id}`}
                                 title="Tira do estoque, registra no Kardex e zera o lote">

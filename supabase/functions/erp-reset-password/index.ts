@@ -65,6 +65,12 @@ Deno.serve(async (req) => {
     }
 
     await admin.from("erp_usuarios").update({ tentativas_login: 0, bloqueado: false }).eq("id", alvo.id);
+    // senha nova: o login por CPF dele volta a aceitar tentativas na hora (122)
+    const { data: linha } = await admin.from("erp_usuarios").select("cpf").eq("id", alvo.id).maybeSingle();
+    if (linha?.cpf) {
+      const { error: erroLiberar } = await admin.rpc("liberar_login", { p_chaves: [`cpf:${linha.cpf}`] });
+      if (erroLiberar) console.error("erp-reset-password: contador do CPF não zerado:", erroLiberar.message);
+    }
     return jsonResponse({ success: true, email: alvo.email, senha_trocada: !!body.nova_senha }, 200);
   } catch (err) {
     console.error("Erro inesperado:", err);
