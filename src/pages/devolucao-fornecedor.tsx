@@ -56,6 +56,7 @@ import {
   faltasDoFornecedor, itemDaNotaEntrada, itemDoProduto, itemDoXml, lerXmlNfe, mudarQuantidadeOuValor,
   soDigitos, totais, type ItemDevolucao,
 } from "@/lib/devolucao-fornecedor";
+import { escaparHtml, escreverEImprimir } from "@/lib/imprimir";
 
 const MODALIDADES = [
   { v: "0", t: "0 - Por conta do Emitente" },
@@ -481,17 +482,16 @@ export function DevolucaoFornecedorPage() {
   const imprimirRelatorio = () => {
     const w = window.open("", "_blank");
     if (!w) { toast.error("O navegador bloqueou a janela de impressão."); return; }
-    const linhas = lista.map((d) => `<tr><td>${d.nota?.numero ?? "—"}</td><td>${new Date(d.created_at).toLocaleString("pt-BR")}</td>
-      <td>${d.fornecedor?.nome_razao ?? "—"}</td><td style="text-align:right">${brl(Number(d.valor_total ?? 0))}</td><td>${situacao(d).texto}</td>
+    // nome do fornecedor vem do XML da NF-e dele: escapado (varredura de 03/11/2026)
+    const linhas = lista.map((d) => `<tr><td>${escaparHtml(d.nota?.numero ?? "—")}</td><td>${new Date(d.created_at).toLocaleString("pt-BR")}</td>
+      <td>${escaparHtml(d.fornecedor?.nome_razao ?? "—")}</td><td style="text-align:right">${brl(Number(d.valor_total ?? 0))}</td><td>${situacao(d).texto}</td>
       <td>${d.nota?.ambiente === "producao" ? "Produção" : d.nota ? "Homologação" : "—"}</td></tr>`).join("");
     const total = lista.reduce((s, d) => s + Number(d.valor_total ?? 0), 0);
-    w.document.write(`<!doctype html><meta charset="utf-8"><title>Notas de devolução a fornecedor</title>
+    escreverEImprimir(w, `<!doctype html><meta charset="utf-8"><title>Notas de devolução a fornecedor</title>
       <style>body{font-family:Arial,sans-serif;font-size:12px;margin:20px}table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #ccc;padding:5px;text-align:left}th{background:#eee}</style>
-      <h2>Notas de devolução a fornecedor — ${loja?.apelido ?? ""}</h2>
+      <h2>Notas de devolução a fornecedor — ${escaparHtml(loja?.apelido ?? "")}</h2>
       <p>${soAndamento ? "Em andamento" : `Período: ${periodo.de.split("-").reverse().join("/")} a ${periodo.ate.split("-").reverse().join("/")}`} · ${lista.length} nota(s) · total ${brl(total)}</p>
-      <table><thead><tr><th>Nota</th><th>Data</th><th>Fornecedor</th><th style="text-align:right">Valor</th><th>Status</th><th>Ambiente</th></tr></thead><tbody>${linhas}</tbody></table>
-      <script>window.onload=()=>window.print()</script>`);
-    w.document.close();
+      <table><thead><tr><th>Nota</th><th>Data</th><th>Fornecedor</th><th style="text-align:right">Valor</th><th>Status</th><th>Ambiente</th></tr></thead><tbody>${linhas}</tbody></table>`);
   };
 
   if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="Notas de Devolução a Fornecedor" />;

@@ -23,6 +23,7 @@ import type {
 import { useAuthStore, mapaPapelPermissoes } from "@/lib/store/auth-store";
 import { invalidarDominios, DOMINIOS_DA_VENDA } from "@/lib/dominios-cache";
 import { lerTudo } from "@/lib/ler-tudo";
+import { valorDoFiltro } from "@/lib/filtro-postgrest";
 
 export { isSupabaseConfigured, supabase };
 
@@ -237,7 +238,8 @@ export function useProdutos(filters?: { lojaId?: string; search?: string }) {
           .order("nome")
           .order("id");
         if (filters?.search) {
-          query = query.or(`nome.ilike.%${filters.search}%,sku.ilike.%${filters.search}%`);
+          const termo = valorDoFiltro(`%${filters.search}%`);
+          query = query.or(`nome.ilike.${termo},sku.ilike.${termo}`);
         }
         return query;
       });

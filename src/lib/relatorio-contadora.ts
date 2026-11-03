@@ -137,5 +137,5 @@ td{border-bottom:1px solid #ddd;padding:2px 3px}.n{text-align:right;white-space:
 <tbody>${ent || '<tr><td colspan="5">Nenhuma nota de entrada no mês.</td></tr>'}</tbody></table>
 <h2>Numerações inutilizadas</h2><table><thead><tr><th>Modelo</th><th>Série</th><th>Números</th><th>Data</th></tr></thead>
 <tbody>${inu || '<tr><td colspan="4">Nenhuma inutilização no mês.</td></tr>'}</tbody></table>
-<script>window.onload=function(){window.print()}</script></body></html>`;
+</body></html>`;
 }

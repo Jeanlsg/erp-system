@@ -140,6 +140,8 @@ Deno.serve(async (req) => {
       falhas: falhas.slice(0, 10),
     });
   } catch (e) {
-    return json(500, { erro: String(e) });
+    // o detalhe fica no log; a resposta não leva mensagem do banco nem do SMTP
+    console.error("erp-email-campanha:", e);
+    return json(500, { erro: "Falha ao enviar a campanha. Tente de novo; se repetir, veja o log do servidor." });
   }
 });

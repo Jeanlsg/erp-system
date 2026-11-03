@@ -46,3 +46,15 @@ docs/
 !docs/
 !docs/auditoria/
 !docs/auditoria/**
+
+# Certificado A1, chaves e credenciais (varredura de 03/11/2026): o ERP lida
+# com o certificado da loja; um .pfx salvo na pasta não pode entrar no commit
+*.pfx
+*.p12
+*.pem
+*.key
+*.jks
+*.keystore
+service-account*.json
+*-adminsdk-*.json
+*.map

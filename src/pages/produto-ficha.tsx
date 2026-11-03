@@ -31,6 +31,7 @@ import {
   ROTULO_CAMPO_PRECO, TIPOS_MOVIMENTO, alteracoesDePreco, htmlFichaProduto, resumoMovimentos, rotuloOrigem, sinalDoMovimento,
 } from "@/lib/ficha-produto";
 import { precoAtacadoNoPayload, precoAtacadoOriginal } from "@/lib/preco-atacado";
+import { escreverEImprimir } from "@/lib/imprimir";
 
 // Data LOCAL (AAAA-MM-DD). toISOString() é UTC: à noite em Recife já é o dia
 // seguinte, e a tela mostrava "até amanhã".
@@ -128,13 +129,12 @@ export function ProdutoFichaPage() {
     if (!produto) return;
     const w = window.open("", "_blank", "width=1000,height=800");
     if (!w) { toast.error("Libere pop-ups deste site para imprimir."); return; }
-    w.document.write(htmlFichaProduto({
+    escreverEImprimir(w, htmlFichaProduto({
       produto, loja: lojaAtual?.apelido ?? lojaAtual?.nome ?? "", de, ate, estoque, custo: custoMedio,
       preco: Number(produto.preco_venda ?? 0),
       atacado: atacadoGravado,
       movimentos: movimentos.map((m: any) => ({ ...m, usuario: nomeUsuario(m.usuario_id) })),
     }));
-    w.document.close();
   };
 
   if (!isSupabaseConfigured()) return <SupabaseNotConfigured title="Ficha do produto" />;

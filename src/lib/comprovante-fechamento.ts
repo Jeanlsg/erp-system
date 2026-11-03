@@ -23,6 +23,7 @@
 
 import { brl } from "@/lib/format";
 import type { DadosFechamento } from "@/lib/dados-fechamento";
+import { escreverEImprimir } from "@/lib/imprimir";
 
 const esc = (s: unknown) =>
   String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
@@ -140,7 +141,6 @@ export function montarComprovante(d: DadosFechamento): string {
   .nome-assin { font-size: 8pt; }
   .rodape { margin: 3mm 0 7mm; text-align: center; font-size: 7.5pt; }
 </style></head><body>${corpo}
-<script>window.onload = function () { window.print(); };</script>
 </body></html>`;
 }
 
@@ -161,8 +161,6 @@ export function abrirJanelaDoComprovante(): Window | null {
 export function imprimirComprovante(d: DadosFechamento, janela?: Window | null) {
   const w = janela ?? window.open("", "_blank", "width=420,height=820");
   if (!w || w.closed) return false;   // bloqueador de pop-up
-  w.document.open();
-  w.document.write(montarComprovante(d));
-  w.document.close();
+  escreverEImprimir(w, montarComprovante(d));
   return true;
 }

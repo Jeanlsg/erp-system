@@ -28,6 +28,7 @@ import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { brl, date } from "@/lib/format";
 import { valorPorExtenso } from "@/lib/extenso";
+import { escreverEImprimir } from "@/lib/imprimir";
 
 function htmlPromissoria(p: {
   numero: string; valor: number; extenso: string; vencimento: string;
@@ -65,7 +66,7 @@ function htmlPromissoria(p: {
   </div>
   <div class="ass"><div class="linha">Assinatura do emitente</div></div>
 </div>
-<script>window.onload = () => window.print();</scr` + `ipt></body></html>`;
+</body></html>`;
 }
 
 export function PromissoriaPage() {
@@ -93,7 +94,7 @@ export function PromissoriaPage() {
     const pessoa = clientes.find((c: any) => c.id === p.pessoa_id);
     const w = window.open("", "_blank", "width=860,height=640");
     if (!w) { toast.error("Pop-up bloqueado — libere para imprimir."); return; }
-    w.document.write(htmlPromissoria({
+    escreverEImprimir(w, htmlPromissoria({
       numero: p.numero ?? "S/N",
       valor: Number(p.valor),
       extenso: p.valor_extenso ?? valorPorExtenso(Number(p.valor)),
@@ -105,7 +106,6 @@ export function PromissoriaPage() {
       credorCnpj: loja?.cnpj ?? "—",
       praca: loja ? `${loja.cidade ?? ""}/${loja.uf ?? ""}` : "—",
     }));
-    w.document.close();
   };
 
   const emitir = async () => {

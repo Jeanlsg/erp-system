@@ -27,12 +27,23 @@ RUN npm install --no-audit --no-fund
 COPY . .
 RUN rm -rf node_modules/.vite dist && npm run build
 
+# Cabeçalhos de segurança: a CSP libera o Supabase desta instalação. A origem
+# é o VITE_SUPABASE_URL que o próprio build usou (loadEnv do Vite: build arg
+# ou o .env que o EasyPanel grava), em https e wss — sem escrever o endereço
+# no repo. Sem ela o build para: a CSP sairia bloqueando o banco.
+RUN url=$(node --input-type=module -e "import { loadEnv } from 'vite'; process.stdout.write(loadEnv('production', process.cwd(), 'VITE_').VITE_SUPABASE_URL || '')") && \
+    origem=$(printf '%s' "$url" | sed -E 's#^(https?://[^/]+).*#\1#') && \
+    { test -n "$origem" || { echo "VITE_SUPABASE_URL vazio: a CSP não teria o Supabase"; exit 1; }; } && \
+    ws=$(printf '%s' "$origem" | sed -E 's#^http#ws#') && \
+    sed -e "s#__SUPABASE_WS__#$ws#g" -e "s#__SUPABASE__#$origem#g" nginx-seguranca.conf > /app/seguranca.conf
+
 # ===== Runtime stage =====
 FROM --platform=linux/amd64 nginx:1.27-alpine AS runner
 
 RUN apk add --no-cache wget
 
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=builder /app/seguranca.conf /etc/nginx/seguranca.conf
 COPY --from=builder /app/dist /usr/share/nginx/html
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \

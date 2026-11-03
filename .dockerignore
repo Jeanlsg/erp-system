@@ -1,0 +1,16 @@
+# Fora do contexto do build (varredura de 03/11/2026): o estágio de build
+# copia tudo (COPY . .). A imagem final só leva o dist, mas histórico,
+# certificado e chave não precisam nem passar pelo builder.
+# O .env fica: o EasyPanel grava ali as VITE_* (públicas) antes do build.
+.git
+.env.*
+!.env.example
+node_modules
+dist
+docs
+_git-local
+*.pdf
+*.pfx
+*.p12
+*.pem
+*.key

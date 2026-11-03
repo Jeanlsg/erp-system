@@ -35,6 +35,7 @@ import { DocumentosPage } from "@/pages/documentos";
 import { CrediarioProprioPage } from "@/pages/crediario-proprio";
 import { GestaoHubPage } from "@/pages/gestao";
 import { toast } from "sonner";
+import { escaparHtml, escreverEImprimir } from "@/lib/imprimir";
 
 // ====================================================================
 // CONSULTA PESSOA FÍSICA
@@ -353,16 +354,15 @@ function imprimirEtiqueta(p: any) {
     .join("");
   const w = window.open("", "_blank", "width=400,height=300");
   if (!w) { toast.error("Habilite pop-ups para imprimir a etiqueta."); return; }
-  w.document.write(`<!doctype html><html><head><title>Etiqueta — ${p.nome}</title>
+  // nome e SKU vêm do cadastro ou do XML do fornecedor: escapados (varredura de 03/11/2026)
+  escreverEImprimir(w, `<!doctype html><html><head><title>Etiqueta — ${escaparHtml(p.nome)}</title>
     <style>body{font-family:sans-serif;text-align:center;padding:16px}p{margin:2px}</style></head><body>
-    <p style="font-weight:bold">${p.nome}</p>
-    <p style="font-size:11px;color:#555">${p.sku ?? ""}</p>
+    <p style="font-weight:bold">${escaparHtml(p.nome)}</p>
+    <p style="font-size:11px;color:#555">${escaparHtml(p.sku ?? "")}</p>
     <svg width="200" height="64" xmlns="http://www.w3.org/2000/svg">${barras}</svg>
-    <p style="font-family:monospace">${codigo}</p>
+    <p style="font-family:monospace">${escaparHtml(codigo)}</p>
     <p style="font-weight:bold;font-size:18px">${Number(p.preco_venda ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
-    <script>window.onload = () => { window.print(); window.close(); };<\u002Fscript>
-    </body></html>`);
-  w.document.close();
+    </body></html>`, { fechar: true });
 }
 
 export function CodigoBarrasPage() {

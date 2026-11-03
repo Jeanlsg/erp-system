@@ -2,7 +2,7 @@ import { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ShieldOff, Settings, ArrowLeft, EyeOff } from "lucide-react";
+import { ShieldOff, Settings, ArrowLeft, EyeOff, Loader2, WifiOff } from "lucide-react";
 import { useFeatureFlags, useAdminPrincipal } from "@/lib/supabase-queries";
 import { date } from "@/lib/format";
 
@@ -20,14 +20,38 @@ interface Props {
  *   Assim o admin consegue testar/previewar a página desativada.
  */
 export function FeatureGuard({ path, children }: Props) {
-  const { data: flags = [], isLoading } = useFeatureFlags();
+  const { data: lidas, isLoading, isError, refetch } = useFeatureFlags();
   const { data: ehPrincipal = false, isLoading: carregandoDono } = useAdminPrincipal();
   // Página desligada some para TODOS os cargos — inclusive outros admins.
   // Só o dono do sistema continua enxergando, em modo preview.
   const isAdmin = ehPrincipal;
 
-  // Enquanto carrega, permite acesso (fail-open)
-  if (isLoading || carregandoDono) return <>{children}</>;
+  // Fechado até confirmar (varredura de 03/11/2026): antes a página abria
+  // enquanto as flags carregavam e, se a leitura falhasse, de vez — página
+  // desligada aparecia para todos. Com cache (inclusive o salvo no
+  // navegador), vale o cache.
+  if (isLoading || carregandoDono) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center text-muted-foreground">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    );
+  }
+  if (!lidas && isError) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center p-6">
+        <Card className="max-w-md w-full">
+          <CardContent className="p-8 text-center space-y-3">
+            <WifiOff className="mx-auto h-8 w-8 text-muted-foreground" />
+            <h2 className="text-lg font-semibold">Não deu para conferir as páginas liberadas</h2>
+            <p className="text-sm text-muted-foreground">Confira a internet e tente de novo.</p>
+            <Button variant="outline" onClick={() => void refetch()}>Tentar de novo</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+  const flags = lidas ?? [];
 
   const flag = flags.find((f) => f.path === path);
 

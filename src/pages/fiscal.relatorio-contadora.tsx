@@ -27,6 +27,7 @@ import { brl } from "@/lib/format";
 import {
   caminhoNoZip, htmlRelatorioContadora, nomeDoZip, notasDoRelatorio, resumoDasNotas, rotuloNota,
 } from "@/lib/relatorio-contadora";
+import { escreverEImprimir } from "@/lib/imprimir";
 
 const mesAnterior = () => {
   const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1);
@@ -59,7 +60,7 @@ export function RelatorioContadoraPage() {
   const imprimir = () => {
     const w = window.open("", "_blank", "width=1100,height=850");
     if (!w) { toast.error("Libere pop-ups deste site para imprimir."); return; }
-    w.document.write(html()); w.document.close();
+    escreverEImprimir(w, html());
   };
 
   const baixarZip = async () => {
@@ -97,7 +98,7 @@ export function RelatorioContadoraPage() {
           else faltando.push(`entrada ${e.numero}`);
         }
       }
-      arquivos["relatorio.html"] = strToU8(html().replace(/<script>.*?<\/script>/s, ""));
+      arquivos["relatorio.html"] = strToU8(html());
       setZipando("Compactando…");
       const zip = zipSync(arquivos, { level: 6 });
       const url = URL.createObjectURL(new Blob([zip], { type: "application/zip" }));

@@ -167,5 +167,5 @@ export function htmlFichaProduto(p: {
 <div>Preço de venda: <b>${moeda(p.preco)}</b></div>${p.atacado != null ? `<div>Atacado: <b>${moeda(p.atacado)}</b></div>` : ""}<div>Entradas: <b>${r.entradas}</b></div><div>Saídas: <b>${r.saidas}</b> (vendidas: ${r.vendidas})</div></div>
 <table><thead><tr><th>Data</th><th>Tipo</th><th>Origem</th><th class="n">Qtd</th><th class="n">Saldo</th><th class="n">Custo un.</th><th>Usuário</th></tr></thead>
 <tbody>${linhas || '<tr><td colspan="7">Nenhuma movimentação no período.</td></tr>'}</tbody></table>
-<script>window.onload=function(){window.print()}</script></body></html>`;
+</body></html>`;
 }

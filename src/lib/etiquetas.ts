@@ -8,6 +8,8 @@
 // só com o texto — o erro fica visível em vez de virar bipe falhado.
 // ============================================================
 
+import { escreverEImprimir } from "@/lib/imprimir";
+
 const L = ["0001101","0011001","0010011","0111101","0100011","0110001","0101111","0111011","0110111","0001011"];
 const G = ["0100111","0110011","0011011","0100001","0011101","0111001","0000101","0010001","0001001","0010111"];
 const R = L.map((p) => p.split("").map((b) => (b === "0" ? "1" : "0")).join(""));
@@ -110,10 +112,9 @@ export function imprimirEtiquetas(
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>Etiquetas</title>
 <style>${formato === "bobina79x40" ? estiloBobina : estiloA4}
 </style></head><body>${etiquetas}
-<script>window.onload = function () { window.print(); };</script>
 </body></html>`;
 
   const w = window.open("", "_blank", "width=900,height=700");
-  if (w) { w.document.write(html); w.document.close(); }
+  if (w) escreverEImprimir(w, html);
   return { total: produtos.length, semBarras };
 }
