@@ -36,6 +36,8 @@ import {
   isSupabaseConfigured,
 } from "@/lib/supabase-queries";
 import { supabase } from "@/lib/supabase";
+import { corpoDaEdge } from "@/lib/corpo-da-edge";
+import { cpfValido, formatarCpf, soDigitos } from "@/lib/cpf";
 import { useAuth, type Role, roleLabels, ROLE_PERMISSIONS, ROLES, papelPrincipal } from "@/lib/store/auth-store";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { toast } from "sonner";
@@ -226,16 +228,8 @@ function PapeisPanel({ isAdmin, userId }: { isAdmin: boolean; userId?: string })
 // ============================================================
 type UsuarioCrm = { id: string; email: string; nome: string; criado_em: string };
 
-/**
- * Corpo da resposta de uma edge, mesmo em erro: o supabase-js esconde o
- * motivo atrás de "Edge Function returned a non-2xx status code" e o admin
- * não via "Já existe um usuário com este email" nem "tem histórico".
- */
-async function corpoDaEdge(data: any, error: any): Promise<{ success?: boolean; error?: string; [k: string]: any }> {
-  if (data) return data;
-  const corpo = error?.context?.json ? await error.context.json().catch(() => null) : null;
-  return corpo ?? { success: false, error: error?.message ?? "falha desconhecida" };
-}
+// corpoDaEdge: sem ele o admin não via "Já existe um usuário com este
+// email" nem "tem histórico" — só "non-2xx". Foi para lib: o login usa também.
 
 function ImportarDoCrmDialog({ open, onOpenChange, onImportado, lojas }: {
   open: boolean; onOpenChange: (v: boolean) => void; onImportado: () => void; lojas: any[];
@@ -511,7 +505,8 @@ export function UsuariosPage() {
       funcionario: !!funcionarioDe(u.id),
       cargo: funcionarioDe(u.id)?.cargo ?? "",
       departamento: funcionarioDe(u.id)?.departamento ?? "",
-      cpf: funcionarioDe(u.id)?.cpf ?? u.cpf ?? "",
+      // o CPF de acesso é o do login; o do funcionário só preenche o que faltar
+      cpf: formatarCpf(u.cpf ?? funcionarioDe(u.id)?.cpf ?? ""),
       data_admissao: funcionarioDe(u.id)?.data_admissao ?? new Date().toLocaleDateString("sv-SE"),
       funcionarioAtivo: !funcionarioDe(u.id)?.data_demissao,
     });
@@ -532,6 +527,8 @@ export function UsuariosPage() {
     if (existente) {
       await updateFunc.mutateAsync({
         id: existente.id,
+        // ⚠️ o CPF editado aqui não era regravado no funcionário que já existia
+        ...(cpf ? { cpf } : {}),
         cargo: formUsuario.cargo || null,
         departamento: formUsuario.departamento || null,
         data_admissao: formUsuario.data_admissao || null,
@@ -590,6 +587,20 @@ export function UsuariosPage() {
       toast.error("E-mail inválido");
       return;
     }
+    // CPF de acesso: entra no login no lugar do e-mail, então tem de ser um
+    // CPF de verdade e de um login só (o banco também recusa repetido)
+    const cpfAcesso = soDigitos(formUsuario.cpf);
+    if (cpfAcesso && !cpfValido(cpfAcesso)) {
+      toast.error("CPF inválido — confira os números.");
+      return;
+    }
+    if (cpfAcesso) {
+      const { data: dono } = await supabase.from("erp_usuarios").select("id, nome").eq("cpf", cpfAcesso).maybeSingle();
+      if (dono && dono.id !== editId) {
+        toast.error(`Este CPF já é o acesso de ${dono.nome}.`);
+        return;
+      }
+    }
     // Validação de senha apenas na criação (e se o usuário marcou para definir agora)
     if ((!editId || formUsuario.senha) && formUsuario.senha.length < 6) {
       toast.error("A senha deve ter pelo menos 6 caracteres");
@@ -623,6 +634,7 @@ export function UsuariosPage() {
           ativo: formUsuario.ativo,
           loja_default_id: lojaPadrao || null,
           telefone: formUsuario.telefone || null,
+          cpf: cpfAcesso || null,
         });
         if (!editandoDono) {
           await definirFiliais.mutateAsync({ usuarioId: editId, lojas: formUsuario.filiais });
@@ -667,7 +679,11 @@ export function UsuariosPage() {
         });
         const r = await corpoDaEdge(data, error);
         if (!r.success) throw new Error(r.error ?? "Erro desconhecido ao criar usuário");
-        toast.success(`Usuário criado. Já pode entrar com ${formUsuario.email} e a senha definida.`);
+        if (r.user_id && cpfAcesso) {
+          try { await updateUsuario.mutateAsync({ id: r.user_id, cpf: cpfAcesso }); }
+          catch (e: any) { toast.warning(`Usuário criado, mas o CPF de acesso não: ${e.message ?? e}`, { duration: 10000 }); }
+        }
+        toast.success(`Usuário criado. Já pode entrar com ${formUsuario.email}${cpfAcesso ? " ou o CPF" : ""} e a senha definida.`);
         if (r.user_id) {
           try { await sincronizarFuncionario(r.user_id); }
           catch (e: any) { toast.warning(`Usuário criado, mas o funcionário não: ${e.message ?? e}`, { duration: 10000 }); }
@@ -1305,6 +1321,18 @@ export function UsuariosPage() {
               </div>
             </div>
 
+            {/* CPF de acesso (121): fica no login, não só no funcionário —
+                o dono e quem não é funcionário também entram por CPF. */}
+            <div>
+              <Label>CPF de acesso</Label>
+              <Input value={formUsuario.cpf} inputMode="numeric" placeholder="000.000.000-00"
+                onChange={(e) => setFormUsuario({ ...formUsuario, cpf: e.target.value })}
+                onBlur={() => setFormUsuario((f) => ({ ...f, cpf: formatarCpf(f.cpf) }))} />
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Com CPF, a pessoa entra com o CPF ou com o e-mail, e a mesma senha. Um CPF por login.
+              </p>
+            </div>
+
             {/* Funcionário: o usuário é o cadastro-mestre; daqui ele já nasce
                 como funcionário (pessoa + vínculo), com o status editável. */}
             <div className="space-y-2 border rounded-md p-3 bg-muted/30">
@@ -1323,8 +1351,7 @@ export function UsuariosPage() {
                     <div><Label>Cargo</Label><Input value={formUsuario.cargo} onChange={(e) => setFormUsuario({ ...formUsuario, cargo: e.target.value })} /></div>
                     <div><Label>Departamento</Label><Input value={formUsuario.departamento} onChange={(e) => setFormUsuario({ ...formUsuario, departamento: e.target.value })} /></div>
                   </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div><Label>CPF</Label><Input value={formUsuario.cpf} onChange={(e) => setFormUsuario({ ...formUsuario, cpf: e.target.value })} placeholder="000.000.000-00" /></div>
+                  <div className="grid grid-cols-2 gap-3">
                     <div><Label>Admissão</Label><Input type="date" value={formUsuario.data_admissao} onChange={(e) => setFormUsuario({ ...formUsuario, data_admissao: e.target.value })} /></div>
                     <div>
                       <Label>Status</Label>

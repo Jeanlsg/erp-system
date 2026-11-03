@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { limparCacheDoUsuario } from "@/lib/query-client";
+import { corpoDaEdge } from "@/lib/corpo-da-edge";
+import { cpfValido, soDigitos, tipoDoLogin } from "@/lib/cpf";
 import { useLojaAtualStore } from "./loja-atual";
 
 export type Role = "admin" | "gerente" | "caixa" | "estoquista" | "vendedor";
@@ -218,20 +220,50 @@ export const useAuthStore = create<AuthState>()(
   )
 );
 
-// Função de login (Supabase Auth)
+/**
+ * Login (Supabase Auth) com e-mail ou CPF e senha.
+ *
+ * Tem "@" é e-mail: direto no Supabase, como sempre. O resto é CPF: a edge
+ * erp-login acha o login daquele CPF, confere a senha e devolve a sessão —
+ * o e-mail nunca chega à tela (ver o cabeçalho da edge). Daí em diante os
+ * dois caminhos são o mesmo: perfil, situação e limpeza do navegador.
+ */
 export async function login(
-  email: string,
+  identificador: string,
   password: string
 ): Promise<{ ok: true; user: User } | { ok: false; error: string }> {
   try {
     const { supabase } = await import("@/lib/supabase");
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
+    const texto = identificador.trim();
+    let userId: string;
 
-    if (error || !data.user) {
-      return { ok: false, error: "E-mail ou senha inválidos" };
+    if (tipoDoLogin(texto) === "email") {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: texto,
+        password,
+      });
+      if (error || !data.user) {
+        return { ok: false, error: "E-mail ou senha inválidos" };
+      }
+      userId = data.user.id;
+    } else {
+      const cpf = soDigitos(texto);
+      if (!cpfValido(cpf)) {
+        return { ok: false, error: "CPF inválido. Confira os números ou entre com o e-mail." };
+      }
+      const { data, error } = await supabase.functions.invoke("erp-login", { body: { cpf, senha: password } });
+      const r = await corpoDaEdge(data, error);
+      if (!r.success || !r.access_token || !r.refresh_token) {
+        return { ok: false, error: r.error ?? "CPF ou senha inválidos" };
+      }
+      const { data: sessao, error: erroSessao } = await supabase.auth.setSession({
+        access_token: r.access_token,
+        refresh_token: r.refresh_token,
+      });
+      if (erroSessao || !sessao.user) {
+        return { ok: false, error: "Não foi possível abrir a sessão. Tente novamente." };
+      }
+      userId = sessao.user.id;
     }
 
     // Busca perfil do usuario no schema erp (erp.erp_usuarios)
@@ -239,7 +271,7 @@ export async function login(
     const { data: perfil, error: perfilError } = await supabase
       .from("erp_usuarios")
       .select("id, email, nome, role, papeis, ativo, bloqueado, admin_principal, permissoes, loja_default_id")
-      .eq("id", data.user.id)
+      .eq("id", userId)
       .single();
 
     if (perfilError || !perfil) {

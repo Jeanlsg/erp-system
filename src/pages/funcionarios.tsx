@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { mesmasFaixas, resumoFaixas, validarFaixas } from "@/lib/faixas-comissao";
+import { cpfValido, soDigitos } from "@/lib/cpf";
 import { EditorFaixasComissao, faixasEmNumeros, type FaixaTexto } from "@/components/editor-faixas-comissao";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,7 +33,7 @@ export function FuncionariosPage() {
   const { data: usuarios = [] } = useQuery<any[]>({
     queryKey: ["erp_usuarios_vinculo"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("erp_usuarios").select("id, nome, email, telefone, ativo, role, papeis").order("nome");
+      const { data, error } = await supabase.from("erp_usuarios").select("id, nome, email, telefone, ativo, role, papeis, cpf").order("nome");
       if (error) throw error;
       return data ?? [];
     },
@@ -229,6 +230,22 @@ export function FuncionariosPage() {
     return true;
   };
 
+  /**
+   * CPF da ficha → CPF de acesso do login (entrar por CPF, 121), se o login
+   * ainda não tem. Não troca um que já está lá: esse se muda em Usuários e
+   * Permissões. Falhar aqui não desfaz o funcionário salvo.
+   */
+  const preencherCpfDoLogin = async (usuarioId: string | null) => {
+    const cpf = soDigitos(form.cpf);
+    if (!usuarioId || !cpfValido(cpf)) return;
+    if (usuarios.find((u: any) => u.id === usuarioId)?.cpf) return;
+    const { error } = await supabase.from("erp_usuarios").update({ cpf }).eq("id", usuarioId).is("cpf", null);
+    if (error) {
+      toast.warning(`Funcionário salvo, mas o CPF não virou acesso ao sistema: ${error.code === "23505" ? "outro login já usa este CPF" : error.message}`,
+        { duration: 10000 });
+    }
+  };
+
   const handleSalvarEdicao = async () => {
     if (!editando) return;
     if (!form.nome) { toast.error("Informe o nome do funcionário."); return; }
@@ -255,6 +272,7 @@ export function FuncionariosPage() {
         await definirFaixas.mutateAsync({ funcionarioId: editando.id, faixas: faixasNumericas });
       if (!mesmasFaixas(faixasVendaNumericas, faixasVendaSalvas))
         await definirFaixasVenda.mutateAsync({ funcionarioId: editando.id, faixas: faixasVendaNumericas });
+      await preencherCpfDoLogin(usuarioId);
       void qc.invalidateQueries({ queryKey: ["erp_usuarios_vinculo"] });
       invalidarDominios(qc, "pessoas");
       void qc.invalidateQueries({ queryKey: ["erp_usuarios"] });
@@ -387,6 +405,7 @@ export function FuncionariosPage() {
         const usuarioId = await garantirAcesso();
         if (usuarioId && criado?.id) {
           await update.mutateAsync({ id: criado.id, usuario_id: usuarioId });
+          await preencherCpfDoLogin(usuarioId);
         }
         void qc.invalidateQueries({ queryKey: ["erp_usuarios_vinculo"] });
         void qc.invalidateQueries({ queryKey: ["erp_usuarios"] });

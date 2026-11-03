@@ -9,10 +9,12 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { login, useAuth, ehOperadorDeBalcao } from "@/lib/store/auth-store";
 import { supabase } from "@/lib/supabase";
+import { formatarCpf, tipoDoLogin } from "@/lib/cpf";
 
 export function LoginPage() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
+  // e-mail ou CPF (03/11/2026): tem "@" é e-mail, o resto é CPF
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [loading, setLoading] = useState(false);
@@ -37,8 +39,10 @@ export function LoginPage() {
   };
 
   const handleForgotPassword = async () => {
-    if (!email || !email.includes("@")) {
-      toast.error("Digite seu e-mail primeiro para redefinir a senha");
+    // o link vai por e-mail: com o CPF a tela não sabe para onde mandar (e
+    // não deve contar qual é o e-mail daquele CPF)
+    if (!email || tipoDoLogin(email.trim()) !== "email") {
+      toast.error("Para redefinir a senha, digite o seu e-mail (não o CPF). Sem acesso ao e-mail, peça ao administrador.");
       return;
     }
     setResetLoading(true);
@@ -67,26 +71,29 @@ export function LoginPage() {
             </p>
           </div>
           <div className="rounded-md border border-sidebar-border bg-sidebar-accent/40 p-3 text-xs text-sidebar-foreground/70">
-            Use seu e-mail corporativo e senha para acessar.
+            Use seu e-mail ou CPF e a senha para acessar.
           </div>
         </div>
 
         <Card>
           <CardHeader>
             <CardTitle>Entrar</CardTitle>
-            <CardDescription>Use seu e-mail corporativo e senha.</CardDescription>
+            <CardDescription>Use seu e-mail ou CPF e a senha.</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={submit} className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="email">E-mail</Label>
+                <Label htmlFor="email">E-mail ou CPF</Label>
                 <Input
                   id="email"
-                  type="email"
+                  type="text"
                   autoComplete="username"
-                  placeholder="seu@email.com"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  placeholder="seu@email.com ou 000.000.000-00"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  onBlur={() => { if (tipoDoLogin(email) === "cpf") setEmail(formatarCpf(email)); }}
                   required
                 />
               </div>
