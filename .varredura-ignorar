@@ -1,0 +1,23 @@
+# Falsos positivos e riscos aceitos da varredura de segurança (skill varredura-seguranca).
+# Formato: ID [trecho do local]  # motivo. Relatório: docs/seguranca/varredura-2026-11-03.md
+
+E01 supabase/COMO_APLICAR_MIGRATIONS.md   # URL de exemplo com "..." no lugar da senha
+E21 supabase/migrations/001_initial_schema.sql   # policies substituídas depois; banco vivo sem policy true (03/11/2026)
+E21 supabase/migrations/009_rls_policies.sql     # idem
+E21 supabase/migrations/011_agenda_cheques.sql   # idem
+E21 supabase/migrations/012_security_hardening.sql   # idem
+E21 supabase/migrations/025_feature_flags.sql    # idem
+E21 supabase/migrations/027_nfe_entrada.sql      # idem
+E21 supabase/migrations/028_remessas_filiais.sql # idem
+E22 supabase/migrations/010_views.sql            # views recriadas; as sem security_invoker filtram pelo usuário do ERP
+E22 supabase/migrations/028_remessas_filiais.sql # idem
+E23 supabase/migrations/002_auth_setup.sql       # função recriada; nenhuma SECURITY DEFINER sem search_path no banco vivo
+E08                                              # sessão no localStorage é o padrão do SDK (SPA); XSS tratado à parte
+B07                                              # disable_signup: true — só o admin cria conta
+E30 supabase/functions/erp-reset-password        # só admin ativo chama (exigirAdminAtivo)
+E30 supabase/functions/erp-consultar-cadastro    # só admin do ERP chama
+E53 src/lib/comprovante-fechamento.ts          # o HTML do comprovante passa todo texto por esc()
+E53 src/lib/etiquetas.ts                       # idem (escapar &, <, >)
+E53 src/pages/fiscal.relatorio-contadora.tsx   # html() de relatorio-contadora.ts usa esc()
+E53 src/pages/produto-ficha.tsx                # htmlFichaProduto (ficha-produto.ts) usa esc()
+E53 src/pages/promissoria.tsx                  # htmlPromissoria usa esc() nos textos
