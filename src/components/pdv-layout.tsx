@@ -27,6 +27,7 @@ import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { alternaFiliais } from "@/lib/lojas-permitidas";
 import { useConexao } from "@/lib/offline/conexao";
 import { podeTrocarDeLoja } from "@/lib/loja-do-caixa";
+import { TrocaDeSenhaObrigatoria } from "@/components/troca-de-senha-obrigatoria";
 
 export function PdvLayout() {
   const navigate = useNavigate();
@@ -148,6 +149,7 @@ export function PdvLayout() {
         ) : <Outlet />}
       </main>
       </div>
+      <TrocaDeSenhaObrigatoria />
     </div>
   );
 }

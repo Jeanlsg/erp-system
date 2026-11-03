@@ -11,11 +11,13 @@
 //       loja_default_id?: string,
 //       telefone?: string,
 //       senha?: string,         // Opcional - se informada, usuario pode logar direto
+//       forcar_troca_senha?: boolean, // senha temporária: troca obrigatória no 1º acesso
 //       send_invite?: boolean   // Default: !senha
 //     }
 //   })
 
 import { clienteAdmin, corsHeaders, exigirAdminAtivo, jsonResponse } from "../_shared/erp-admin.ts";
+import { problemaDaSenha } from "../_shared/erp-senha.ts";
 
 type Role = "admin" | "gerente" | "caixa" | "estoquista" | "vendedor";
 
@@ -30,6 +32,13 @@ interface CreateUserPayload {
   lojas?: string[];
   telefone?: string | null;
   senha?: string | null;
+  /**
+   * Senha temporária, como no CRM (03/11/2026): quem cria passa a senha à
+   * pessoa, e ela define a dela no primeiro acesso. Fica em
+   * user_metadata.senha_provisoria — a mesma chamada que troca a senha tira a
+   * marca (troca-de-senha-obrigatoria.tsx).
+   */
+  forcar_troca_senha?: boolean;
   send_invite?: boolean;
   redirect_base?: string;   // origem do app que está criando o usuário
 }
@@ -41,6 +50,7 @@ interface CreateUserResponse {
   error?: string;
   invite_sent?: boolean;
   invite_error?: string;
+  senha_provisoria?: boolean;
 }
 
 function isValidEmail(email: string): boolean {
@@ -86,13 +96,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     if (body.senha !== null && body.senha !== undefined && body.senha !== "") {
-      if (body.senha.length < 6) {
-        return jsonResponse(
-          { success: false, error: "A senha deve ter pelo menos 6 caracteres" },
-          400
-        );
+      const problema = problemaDaSenha(body.senha);
+      if (problema) {
+        return jsonResponse({ success: false, error: `Senha temporária: ${problema}` }, 400);
       }
     }
+    const comSenha = !!body.senha;
+    const senhaProvisoria = comSenha && body.forcar_troca_senha === true;
 
     // papéis: todos válidos; o principal (`role`) sempre entra
     const papeis: Role[] = Array.isArray(body.papeis) && body.papeis.length ? body.papeis : [role];
@@ -142,10 +152,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const userCreateData: any = {
       email: body.email,
       email_confirm: true,
-      user_metadata: { nome: body.nome, role: role },
+      user_metadata: { nome: body.nome, role: role, senha_provisoria: senhaProvisoria },
     };
 
-    if (body.senha && body.senha.length >= 6) {
+    if (comSenha) {
       userCreateData.password = body.senha;
     }
 
@@ -241,6 +251,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       user_id: newUser.user.id,
       email: body.email,
       invite_sent: inviteSent,
+      senha_provisoria: senhaProvisoria,
       ...(inviteError ? { invite_error: inviteError } : {}),
     };
 

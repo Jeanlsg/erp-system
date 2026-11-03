@@ -34,6 +34,7 @@ import { useLojaAtualStore } from "@/lib/store/loja-atual";
 import { useLojas, useCaixasAbertosDoUsuario, isSupabaseConfigured } from "@/lib/supabase-queries";
 import { useAutoSelectLoja } from "@/lib/store/use-auto-select-loja";
 import { alternaFiliais } from "@/lib/lojas-permitidas";
+import { TrocaDeSenhaObrigatoria } from "@/components/troca-de-senha-obrigatoria";
 
 /**
  * Telas de cadastro comum a todas as filiais.
@@ -344,6 +345,7 @@ export function RootLayout() {
       </div>
 
       {demo && <ModoDemonstracao rota={location.pathname} aoFechar={() => setDemo(false)} />}
+      <TrocaDeSenhaObrigatoria />
     </div>
   );
 }

@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { mesmasFaixas, resumoFaixas, validarFaixas } from "@/lib/faixas-comissao";
 import { cpfValido, soDigitos } from "@/lib/cpf";
+import { gerarSenhaTemporaria, problemaDaSenha } from "@/lib/senha";
+import { CredenciaisDeAcesso, type Credenciais } from "@/components/credenciais-de-acesso";
 import { EditorFaixasComissao, faixasEmNumeros, type FaixaTexto } from "@/components/editor-faixas-comissao";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { InputMoeda } from "@/components/ui/input-moeda";
 import { Label } from "@/components/ui/label";
-import { Building2, Plus, Search, Loader2, UserCheck, UserX, Mail, Phone, Pencil, UserMinus, RotateCcw, KeyRound, TrendingUp } from "lucide-react";
+import { Building2, Plus, Search, Loader2, UserCheck, UserX, Mail, Phone, Pencil, UserMinus, RotateCcw, KeyRound, TrendingUp, Wand2 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useFuncionarios, useCreateFuncionario, useUpdateFuncionario, isSupabaseConfigured, useFaixasServico, useDefinirFaixasServico, useFaixasComissao, useDefinirFaixasComissao, useTodasFaixasComissao } from "@/lib/supabase-queries";
@@ -47,6 +49,8 @@ export function FuncionariosPage() {
   // Status dependem de data_demissao, que nenhum caminho de tela preenchia;
   // e demitir só por acesso ao banco.
   const [editando, setEditando] = useState<any | null>(null);
+  // login criado aqui: e-mail e senha temporária para passar à pessoa
+  const [credenciais, setCredenciais] = useState<Credenciais | null>(null);
   // Faixas de comissão de serviço (migration 097): bateu X em serviços no
   // mês, ganha Y% sobre todos os serviços do mês. Sem faixa, vale o % fixo.
   const { data: faixasSalvas = [] } = useFaixasServico(editando?.id ?? null);
@@ -195,14 +199,20 @@ export function FuncionariosPage() {
 
     if (!email.includes("@")) throw new Error("Informe o e-mail do funcionário para criar o acesso.");
 
-    // 1) cria login + perfil no ERP
+    // 1) cria login + perfil no ERP — senha temporária, como em Usuários
+    // (03/11/2026): em branco o sistema gera; a pessoa troca no 1º acesso
+    const senha = form.senha || gerarSenhaTemporaria();
     const { data, error } = await supabase.functions.invoke<{ success: boolean; user_id?: string; error?: string }>(
       "erp-create-user",
-      { body: { email, nome: form.nome, role, papeis, senha: form.senha || null, telefone: form.telefone || null, send_invite: false,
+      { body: { email, nome: form.nome, role, papeis, senha, forcar_troca_senha: true, telefone: form.telefone || null, send_invite: false,
           // filiais: sem elas o login não abre caixa ("não está cadastrado nesta filial")
           lojas: form.filiais.length ? form.filiais : (lojaId ? [lojaId] : []), loja_default_id: lojaId || null } },
     );
-    if (data?.success && data.user_id) return data.user_id;
+    if (data?.success && data.user_id) {
+      // o CPF entra depois (preencherCpfDoLogin), se for válido e livre
+      setCredenciais({ nome: form.nome, email, cpf: "", senha, provisoria: true, nova: true });
+      return data.user_id;
+    }
 
     // a function devolve o motivo no corpo mesmo em 4xx; o supabase-js
     // esconde isso atrás de "non-2xx" — vamos buscar o texto de verdade
@@ -226,7 +236,8 @@ export function FuncionariosPage() {
   const validarAcesso = (): boolean => {
     if (!form.acesso || form.usuario_id) return true;
     if (!form.email.trim().includes("@")) { toast.error("Informe o e-mail para criar o acesso."); return false; }
-    if (form.senha.length < 6) { toast.error("A senha do acesso precisa de pelo menos 6 caracteres."); return false; }
+    const problema = form.senha ? problemaDaSenha(form.senha) : null;
+    if (problema) { toast.error(`Senha temporária: ${problema}`); return false; }
     return true;
   };
 
@@ -240,6 +251,7 @@ export function FuncionariosPage() {
     if (!usuarioId || !cpfValido(cpf)) return;
     if (usuarios.find((u: any) => u.id === usuarioId)?.cpf) return;
     const { error } = await supabase.from("erp_usuarios").update({ cpf }).eq("id", usuarioId).is("cpf", null);
+    if (!error) setCredenciais((c) => (c && c.email === form.email.trim().toLowerCase() ? { ...c, cpf } : c));
     if (error) {
       toast.warning(`Funcionário salvo, mas o CPF não virou acesso ao sistema: ${error.code === "23505" ? "outro login já usa este CPF" : error.message}`,
         { duration: 10000 });
@@ -747,8 +759,16 @@ export function FuncionariosPage() {
                         <Input value={form.email} readOnly className="bg-muted" placeholder="preencha o e-mail acima" />
                       </div>
                       <div>
-                        <Label>Senha (mín. 6)</Label>
-                        <Input type="password" value={form.senha} onChange={(e) => setForm({ ...form, senha: e.target.value })} />
+                        <Label>Senha temporária</Label>
+                        <div className="flex gap-1">
+                          <Input className="font-mono" value={form.senha} placeholder="Gerada se vazia"
+                            autoComplete="new-password" onChange={(e) => setForm({ ...form, senha: e.target.value })} />
+                          <Button type="button" variant="outline" size="icon" title="Gerar senha"
+                            onClick={() => setForm({ ...form, senha: gerarSenhaTemporaria() })}>
+                            <Wand2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <p className="mt-1 text-[11px] text-muted-foreground">A pessoa troca no primeiro acesso.</p>
                       </div>
                     </div>
                   )}
@@ -814,6 +834,8 @@ export function FuncionariosPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <CredenciaisDeAcesso credenciais={credenciais} aoFechar={() => setCredenciais(null)} />
     </div>
   );
 }

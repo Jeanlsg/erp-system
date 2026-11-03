@@ -23,7 +23,7 @@ import {
 import {
   Users, Plus, Edit, Shield, Lock, Unlock,
   Search, Loader2, Save, RefreshCw,
-  Mail, Phone, KeyRound, Trash2, Check, Eye, EyeOff, RotateCcw, Layers, Download, Briefcase,
+  Mail, Phone, KeyRound, Trash2, Check, Eye, EyeOff, RotateCcw, Layers, Download, Briefcase, Wand2,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -38,6 +38,8 @@ import {
 import { supabase } from "@/lib/supabase";
 import { corpoDaEdge } from "@/lib/corpo-da-edge";
 import { cpfValido, formatarCpf, soDigitos } from "@/lib/cpf";
+import { DICA_SENHA, gerarSenhaTemporaria, problemaDaSenha } from "@/lib/senha";
+import { CredenciaisDeAcesso, type Credenciais } from "@/components/credenciais-de-acesso";
 import { useAuth, type Role, roleLabels, ROLE_PERMISSIONS, ROLES, papelPrincipal } from "@/lib/store/auth-store";
 import { SupabaseNotConfigured } from "@/components/supabase-not-configured";
 import { toast } from "sonner";
@@ -405,11 +407,15 @@ export function UsuariosPage() {
     telefone: "",
     senha: "",
     definirSenha: false,
+    /** senha dada pelo admin vale para sempre (não pede troca no 1º acesso) */
+    manterSenha: false,
     // funcionário: criado/atualizado junto com o usuário
     funcionario: false, cargo: "", departamento: "", cpf: "",
     data_admissao: new Date().toLocaleDateString("sv-SE"), funcionarioAtivo: true,
   });
   const [showPasswordUsuario, setShowPasswordUsuario] = useState(false);
+  // login criado ou senha dada pelo admin: mostra para copiar e passar à pessoa (como no CRM)
+  const [credenciais, setCredenciais] = useState<Credenciais | null>(null);
   // Vendedor: o que pode fazer e em quais caixas — decidido no próprio formulário
   const [funcoesVendedor, setFuncoesVendedor] = useState<Record<string, boolean>>({});
   const [caixasVendedor, setCaixasVendedor] = useState<string[]>([]);
@@ -478,6 +484,7 @@ export function UsuariosPage() {
       // sem convite por e-mail: o link cairia na tela do CRM (SITE_URL é
       // compartilhada). Quem já tem login no CRM entra por "Importar do CRM".
       definirSenha: true,
+      manterSenha: false,
       funcionario: false, cargo: "", departamento: "", cpf: "",
       data_admissao: new Date().toLocaleDateString("sv-SE"), funcionarioAtivo: true,
     });
@@ -502,6 +509,7 @@ export function UsuariosPage() {
       telefone: u.telefone ?? "",
       senha: "",
       definirSenha: false,
+      manterSenha: false,
       funcionario: !!funcionarioDe(u.id),
       cargo: funcionarioDe(u.id)?.cargo ?? "",
       departamento: funcionarioDe(u.id)?.departamento ?? "",
@@ -601,10 +609,19 @@ export function UsuariosPage() {
         return;
       }
     }
-    // Validação de senha apenas na criação (e se o usuário marcou para definir agora)
-    if ((!editId || formUsuario.senha) && formUsuario.senha.length < 6) {
-      toast.error("A senha deve ter pelo menos 6 caracteres");
-      return;
+    // Senha temporária, como no CRM (03/11/2026): na criação, em branco o
+    // sistema gera; na edição, só se for trocar. A pessoa define a dela no
+    // primeiro acesso, a não ser que o admin marque "manter esta senha". A
+    // própria senha nunca fica temporária: quem troca já sabe a nova.
+    const senhaPropria = !!editId && editId === currentUser?.id;
+    const senhaNova = editId ? formUsuario.senha : (formUsuario.senha || gerarSenhaTemporaria());
+    const senhaProvisoria = !!senhaNova && !senhaPropria && !formUsuario.manterSenha;
+    if (senhaNova) {
+      const problema = problemaDaSenha(senhaNova);
+      if (problema) {
+        toast.error(senhaPropria ? problema : `Senha temporária: ${problema}`);
+        return;
+      }
     }
     const editandoDono = !!editId && !!(usuarios.find((x: any) => x.id === editId) as any)?.admin_principal;
     if (!editandoDono && formUsuario.filiais.length === 0) {
@@ -642,13 +659,20 @@ export function UsuariosPage() {
 
         // Senha nova digitada: troca na hora (antes só prometia um e-mail,
         // que nem era enviado, e o link cairia na tela do CRM)
-        if (formUsuario.senha) {
+        if (senhaNova) {
           const { data, error } = await supabase.functions.invoke("erp-reset-password", {
-            body: { user_id: editId, nova_senha: formUsuario.senha },
+            body: { user_id: editId, nova_senha: senhaNova, forcar_troca_senha: senhaProvisoria },
           });
           const r = await corpoDaEdge(data, error);
           if (!r.success) throw new Error(`usuário salvo, mas a senha não foi trocada: ${r.error}`);
-          toast.success("Usuário atualizado e senha trocada.");
+          if (senhaPropria) {
+            toast.success("Usuário atualizado e senha trocada.");
+          } else {
+            setCredenciais({
+              nome: formUsuario.nome, email: formUsuario.email, cpf: cpfAcesso,
+              senha: senhaNova, provisoria: senhaProvisoria, nova: false,
+            });
+          }
         } else {
           toast.success("Usuário atualizado");
         }
@@ -671,7 +695,8 @@ export function UsuariosPage() {
             papeis: formUsuario.papeis,
             loja_default_id: lojaPadrao || null,
             telefone: formUsuario.telefone || null,
-            senha: formUsuario.senha,
+            senha: senhaNova,
+            forcar_troca_senha: senhaProvisoria,
             send_invite: false,
             // filiais gravadas pela própria edge: o login não nasce sem filial
             lojas: formUsuario.filiais,
@@ -679,11 +704,15 @@ export function UsuariosPage() {
         });
         const r = await corpoDaEdge(data, error);
         if (!r.success) throw new Error(r.error ?? "Erro desconhecido ao criar usuário");
+        let cpfGravado = "";
         if (r.user_id && cpfAcesso) {
-          try { await updateUsuario.mutateAsync({ id: r.user_id, cpf: cpfAcesso }); }
+          try { await updateUsuario.mutateAsync({ id: r.user_id, cpf: cpfAcesso }); cpfGravado = cpfAcesso; }
           catch (e: any) { toast.warning(`Usuário criado, mas o CPF de acesso não: ${e.message ?? e}`, { duration: 10000 }); }
         }
-        toast.success(`Usuário criado. Já pode entrar com ${formUsuario.email}${cpfAcesso ? " ou o CPF" : ""} e a senha definida.`);
+        setCredenciais({
+          nome: formUsuario.nome, email: formUsuario.email, cpf: cpfGravado,
+          senha: senhaNova, provisoria: senhaProvisoria, nova: true,
+        });
         if (r.user_id) {
           try { await sincronizarFuncionario(r.user_id); }
           catch (e: any) { toast.warning(`Usuário criado, mas o funcionário não: ${e.message ?? e}`, { duration: 10000 }); }
@@ -1369,29 +1398,36 @@ export function UsuariosPage() {
               )}
             </div>
 
-            {/* Senha — obrigatória na criação. Não há convite por e-mail: o
-                link cairia na tela do CRM. Quem já tem login no CRM entra por
-                "Importar do CRM". */}
-            {(!editId || !travaAcessoDe(usuarios.find((x: any) => x.id === editId)) || editId === currentUser?.id) && (
-              <div className="space-y-2 border rounded-md p-3 bg-muted/30">
-                {(
-                  <div>
-                    <Label>{editId ? "Nova senha (deixe em branco para manter a atual)" : "Senha (mínimo 6 caracteres)"}</Label>
-                    <div className="relative">
+            {/* Senha temporária, como no CRM: em branco na criação o sistema
+                gera. Não há convite por e-mail: o link cairia na tela do CRM.
+                Quem já tem login no CRM entra por "Importar do CRM". */}
+            {(!editId || !travaAcessoDe(usuarios.find((x: any) => x.id === editId)) || editId === currentUser?.id) && (() => {
+              const propria = !!editId && editId === currentUser?.id;
+              return (
+                <div className="space-y-2 border rounded-md p-3 bg-muted/30">
+                  <Label htmlFor="senha-usuario">
+                    {propria ? "Nova senha (deixe em branco para manter a atual)"
+                      : editId ? "Nova senha temporária (deixe em branco para manter a atual)"
+                      : "Senha temporária"}
+                  </Label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
                       <Input
+                        id="senha-usuario"
                         type={showPasswordUsuario ? "text" : "password"}
+                        autoComplete="new-password"
+                        className="pr-9 font-mono"
                         value={formUsuario.senha}
                         onChange={(e) =>
                           setFormUsuario({ ...formUsuario, senha: e.target.value })
                         }
-                        placeholder={editId ? "Só se for trocar" : "Digite a senha"}
-                        minLength={6}
-                        required={!editId}
+                        placeholder={editId ? "Só se for trocar" : "Gerada automaticamente se vazia"}
                       />
                       <button
                         type="button"
                         onClick={() => setShowPasswordUsuario(!showPasswordUsuario)}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        aria-label={showPasswordUsuario ? "Esconder a senha" : "Mostrar a senha"}
                       >
                         {showPasswordUsuario ? (
                           <EyeOff className="h-4 w-4" />
@@ -1400,17 +1436,42 @@ export function UsuariosPage() {
                         )}
                       </button>
                     </div>
+                    {!propria && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          setFormUsuario({ ...formUsuario, senha: gerarSenhaTemporaria() });
+                          setShowPasswordUsuario(true);
+                        }}
+                      >
+                        <Wand2 className="h-4 w-4 mr-1" /> Gerar
+                      </Button>
+                    )}
                   </div>
-                )}
-              </div>
-            )}
-
-            {!editId && (
-              <div className="text-xs text-muted-foreground bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 p-2 rounded">
-                <Check className="h-3 w-3 inline mr-1 text-green-600" />
-                O usuário poderá logar imediatamente com a senha definida acima.
-              </div>
-            )}
+                  <p className="text-[11px] text-muted-foreground">{DICA_SENHA}.</p>
+                  {!propria && (!editId || formUsuario.senha) && (
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4"
+                        checked={formUsuario.manterSenha}
+                        onChange={(e) => setFormUsuario({ ...formUsuario, manterSenha: e.target.checked })}
+                      />
+                      Manter esta senha (não exigir troca no primeiro acesso)
+                    </label>
+                  )}
+                  {!propria && (
+                    <p className="text-[11px] text-muted-foreground">
+                      {formUsuario.manterSenha
+                        ? "A pessoa entra com esta senha e continua com ela."
+                        : "No primeiro acesso, o sistema pede que a pessoa crie a própria senha."}
+                      {" "}Ao salvar, a senha aparece para você copiar e passar por um canal seguro.
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setModalUsuario(false)}>
@@ -1430,6 +1491,8 @@ export function UsuariosPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <CredenciaisDeAcesso credenciais={credenciais} aoFechar={() => setCredenciais(null)} />
 
       {/* Modal: Gerenciar Permissões */}
       <Dialog open={modalPermissoes} onOpenChange={setModalPermissoes}>

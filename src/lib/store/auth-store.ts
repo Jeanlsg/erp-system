@@ -96,6 +96,12 @@ export interface User {
    * "venda.cancelar" de um gerente não mudava nada.
    */
   permissoes?: Record<string, boolean> | null;
+  /**
+   * Entrou com a senha temporária que o admin deu (03/11/2026, como no CRM):
+   * antes de usar o sistema define a própria (troca-de-senha-obrigatoria.tsx).
+   * Vem de auth user_metadata.senha_provisoria.
+   */
+  senha_provisoria?: boolean;
 }
 
 // Nomes dos cargos pedidos pela loja (outubro/2026). Só o rótulo muda: a chave
@@ -236,6 +242,7 @@ export async function login(
     const { supabase } = await import("@/lib/supabase");
     const texto = identificador.trim();
     let userId: string;
+    let senhaProvisoria = false;
 
     if (tipoDoLogin(texto) === "email") {
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -246,6 +253,7 @@ export async function login(
         return { ok: false, error: "E-mail ou senha inválidos" };
       }
       userId = data.user.id;
+      senhaProvisoria = data.user.user_metadata?.senha_provisoria === true;
     } else {
       const cpf = soDigitos(texto);
       if (!cpfValido(cpf)) {
@@ -264,6 +272,7 @@ export async function login(
         return { ok: false, error: "Não foi possível abrir a sessão. Tente novamente." };
       }
       userId = sessao.user.id;
+      senhaProvisoria = sessao.user.user_metadata?.senha_provisoria === true;
     }
 
     // Busca perfil do usuario no schema erp (erp.erp_usuarios)
@@ -308,6 +317,7 @@ export async function login(
       admin_principal: !!(perfil as any).admin_principal,
       loja_default_id: (perfil as any).loja_default_id ?? null,
       permissoes: ((perfil as any).permissoes ?? null) as Record<string, boolean> | null,
+      senha_provisoria: senhaProvisoria,
     };
     useAuthStore.getState().setUser(user);
 

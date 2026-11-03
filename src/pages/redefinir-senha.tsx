@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/lib/supabase";
+import { DICA_SENHA, problemaDaSenha } from "@/lib/senha";
 
 export function RedefinirSenhaPage() {
   const navigate = useNavigate();
@@ -74,8 +75,9 @@ export function RedefinirSenhaPage() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (senha.length < 6) {
-      toast.error("A senha deve ter pelo menos 6 caracteres");
+    const problema = problemaDaSenha(senha);
+    if (problema) {
+      toast.error(problema);
       return;
     }
     if (senha !== confirmar) {
@@ -84,8 +86,11 @@ export function RedefinirSenhaPage() {
     }
     setLoading(true);
     try {
+      // quem esqueceu a senha temporária e redefiniu pelo link já tem a dele:
+      // a troca do primeiro acesso não aparece depois
       const { error } = await supabase.auth.updateUser({
         password: senha,
+        data: { senha_provisoria: false },
       });
       if (error) throw error;
       setSucesso(true);
@@ -201,12 +206,12 @@ export function RedefinirSenhaPage() {
                 <Input
                   id="senha"
                   type={showPassword ? "text" : "password"}
-                  placeholder="Mínimo 6 caracteres"
+                  placeholder={DICA_SENHA}
                   className="pl-9 pr-10"
                   value={senha}
                   onChange={(e) => setSenha(e.target.value)}
                   required
-                  minLength={6}
+                  minLength={8}
                 />
                 <button
                   type="button"
@@ -228,7 +233,7 @@ export function RedefinirSenhaPage() {
                   value={confirmar}
                   onChange={(e) => setConfirmar(e.target.value)}
                   required
-                  minLength={6}
+                  minLength={8}
                 />
               </div>
             </div>

@@ -6,7 +6,8 @@
 //   supabase.functions.invoke('erp-reset-password', {
 //     body: {
 //       user_id: 'uuid-do-usuario',
-//       nova_senha?: string,     // define a senha na hora (mín. 6)
+//       nova_senha?: string,     // define a senha na hora (regra em _shared/erp-senha.ts)
+//       forcar_troca_senha?: boolean, // com nova_senha: troca obrigatória no próximo acesso
 //       redirect_base?: string,  // sem nova_senha: origem do ERP para o link do e-mail
 //     }
 //   })
@@ -17,10 +18,13 @@
 // Também desbloqueia e zera as tentativas de login.
 
 import { alvoDoErp, clienteAdmin, corsHeaders, exigirAdminAtivo, jsonResponse } from "../_shared/erp-admin.ts";
+import { problemaDaSenha } from "../_shared/erp-senha.ts";
 
 interface ResetPasswordPayload {
   user_id: string;
   nova_senha?: string;
+  /** a senha que o admin deu é temporária: a pessoa define a dela no próximo acesso */
+  forcar_troca_senha?: boolean;
   redirect_base?: string;
 }
 
@@ -41,10 +45,14 @@ Deno.serve(async (req) => {
     if (alvo instanceof Response) return alvo;
 
     if (body.nova_senha !== undefined && body.nova_senha !== null && body.nova_senha !== "") {
-      if (String(body.nova_senha).length < 6) {
-        return jsonResponse({ success: false, error: "A senha deve ter pelo menos 6 caracteres" }, 400);
-      }
-      const { error } = await admin.auth.admin.updateUserById(alvo.id, { password: String(body.nova_senha) });
+      const problema = problemaDaSenha(String(body.nova_senha));
+      if (problema) return jsonResponse({ success: false, error: problema }, 400);
+      // a própria senha não fica temporária: quem troca já sabe a nova
+      const provisoria = body.forcar_troca_senha === true && alvo.id !== chamador.id;
+      const { error } = await admin.auth.admin.updateUserById(alvo.id, {
+        password: String(body.nova_senha),
+        user_metadata: { senha_provisoria: provisoria },
+      });
       if (error) return jsonResponse({ success: false, error: `Erro ao trocar a senha: ${error.message}` }, 500);
     } else {
       // O destino vem do próprio front do ERP: SITE_URL é a do CRM.
